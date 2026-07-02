@@ -391,12 +391,16 @@ window.addEventListener('resize', () => {
 
 // Match View 01 from DWG for static capture
 export function setTopView() {
-  camera.position.set(0.05, 6.5, 0.05);
-  controls.target.set(0.05, 0, 0.05);
-  controls.update();
+  controls.enabled = false;
+  camera.position.set(0, 7.2, 0.001);
+  camera.up.set(0, 0, -1);
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
 }
 
 export function setView01() {
+  controls.enabled = true;
+  camera.up.set(0, 1, 0);
   camera.position.set(-1.35, 1.62, -1.55);
   controls.target.set(0.05, 1.08, 0.85);
   controls.update();
