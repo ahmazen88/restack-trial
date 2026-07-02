@@ -1,0 +1,16 @@
+{
+  "name": "foyer",
+  "version": "1.0.0",
+  "description": "3D foyer interior from DWG — forest mural, arched window, chain cabinet, brass chandelier",
+  "type": "module",
+  "scripts": {
+    "serve": "npx --yes serve -l 8787 .",
+    "capture": "node capture.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}
