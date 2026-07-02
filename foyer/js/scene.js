@@ -12,8 +12,14 @@ import {
 const ROOM = { w: 4.2, d: 3.8, h: 3.0 };
 const WALL_T = 0.12;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: !IS_MOBILE,
+  preserveDrawingBuffer: true,
+  powerPreference: IS_MOBILE ? 'low-power' : 'high-performance',
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_MOBILE ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -31,6 +37,10 @@ camera.position.set(-1.0, 1.68, -1.35);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0.1, 1.15, 1.0);
 controls.enableDamping = true;
+controls.dampingFactor = IS_MOBILE ? 0.08 : 0.05;
+controls.rotateSpeed = IS_MOBILE ? 0.5 : 1.0;
+controls.enablePan = !IS_MOBILE;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 controls.maxPolarAngle = Math.PI * 0.495;
 controls.minDistance = 2.5;
 controls.maxDistance = 10;
@@ -345,7 +355,7 @@ function buildLighting() {
   const sun = new THREE.DirectionalLight(0xfff5e8, 0.85);
   sun.position.set(-2, 4, 3);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);
   sun.shadow.camera.near = 0.5;
   sun.shadow.camera.far = 15;
   sun.shadow.camera.left = -5;
@@ -383,12 +393,6 @@ function animate() {
 }
 animate();
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
 // Match View 01 from DWG for static capture
 export function setTopView() {
   controls.enabled = false;
@@ -405,6 +409,18 @@ export function setView01() {
   controls.target.set(0.05, 1.08, 0.85);
   controls.update();
 }
+
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight || document.documentElement.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+resize();
 
 export function captureRender() {
   setView01();
