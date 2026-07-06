@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flat 4C — 2D Design Images</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    #stage { position: relative; width: 1400px; height: 900px; }
+    .sheet {
+      position: absolute;
+      top: 0; left: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .sheet.active { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="floor-plan" class="sheet active" data-sheet="floor-plan"></canvas>
+    <canvas id="elevations" class="sheet" data-sheet="elevations"></canvas>
+    <canvas id="material-board" class="sheet" data-sheet="material-board"></canvas>
+    <canvas id="lighting-matrix" class="sheet" data-sheet="lighting-matrix"></canvas>
+  </div>
+  <script type="module">
+    import { renderFloorPlan } from './js/floor-plan.js';
+    import { renderElevations } from './js/room-elevations.js';
+    import { renderMaterialBoard } from './js/material-board.js';
+    import { renderLightingMatrix } from './js/lighting-matrix.js';
+
+    renderFloorPlan();
+    renderElevations();
+    renderMaterialBoard();
+    renderLightingMatrix();
+
+    window.showSheet = (name) => {
+      document.querySelectorAll('.sheet').forEach((el) => {
+        el.classList.toggle('active', el.dataset.sheet === name);
+      });
+    };
+  </script>
+</body>
+</html>

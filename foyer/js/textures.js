@@ -12,54 +12,62 @@ function canvasTexture(draw, w = 512, h = 512) {
   return tex;
 }
 
-export function forestMuralTexture() {
+export function sepiaToileTexture() {
   return canvasTexture((ctx, w, h) => {
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#d4d4d0');
-    g.addColorStop(0.45, '#b8b8b4');
-    g.addColorStop(1, '#9a9a96');
+    g.addColorStop(0, '#d8ccc0');
+    g.addColorStop(0.5, '#c4b4a0');
+    g.addColorStop(1, '#a89888');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
     const rng = (seed) => {
       let s = seed;
       return () => {
-        s = (s * 16807 + 0) % 2147483647;
+        s = (s * 16807) % 2147483647;
         return (s - 1) / 2147483646;
       };
     };
 
-    for (let i = 0; i < 38; i++) {
-      const r = rng(i * 97 + 13);
-      const x = r() * w;
-      const baseW = 8 + r() * 22;
-      const hScale = 0.55 + r() * 0.45;
-      const trunkH = h * hScale;
-      const gray = 55 + Math.floor(r() * 45);
+    // Toile-style pastoral vignettes (sepia silhouettes)
+    for (let s = 0; s < 6; s++) {
+      const r = rng(s * 131 + 7);
+      const cx = (s % 3) * (w / 3) + w / 6 + r() * 40;
+      const cy = Math.floor(s / 3) * (h / 2) + h / 4 + r() * 30;
+      const sc = 0.6 + r() * 0.5;
 
-      ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray - 4})`;
+      ctx.fillStyle = `rgba(90, 72, 58, ${0.12 + r() * 0.1})`;
       ctx.beginPath();
-      ctx.moveTo(x - baseW * 0.35, h);
-      ctx.lineTo(x - baseW * 0.12, h - trunkH * 0.55);
-      ctx.lineTo(x, h - trunkH);
-      ctx.lineTo(x + baseW * 0.12, h - trunkH * 0.55);
-      ctx.lineTo(x + baseW * 0.35, h);
+      ctx.ellipse(cx, cy + 30 * sc, 45 * sc, 18 * sc, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = `rgba(30, 30, 28, ${0.08 + r() * 0.12})`;
-      ctx.lineWidth = 1 + r() * 2;
-      for (let b = 0; b < 6; b++) {
-        const by = h - trunkH * (0.2 + b * 0.12);
+      ctx.strokeStyle = `rgba(70, 55, 42, ${0.2 + r() * 0.15})`;
+      ctx.lineWidth = 1.5 * sc;
+      ctx.beginPath();
+      ctx.moveTo(cx - 20 * sc, cy + 20 * sc);
+      ctx.quadraticCurveTo(cx, cy - 40 * sc, cx + 25 * sc, cy + 15 * sc);
+      ctx.stroke();
+
+      for (let b = 0; b < 3; b++) {
         ctx.beginPath();
-        ctx.moveTo(x - baseW * 0.2, by);
-        ctx.quadraticCurveTo(x + (r() - 0.5) * 30, by - 8, x + baseW * 0.25, by + 4);
-        ctx.stroke();
+        ctx.arc(cx - 10 * sc + b * 12 * sc, cy - 5 * sc, 6 * sc, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(80, 65, 50, ${0.08})`;
+        ctx.fill();
       }
     }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(0, 0, w, h * 0.35);
+    // Ornate border frame hint
+    ctx.strokeStyle = 'rgba(92, 61, 40, 0.35)';
+    ctx.lineWidth = 12;
+    ctx.strokeRect(24, 24, w - 48, h - 48);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 40, w - 80, h - 80);
   }, 1024, 1024);
+}
+
+/** @deprecated use sepiaToileTexture — kept for import compat */
+export function forestMuralTexture() {
+  return sepiaToileTexture();
 }
 
 export function woodGrainTexture(dark = false) {

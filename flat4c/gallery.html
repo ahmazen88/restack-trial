@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flat 4C — Design Images</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1816;
+      color: #f5f0e8;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    header {
+      max-width: 1200px;
+      margin: 0 auto 32px;
+      border-bottom: 1px solid #3a3632;
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: 0.04em; }
+    .sub { color: #a89888; font-size: 0.9rem; margin-top: 6px; }
+    section { max-width: 1200px; margin: 0 auto 40px; }
+    h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #b8956b;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    figure {
+      background: #252220;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #3a3632;
+    }
+    figure img {
+      width: 100%;
+      display: block;
+      cursor: zoom-in;
+    }
+    figcaption {
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: #d4c8b8;
+    }
+    figcaption a {
+      color: #b8956b;
+      text-decoration: none;
+      font-size: 0.75rem;
+      display: inline-block;
+      margin-top: 4px;
+    }
+    figcaption a:hover { text-decoration: underline; }
+    .full { grid-column: 1 / -1; }
+    .full img { max-height: 80vh; object-fit: contain; background: #111; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FLAT 4C — DESIGN IMAGES</h1>
+    <p class="sub">Rev B · Warm Modern Heritage · Schematic sheets &amp; foyer renders</p>
+  </header>
+
+  <section>
+    <h2>Schematic 2D sheets</h2>
+    <div class="grid">
+      <figure>
+        <img src="images/flat4c_floor_plan.png" alt="Floor plan" loading="lazy" />
+        <figcaption>Floor plan — 3BHK schematic with finish zones<a href="images/flat4c_floor_plan.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/flat4c_room_elevations.png" alt="Room elevations" loading="lazy" />
+        <figcaption>Room elevations — 6 key spaces<a href="images/flat4c_room_elevations.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/flat4c_material_board.png" alt="Material board" loading="lazy" />
+        <figcaption>Material &amp; finishes board<a href="images/flat4c_material_board.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/flat4c_lighting_matrix.png" alt="Lighting matrix" loading="lazy" />
+        <figcaption>Lighting criteria matrix<a href="images/flat4c_lighting_matrix.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Foyer 3D renders</h2>
+    <div class="grid">
+      <figure class="full">
+        <img src="images/foyer_perspective.png" alt="Foyer perspective" loading="lazy" />
+        <figcaption>Foyer perspective<a href="images/foyer_perspective.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/foyer_mural_wall.png" alt="Mural wall" loading="lazy" />
+        <figcaption>W03 sepia toile mural wall<a href="images/foyer_mural_wall.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/foyer_console_detail.png" alt="Console detail" loading="lazy" />
+        <figcaption>V01 walnut console detail<a href="images/foyer_console_detail.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+      <figure>
+        <img src="images/foyer_plan.png" alt="Foyer plan" loading="lazy" />
+        <figcaption>Foyer plan view<a href="images/foyer_plan.png" target="_blank">Open full size ↗</a></figcaption>
+      </figure>
+    </div>
+  </section>
+</body>
+</html>

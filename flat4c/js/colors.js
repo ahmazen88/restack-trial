@@ -1,0 +1,37 @@
+/** Flat 4C Rev B — Warm Modern Heritage palette */
+export const PALETTE = {
+  warmPutty: '#D4C8B8',
+  warmPuttyDark: '#B8A898',
+  matteWhite: '#F5F3EF',
+  walnut: '#6B4E3D',
+  walnutLight: '#8B6B52',
+  paleOak: '#C9B99A',
+  brass: '#B8956B',
+  brassLight: '#D4AF7A',
+  honedGranite: '#2A2A2E',
+  whiteQuartz: '#E8E6E2',
+  paleQuartz: '#D8D4CC',
+  sepiaToile: '#C4B4A0',
+  sepiaToileDark: '#8A7A68',
+  limeTexture: '#C8C0B0',
+  tileFloor: '#9A9690',
+  ink: '#1A1816',
+  inkMuted: '#5A5650',
+  grid: '#E0DCD6',
+  accentGreen: '#6B7B5E',
+};
+
+export const FINISHES = [
+  { code: 'F01', name: 'Flooring', spec: 'Vitrified tile — matte honed', color: PALETTE.tileFloor, loc: 'Entire apartment' },
+  { code: 'W01', name: 'Main walls', spec: 'Warm Putty matte emulsion', color: PALETTE.warmPutty, loc: 'Living / Bedrooms' },
+  { code: 'W02', name: 'Feature wall', spec: 'Mineral lime texture — low sheen', color: PALETTE.limeTexture, loc: 'Focal walls' },
+  { code: 'W03', name: 'Foyer mural', spec: 'Framed sepia toile wallpaper', color: PALETTE.sepiaToile, loc: 'Entrance' },
+  { code: 'C01', name: 'Ceiling', spec: 'Architectural matte white', color: PALETTE.matteWhite, loc: 'Entire apartment' },
+  { code: 'V01', name: 'Hero joinery', spec: 'Natural walnut veneer — matte PU', color: PALETTE.walnut, loc: 'TV / Headboard / Foyer' },
+  { code: 'L01', name: 'Cabinetry', spec: 'Pale Oak HPL', color: PALETTE.paleOak, loc: 'Kitchen & wardrobes' },
+  { code: 'B01', name: 'Metalwork', spec: 'Brushed antique brass — satin', color: PALETTE.brass, loc: 'Hardware & sconces' },
+  { code: 'S01', name: 'Kitchen tops', spec: 'Black granite — honed', color: PALETTE.honedGranite, loc: 'Counters' },
+  { code: 'S02', name: 'Kitchen splash', spec: 'Pale-veined quartz — honed', color: PALETTE.paleQuartz, loc: 'Wet wall' },
+  { code: 'S03', name: 'Vanity tops', spec: 'White quartz — honed', color: PALETTE.whiteQuartz, loc: 'Bathrooms' },
+  { code: 'G01', name: 'Glazing', spec: 'Fluted tempered glass', color: '#C8D0D8', loc: 'Partitions' },
+];

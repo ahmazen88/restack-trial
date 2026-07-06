@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
-  forestMuralTexture,
+  sepiaToileTexture,
   woodGrainTexture,
   rugTexture,
   floorTexture,
@@ -46,8 +46,8 @@ controls.minDistance = 2.5;
 controls.maxDistance = 10;
 controls.update();
 
-// Materials
-const muralTex = forestMuralTexture();
+// Materials — Flat 4C Rev B (W03 sepia toile, V01 walnut, B01 brass)
+const muralTex = sepiaToileTexture();
 muralTex.repeat.set(2.5, 1.2);
 
 const muralMat = new THREE.MeshStandardMaterial({
@@ -137,20 +137,21 @@ function buildRoom() {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Ceiling
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), muralMat.clone());
+  // Ceiling — C01 architectural matte white
+  const ceilMat = new THREE.MeshStandardMaterial({ color: 0xf5f3ef, roughness: 0.92, metalness: 0 });
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), ceilMat);
   ceil.rotation.x = Math.PI / 2;
   ceil.position.y = ROOM.h;
   scene.add(ceil);
 
-  // Back wall (+Z)
+  // Back wall (+Z) — W03 framed sepia toile panel (center)
   box(ROOM.w, ROOM.h, WALL_T, muralMat, 0, ROOM.h / 2, hd, 0, 0, 0);
+  // Side walls — W01 warm putty
+  const puttyMat = new THREE.MeshStandardMaterial({ color: 0xd4c8b8, roughness: 0.88, metalness: 0 });
+  box(WALL_T, ROOM.h, ROOM.d, puttyMat, hw, ROOM.h / 2, 0, 0, 0, 0);
+  box(WALL_T, ROOM.h, ROOM.d, puttyMat, -hw, ROOM.h / 2, 0, 0, 0, 0);
   // Front wall (-Z)
-  box(ROOM.w, ROOM.h, WALL_T, muralMat, 0, ROOM.h / 2, -hd, 0, 0, 0);
-  // Right wall (+X)
-  box(WALL_T, ROOM.h, ROOM.d, muralMat, hw, ROOM.h / 2, 0, 0, 0, 0);
-  // Left wall (-X)
-  box(WALL_T, ROOM.h, ROOM.d, muralMat, -hw, ROOM.h / 2, 0, 0, 0, 0);
+  box(ROOM.w, ROOM.h, WALL_T, puttyMat, 0, ROOM.h / 2, -hd, 0, 0, 0);
 }
 
 function buildDoor() {
@@ -251,57 +252,29 @@ function buildCabinet() {
   const cabD = 0.42;
   const z = hd - cabD / 2 - 0.05;
   const y = cabH / 2;
-  const panelCount = 6;
-  const panelW = cabW / panelCount;
 
-  box(cabW, cabH, cabD, woodMat, 0, y, z);
+  // V01 walnut veneer console — integrated, no chain panels
+  const walnutMat = new THREE.MeshStandardMaterial({
+    map: woodGrainTexture(true),
+    color: 0x6b4e3d,
+    roughness: 0.55,
+    metalness: 0.02,
+  });
+  box(cabW, cabH, cabD, walnutMat, 0, y, z);
 
-  // Vertical chain strips between panels
-  for (let i = 1; i < panelCount; i++) {
-    const x = -cabW / 2 + panelW * i;
-    box(0.035, cabH - 0.06, 0.04, chainMat, x, y, z + cabD / 2 + 0.01);
+  // Shadow-gap reveal at wall junction
+  box(cabW + 0.04, 0.012, 0.02, new THREE.MeshStandardMaterial({ color: 0x1a1816 }), 0, cabH + 0.006, z - cabD / 2 - 0.01);
 
-    // Chain links illusion
-    for (let l = 0; l < 9; l++) {
-      const link = new THREE.Mesh(
-        new THREE.TorusGeometry(0.012, 0.004, 6, 12),
-        chainMat,
-      );
-      link.position.set(x, 0.08 + l * 0.06, z + cabD / 2 + 0.025);
-      link.rotation.y = Math.PI / 2;
-      scene.add(link);
-    }
-  }
-
-  // Panel seams
-  for (let i = 1; i < panelCount; i++) {
-    const x = -cabW / 2 + panelW * i;
-    box(0.008, cabH - 0.04, cabD + 0.01, darkWoodMat, x, y, z);
-  }
-
-  // Sculptural object (left)
-  const sculpt = new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 16, 16),
-    new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.1 }),
-  );
-  sculpt.scale.set(1.4, 0.7, 1.0);
-  sculpt.position.set(-1.0, cabH + 0.08, z);
-  sculpt.castShadow = true;
-  scene.add(sculpt);
-
-  // Open book (right)
-  const bookBase = box(0.22, 0.025, 0.16, new THREE.MeshStandardMaterial({ color: 0xf0ebe0, roughness: 0.9 }), 1.15, cabH + 0.02, z);
-  const bookL = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.02, 0.15),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }),
-  );
-  bookL.rotation.z = 0.35;
-  bookL.position.set(1.08, cabH + 0.05, z);
-  scene.add(bookL);
-  const bookR = bookL.clone();
-  bookR.rotation.z = -0.35;
-  bookR.position.set(1.22, cabH + 0.05, z);
-  scene.add(bookR);
+  // Brass console lamp (Layer 4 decorative anchor)
+  const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.02, 16), brassMat);
+  lampBase.position.set(1.2, cabH + 0.02, z);
+  scene.add(lampBase);
+  const lampStem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.35, 8), brassMat);
+  lampStem.position.set(1.2, cabH + 0.2, z);
+  scene.add(lampStem);
+  const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.12, 16, 1, true), shadeMat);
+  lampShade.position.set(1.2, cabH + 0.4, z);
+  scene.add(lampShade);
 }
 
 function buildRug() {
@@ -410,6 +383,22 @@ export function setView01() {
   controls.update();
 }
 
+export function setMuralView() {
+  controls.enabled = false;
+  camera.up.set(0, 1, 0);
+  camera.position.set(0.05, 1.55, 0.35);
+  camera.lookAt(0, 1.45, 2.0);
+  camera.updateProjectionMatrix();
+}
+
+export function setConsoleView() {
+  controls.enabled = false;
+  camera.up.set(0, 1, 0);
+  camera.position.set(1.8, 1.35, 1.2);
+  camera.lookAt(0.2, 0.85, 1.85);
+  camera.updateProjectionMatrix();
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight || document.documentElement.clientHeight;
@@ -431,3 +420,5 @@ export function captureRender() {
 window.captureRender = captureRender;
 window.setView01 = setView01;
 window.setTopView = setTopView;
+window.setMuralView = setMuralView;
+window.setConsoleView = setConsoleView;
