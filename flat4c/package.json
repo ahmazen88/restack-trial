@@ -1,0 +1,12 @@
+{
+  "name": "flat4c-2d",
+  "version": "1.0.0",
+  "description": "Flat 4C Rev B — 2D design images (floor plan, elevations, material board, lighting)",
+  "type": "module",
+  "scripts": {
+    "capture": "node capture-2d.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}
