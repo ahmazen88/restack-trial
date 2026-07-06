@@ -9,7 +9,9 @@ cd flat4c && npm install && npx playwright install chromium && npm run capture
 cd ../foyer && npm install && node capture.mjs
 ```
 
-Output: `/opt/cursor/artifacts/flat4c/`
+Output: `flat4c/images/` (committed PNGs) and `gallery.html` for browser viewing.
+
+Open **gallery.html** in a browser, or after GitHub Pages deploy: `https://<user>.github.io/<repo>/`
 
 | File | Description |
 |---|---|
