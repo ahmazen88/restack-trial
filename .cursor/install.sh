@@ -20,10 +20,14 @@ fi
 # fuse-overlayfs: overlay2/native overlay mounts fail inside the nested
 # container, so Docker must use the FUSE-based storage driver instead.
 # zstd is required by the Ollama installer to unpack its release archive.
+# fuse3 ships an interactive /etc/fuse.conf conffile prompt that DEBIAN_FRONTEND
+# does not suppress, so force-keep the existing conffile to stay non-interactive.
 sudo apt-get update -y
-sudo apt-get install -y --no-install-recommends fuse-overlayfs zstd
-# The fuse3 package ships an interactive conffile prompt; keep the existing file.
-sudo dpkg --configure -a --force-confold || true
+sudo apt-get install -y --no-install-recommends \
+  -o Dpkg::Options::=--force-confdef \
+  -o Dpkg::Options::=--force-confold \
+  fuse-overlayfs zstd
+sudo dpkg --configure -a --force-confdef --force-confold || true
 
 sudo mkdir -p /etc/docker
 echo '{"storage-driver":"fuse-overlayfs"}' | sudo tee /etc/docker/daemon.json >/dev/null
