@@ -3,7 +3,8 @@
 A fully **offline** AI agent that reasons over your **local files** using **local
 models** only. It combines:
 
-- **Local intelligence** — `llama3.2` (chat + tool calling) served by Ollama.
+- **Local intelligence** — `llama3.1:8b` (strong, reliable chat + tool calling)
+  served by Ollama.
 - **A local knowledge base** — text files under `knowledge/` are embedded with
   the local `nomic-embed-text` model into an on-disk vector index, and searched
   with retrieval-augmented generation (RAG).
@@ -23,7 +24,7 @@ machine.
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama serve &
-ollama pull llama3.2           # chat + tool calling (~2 GB)
+ollama pull llama3.1:8b        # chat + tool calling (~4.9 GB)
 ollama pull nomic-embed-text   # embeddings for the knowledge base (~275 MB)
 ```
 
@@ -63,7 +64,7 @@ composes an answer, and writes the file, all via the local models.
 
 | Aspect | Details |
 | --- | --- |
-| Intelligence | Local `llama3.2` via Ollama (OpenAI-compatible API) |
+| Intelligence | Local `llama3.1:8b` via Ollama (OpenAI-compatible API) |
 | Knowledge base | On-disk vector index over `knowledge/` (embeddings via `nomic-embed-text`) |
 | Tools | `search_knowledge` (RAG), `list_files`, `read_file`, `write_file` |
 | Storage | Vector index in `.index/`; files read from the project, written to `workspace/` |

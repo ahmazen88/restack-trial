@@ -31,7 +31,9 @@ with import_functions():
     )
 
 MAX_TOOL_ITERATIONS = 6
-STEP_TIMEOUT = timedelta(seconds=120)
+# Generous timeout: the local 8B model runs on CPU, so a single chat completion
+# that also generates the file content can take well over a minute.
+STEP_TIMEOUT = timedelta(seconds=240)
 
 SYSTEM_PROMPT = (
     "You are a fully offline assistant that works over the user's local files. "

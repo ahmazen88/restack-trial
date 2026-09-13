@@ -10,9 +10,11 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # Local models for the offline agent examples:
-#   - llama3.2: chat + tool calling
+#   - llama3.2: chat + tool calling for the agent_ollama example
+#   - llama3.1:8b: stronger, reliable tool calling for agent_local_files
 #   - nomic-embed-text: embeddings for the local-files knowledge base (RAG)
 OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+OLLAMA_LOCAL_FILES_MODEL="${OLLAMA_LOCAL_FILES_MODEL:-llama3.1:8b}"
 OLLAMA_EMBED_MODEL="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
 
 # --- Docker engine -----------------------------------------------------------
@@ -59,7 +61,7 @@ if ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
   done
 fi
 
-for model in "${OLLAMA_MODEL}" "${OLLAMA_EMBED_MODEL}"; do
+for model in "${OLLAMA_MODEL}" "${OLLAMA_LOCAL_FILES_MODEL}" "${OLLAMA_EMBED_MODEL}"; do
   if ! ollama list | awk '{print $1}' | grep -q "^${model}"; then
     ollama pull "${model}"
   fi
