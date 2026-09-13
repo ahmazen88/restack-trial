@@ -9,8 +9,11 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Local model used by the offline agent example. llama3.2 supports tool calling.
+# Local models for the offline agent examples:
+#   - llama3.2: chat + tool calling
+#   - nomic-embed-text: embeddings for the local-files knowledge base (RAG)
 OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+OLLAMA_EMBED_MODEL="${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
 
 # --- Docker engine -----------------------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
@@ -56,9 +59,11 @@ if ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
   done
 fi
 
-if ! ollama list | awk '{print $1}' | grep -q "^${OLLAMA_MODEL}"; then
-  ollama pull "${OLLAMA_MODEL}"
-fi
+for model in "${OLLAMA_MODEL}" "${OLLAMA_EMBED_MODEL}"; do
+  if ! ollama list | awk '{print $1}' | grep -q "^${model}"; then
+    ollama pull "${model}"
+  fi
+done
 
 # Stop the temporary server (by PID); start.sh manages it on each boot.
 if [ -n "${ollama_pid}" ]; then
@@ -68,5 +73,6 @@ fi
 # --- Pre-sync the example projects -------------------------------------------
 uv sync --project child_workflows
 uv sync --project agent_ollama
+uv sync --project agent_local_files
 
 echo "install.sh completed successfully"
