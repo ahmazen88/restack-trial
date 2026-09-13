@@ -21,6 +21,8 @@ OLLAMA_BASE_URL = os.environ.get(
     "OLLAMA_BASE_URL", "http://localhost:11434/v1"
 )
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
+# Low temperature makes tool-calling deterministic and reliable on small models.
+OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0"))
 
 
 class Message(BaseModel):
@@ -67,6 +69,7 @@ async def llm_chat(function_input: LlmChatInput) -> ChatCompletion:
             model=function_input.model or OLLAMA_MODEL,
             messages=function_input.messages,
             tools=function_input.tools,
+            temperature=OLLAMA_TEMPERATURE,
         )
 
         log.info("llm_chat function completed", result=result)

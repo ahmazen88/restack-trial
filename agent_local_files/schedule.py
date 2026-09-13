@@ -4,12 +4,35 @@ import time
 
 from restack_ai import Restack
 
-# The question the agent will answer using only local files + local models.
-QUESTION = (
-    "Using the local knowledge base, explain how this project runs agents "
-    "fully offline and how the local knowledge base works. Then write a short "
-    "summary to 'summary.md' and tell me where you saved it."
+# Two natural turns: first retrieve from the local knowledge base, then save the
+# result to a local file. Each turn is a single, reliable tool call.
+TURN_1 = (
+    "Using the local knowledge base, explain how this project runs agents fully "
+    "offline and how the local knowledge base works."
 )
+TURN_2 = "Now save that explanation as a summary to 'summary.md'."
+
+
+def _print_new(messages: list, seen: int) -> int:
+    for message in messages[seen:]:
+        role = message.get("role")
+        content = message.get("content")
+        if role == "tool":
+            preview = (content or "").splitlines()[:1]
+            print(f"[tool result] {preview[0] if preview else ''}")  # noqa: T201
+        elif content:
+            print(f"[{role}] {content}")  # noqa: T201
+    return len(messages)
+
+
+async def _ask(client: Restack, agent_id: str, run_id: str, text: str) -> list:
+    return await client.send_agent_event(
+        agent_id=agent_id,
+        run_id=run_id,
+        event_name="messages",
+        event_input={"messages": [{"role": "user", "content": text}]},
+        wait_for_completion=True,
+    )
 
 
 async def main() -> None:
@@ -20,23 +43,12 @@ async def main() -> None:
         agent_name="AgentLocalFiles", agent_id=agent_id
     )
 
-    result = await client.send_agent_event(
-        agent_id=agent_id,
-        run_id=run_id,
-        event_name="messages",
-        event_input={"messages": [{"role": "user", "content": QUESTION}]},
-        wait_for_completion=True,
-    )
-
     print("=== Conversation ===")  # noqa: T201
-    for message in result:
-        role = message.get("role")
-        content = message.get("content")
-        if role == "tool":
-            preview = (content or "").splitlines()[:1]
-            print(f"[tool result] {preview[0] if preview else ''}")  # noqa: T201
-        elif content:
-            print(f"[{role}] {content}")  # noqa: T201
+    seen = 0
+    result = await _ask(client, agent_id, run_id, TURN_1)
+    seen = _print_new(result, seen)
+    result = await _ask(client, agent_id, run_id, TURN_2)
+    seen = _print_new(result, seen)
 
     await client.send_agent_event(
         agent_id=agent_id, run_id=run_id, event_name="end"
