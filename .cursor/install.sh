@@ -2,11 +2,15 @@
 # Idempotent repository setup for the Restack AI Python examples.
 # Installs the Docker engine (used to run the Restack service), the
 # fuse-overlayfs storage driver required inside the nested Cloud Agent VM,
-# and the uv Python package manager. Also pre-syncs the child_workflows
-# quickstart so it is ready to run out of the box.
+# the uv Python package manager, and Ollama with a local model so the
+# fully-offline agent example (agent_ollama) works without any API key.
+# Also pre-syncs the child_workflows and agent_ollama examples.
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+
+# Local model used by the offline agent example. llama3.2 supports tool calling.
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
 
 # --- Docker engine -----------------------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
@@ -15,8 +19,9 @@ fi
 
 # fuse-overlayfs: overlay2/native overlay mounts fail inside the nested
 # container, so Docker must use the FUSE-based storage driver instead.
+# zstd is required by the Ollama installer to unpack its release archive.
 sudo apt-get update -y
-sudo apt-get install -y --no-install-recommends fuse-overlayfs
+sudo apt-get install -y --no-install-recommends fuse-overlayfs zstd
 # The fuse3 package ships an interactive conffile prompt; keep the existing file.
 sudo dpkg --configure -a --force-confold || true
 
@@ -30,7 +35,34 @@ if [ ! -x "$HOME/.local/bin/uv" ] && ! command -v uv >/dev/null 2>&1; then
 fi
 export PATH="$HOME/.local/bin:$PATH"
 
-# --- Pre-sync the quickstart example ----------------------------------------
+# --- Ollama (local LLM for the fully-offline agent example) ------------------
+if ! command -v ollama >/dev/null 2>&1; then
+  curl -fsSL https://ollama.com/install.sh | sh
+fi
+
+# Pulling a model needs a running server; start a temporary one if needed.
+# The downloaded model is stored on disk and persists into the snapshot.
+ollama_pid=""
+if ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
+  nohup ollama serve >/tmp/ollama-install.log 2>&1 &
+  ollama_pid="$!"
+  for _ in $(seq 1 30); do
+    curl -sf http://localhost:11434/api/version >/dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+
+if ! ollama list | awk '{print $1}' | grep -q "^${OLLAMA_MODEL}"; then
+  ollama pull "${OLLAMA_MODEL}"
+fi
+
+# Stop the temporary server (by PID); start.sh manages it on each boot.
+if [ -n "${ollama_pid}" ]; then
+  kill "${ollama_pid}" 2>/dev/null || true
+fi
+
+# --- Pre-sync the example projects -------------------------------------------
 uv sync --project child_workflows
+uv sync --project agent_ollama
 
 echo "install.sh completed successfully"

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Per-boot startup for the Restack AI Python examples.
 # Brings up the Docker daemon and the shared Restack engine container that
-# every example connects to. Idempotent: safe to run on each boot.
+# every example connects to, plus the local Ollama server used by the
+# fully-offline agent example. Idempotent: safe to run on each boot.
 set -euo pipefail
 
 # --- Docker daemon -----------------------------------------------------------
@@ -9,6 +10,16 @@ if ! sudo docker info >/dev/null 2>&1; then
   sudo service docker start || true
   for _ in $(seq 1 30); do
     sudo docker info >/dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+
+# --- Ollama server (local LLM for the offline agent example) -----------------
+if command -v ollama >/dev/null 2>&1 \
+   && ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
+  nohup ollama serve >/tmp/ollama.log 2>&1 &
+  for _ in $(seq 1 30); do
+    curl -sf http://localhost:11434/api/version >/dev/null 2>&1 && break
     sleep 1
   done
 fi
