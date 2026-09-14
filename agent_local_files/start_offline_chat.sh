@@ -25,6 +25,8 @@ echo "==> Starting Docker engine, Restack, and Ollama (this may take a moment)â€
 bash "$REPO_ROOT/.cursor/start.sh"
 
 # --- Ollama server (belt-and-suspenders; start.sh already handles this) ------
+# Keep models resident between requests to avoid slow CPU reloads per call.
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:--1}"
 if command -v ollama >/dev/null 2>&1 \
    && ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
   echo "==> Starting Ollama serverâ€¦"

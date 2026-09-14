@@ -15,6 +15,9 @@ if ! sudo docker info >/dev/null 2>&1; then
 fi
 
 # --- Ollama server (local LLM for the offline agent example) -----------------
+# Keep models resident between requests so CPU inference does not pay the
+# multi-second reload cost on every call. -1 keeps them loaded indefinitely.
+export OLLAMA_KEEP_ALIVE="${OLLAMA_KEEP_ALIVE:--1}"
 if command -v ollama >/dev/null 2>&1 \
    && ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
   nohup ollama serve >/tmp/ollama.log 2>&1 &
