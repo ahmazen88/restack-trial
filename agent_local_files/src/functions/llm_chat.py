@@ -26,6 +26,10 @@ OLLAMA_BASE_URL = os.environ.get(
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
 # Low temperature keeps local tool-calling deterministic and reliable.
 OLLAMA_TEMPERATURE = float(os.environ.get("OLLAMA_TEMPERATURE", "0"))
+# Cap generated tokens to shave CPU generation time. 512 is enough for a
+# concise grounded answer or a short summary file without truncating, and can
+# be raised via the environment when longer output is genuinely needed.
+OLLAMA_MAX_TOKENS = int(os.environ.get("OLLAMA_MAX_TOKENS", "512"))
 
 
 class Message(BaseModel):
@@ -209,6 +213,7 @@ async def llm_chat(function_input: LlmChatInput) -> ChatCompletion:
             messages=function_input.messages,
             tools=function_input.tools,
             temperature=OLLAMA_TEMPERATURE,
+            max_tokens=OLLAMA_MAX_TOKENS,
         )
 
         message = result.choices[0].message

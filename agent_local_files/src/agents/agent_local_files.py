@@ -45,7 +45,8 @@ SYSTEM_PROMPT = (
     "file names. Ground every answer in the tool results and cite the source "
     "files you used. Always reply to the user in clear, friendly, plain "
     "sentences — never output tool calls, JSON, or function syntax as your "
-    "answer."
+    "answer. Keep answers concise: a short, direct paragraph is best; only add "
+    "more when the question truly needs it."
 )
 
 
