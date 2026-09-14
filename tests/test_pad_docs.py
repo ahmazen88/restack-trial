@@ -159,14 +159,15 @@ class PadDocsTests(unittest.TestCase):
 
     def test_portal_uploads_ariba_guide(self) -> None:
         text = (DOCS / "07-portal-uploads-ariba.md").read_text(encoding="utf-8")
-        self.assertIn("## Start: the drop folder", text)
+        self.assertIn("## Drop folder", text)
         self.assertIn("**Analogy", text)
         self.assertIn("AribaFolderUpload.robin", text)
         self.assertIn("Populate text field on web page", text)
         self.assertIn("Wait for window", text)
         self.assertIn("Send keys", text)
         self.assertIn("type=file", text)
-        self.assertIn("Get files in folder", text)
+        self.assertIn("Add Attachment", text)
+        self.assertIn("Workbench", text)
         self.assertIn("C:\\RPA\\Ariba\\Inbox", text)
         self.assertIn("No PAD trigger", text)
         self.assertNotIn("Launch Outlook", text)
@@ -200,10 +201,12 @@ class PadDocsTests(unittest.TestCase):
         self.assertNotIn("Display.SelectFileDialog", robin)
 
         questions = [
-            "Question 1 of 4 — Purchase order",
-            "Question 2 of 4 — Invoice header",
-            "Question 3 of 4 — Attachments",
-            "Question 4 of 4 — Review and submit",
+            "Workbench",
+            "Create Invoice",
+            "Standard Invoice",
+            "Add to Header",
+            "Add Attachment",
+            "Invoice submitted",
         ]
         for label in questions:
             self.assertIn(label, robin)
@@ -213,17 +216,23 @@ class PadDocsTests(unittest.TestCase):
             "Txt_Username",
             "Txt_Password",
             "Btn_SignIn",
+            "Tab_Workbench",
+            "Tile_Orders",
+            "Txt_OrderNumbers",
+            "Btn_Apply",
+            "Lnk_PONumber",
             "Btn_CreateInvoice",
-            "Txt_PONumber",
-            "Btn_NextPO",
+            "Btn_StandardInvoice",
             "Txt_InvoiceNumber",
             "Txt_InvoiceDate",
-            "Btn_NextHeader",
+            "Btn_AddToHeader",
+            "Mnu_Attachment",
             "Inp_File",
-            "Btn_Attach",
-            "Btn_NextAttach",
+            "Btn_ChooseFile",
+            "Btn_AddAttachment",
+            "Btn_Next",
             "Btn_Submit",
-            "Btn_CreateAnother",
+            "Btn_BackToWorkbench",
         ):
             self.assertIn(f"['{name}']", robin)
             self.assertIn(f"`{name}`", captures)
@@ -237,7 +246,8 @@ class PadDocsTests(unittest.TestCase):
         self.assertIn("127.0.0.1:8765", robin)
         self.assertIn('id="file-input"', mock)
         self.assertIn("Loading", mock)
-        self.assertIn("IR1042", mock)
+        self.assertIn("Invoice submitted", mock)
+        self.assertIn("KB0399884", (flow_dir / "ariba-sources.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

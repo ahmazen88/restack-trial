@@ -1,26 +1,14 @@
 # AribaFolderUpload — connected PAD flow (paste into Main)
-# Drop PDFs in Inbox, press Play. No PAD trigger, no mail, no queue, no notification.
+# Drop PDFs in Inbox, press Play. No PAD trigger.
+# Click path from SAP KB0397437 / KB0399884 / Guide to Invoicing — see ariba-sources.md
 #
-# INPUT (Variables pane → mark as Input so a cloud "Run a desktop flow" action can call this):
-#   PortalUrl, DropFolder, Username, Password
-# OUTPUT (mark as Output):
-#   ProcessedCount, FailedCount, LastConfirmationId
+# INPUT: PortalUrl, DropFolder, Username, Password
+# OUTPUT: ProcessedCount, FailedCount, LastConfirmationId
 #
-# Timeouts (seconds) — wait for text/element, do not sleep through loading screens:
-#   Launch / first paint     60
-#   Ariba-class page load   120
-#   Loading overlay gone     90
-#   Wizard question text     60
-#   OS Open dialog           15
-#   Upload file name shown   90
-#   Submit confirmation     120
-#   OCR fallback             20
-#   Fixed Wait after click    1  (settle only)
-# Retry: 3 times, 5 seconds apart (On block error, per PDF)
-# Image/OCR matching: Tolerance 10 (PAD default). Width/height multiplier 1 (do not use >3).
-#
-# Capture UI elements first. Names must match appmask['AribaPortal'][*] in ui-elements.md.
-# Point PortalUrl at the mock (http://127.0.0.1:8765/index.html) until selectors work, then your realm.
+# Timeouts (seconds): launch 60, Ariba page 120, Loading gone 90, screen text 60,
+# Open dialog 15, file listed 90, submit 120, OCR 20, settle 1.
+# Retry: On block error Fixed 3 x 5s per PDF. OCR/image Tolerance 10, multiplier 1.
+# Name PDFs PO_Invoice.pdf (example 4500123456_INV-1001.pdf). Mock PO is 4500123456.
 
 SET PortalUrl TO $'''http://127.0.0.1:8765/index.html'''
 SET DropFolder TO $'''C:\\RPA\\Ariba\\Inbox'''
@@ -32,13 +20,21 @@ SET Username TO $'''demo'''
 SET Password TO $'''demo'''
 SET LoadingText TO $'''Loading'''
 SET SignInText TO $'''Sign in'''
-SET HomeText TO $'''Create Invoice'''
+SET WorkbenchText TO $'''Workbench'''
+SET OrdersText TO $'''Orders'''
+SET CreateInvoiceText TO $'''Create Invoice'''
+SET StandardInvoiceText TO $'''Standard Invoice'''
+SET SummaryText TO $'''Summary'''
+SET InvoiceNumberLabel TO $'''Invoice Number'''
+SET AddToHeaderText TO $'''Add to Header'''
+SET AttachmentMenuText TO $'''Attachment'''
+SET ChooseFileText TO $'''Choose File'''
+SET AddAttachmentText TO $'''Add Attachment'''
+SET NextText TO $'''Next'''
+SET ReviewText TO $'''Review'''
+SET SubmitText TO $'''Submit'''
+SET SubmittedText TO $'''Invoice submitted'''
 SET MfaText TO $'''Approve sign-in'''
-SET QuestionPO TO $'''Question 1 of 4 — Purchase order'''
-SET QuestionHeader TO $'''Question 2 of 4 — Invoice header'''
-SET QuestionAttach TO $'''Question 3 of 4 — Attachments'''
-SET QuestionReview TO $'''Question 4 of 4 — Review and submit'''
-SET ConfirmNeedle TO $'''IR'''
 SET DuplicateText TO $'''Duplicate invoice'''
 SET UploadFailText TO $'''failed to upload'''
 SET ProcessedCount TO 0
@@ -73,9 +69,6 @@ IF Pdfs.Count = 0 THEN
  GOTO CleanExit
 END
 
-############################################
-# Login once — event interface is Play / Run desktop flow, not a PAD trigger
-############################################
 WebAutomation.LaunchEdge.LaunchEdge Url: PortalUrl WindowState: WebAutomation.BrowserWindowState.Maximized ClearCache: False ClearCookies: False WaitForPageToLoadTimeout: 120 Timeout: 60 BrowserInstance=> Browser
 SET BrowserOpen TO True
 WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: SignInText) FOR 60
@@ -91,7 +84,7 @@ WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Contr
 WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_Password'] Text: Password EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
 WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_SignIn'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
 WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
-WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: HomeText) FOR 120
+WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: WorkbenchText) FOR 120
 
 LOOP FOREACH CurrentPdf IN Pdfs
  SET FileFailed TO False
@@ -100,7 +93,12 @@ LOOP FOREACH CurrentPdf IN Pdfs
  DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> FileStarted
  File.GetPathPart File: CurrentPdf FileName=> FileName FileNameWithoutExtension=> FileNameNoExtension FileExtension=> FileExtension
  SET InvoiceNumber TO FileNameNoExtension
- SET PONumber TO FileNameNoExtension
+ SET PONumber TO $'''4500123456'''
+ Text.ParseText.RegexParse Text: FileNameNoExtension TextToFind: $'''^(\\d+)_''' IsRegularExpression: True StartingPosition: 0 FirstOccurrenceOnly: True IgnoreCase: True Position=> PoPos Match=> ParsedPO
+ IF ParsedPO <> $'''''' THEN
+  SET PONumber TO ParsedPO
+  Text.ParseText.RegexParse Text: FileNameNoExtension TextToFind: $'''_(.+)$''' IsRegularExpression: True StartingPosition: 0 FirstOccurrenceOnly: True IgnoreCase: True Position=> InvPos Match=> InvoiceNumber
+ END
  Text.ConvertDateTimeToText.FromCustomDateTime DateTime: FileStarted CustomFormat: $'''MM/dd/yyyy''' Result=> InvoiceDateText
 
  BLOCK
@@ -110,9 +108,6 @@ LOOP FOREACH CurrentPdf IN Pdfs
   SET FileMessage TO $'''%LastError.Message% @ %LastError.Location%'''
  END
 
-  ############################################
-  # Navigate to Create Invoice (find Home text, then the control)
-  ############################################
   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: SignInText) THEN
    WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_Username'] Text: Username EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
    WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_Password'] Text: Password EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
@@ -121,55 +116,54 @@ LOOP FOREACH CurrentPdf IN Pdfs
   END
 
   LOOP NavTry FROM 1 TO 3 STEP 1
-   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: HomeText) THEN
+   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: WorkbenchText) THEN
     EXIT LOOP
    END
    IF NavTry = 3 THEN
-    OCR.WaitForTextOnScreen.WaitForTextToAppear OCREngineType: OCR.OcrEngineType.WindowsOcrEngine TextToFind: HomeText IsRegEx: False SearchForTextOn: OCR.SearchForTextOn.ForegroundWindow SearchMode: OCR.SearchMode.WholeOfSpecifiedSource WindowsOcrLanguage: OCR.WindowsOcrLanguage.English ImageWidthMultiplier: 1 ImageHeightMultiplier: 1 ImageMatchingAlgorithm: OCR.ImageMatchingAlgorithm.Basic FailWithTimeoutError: True Timeout: 20
+    OCR.WaitForTextOnScreen.WaitForTextToAppear OCREngineType: OCR.OcrEngineType.WindowsOcrEngine TextToFind: WorkbenchText IsRegEx: False SearchForTextOn: OCR.SearchForTextOn.ForegroundWindow SearchMode: OCR.SearchMode.WholeOfSpecifiedSource WindowsOcrLanguage: OCR.WindowsOcrLanguage.English ImageWidthMultiplier: 1 ImageHeightMultiplier: 1 ImageMatchingAlgorithm: OCR.ImageMatchingAlgorithm.Basic FailWithTimeoutError: True Timeout: 20
    ELSE
     WAIT 5
    END
   END
 
-  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_CreateInvoice'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Tab_Workbench'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
   WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
-
-  ############################################
-  # Question 1 — Purchase order
-  ############################################
-  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: QuestionPO) FOR 60
-  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainElement BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_PONumber']) FOR 60
-  WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_PONumber'] Text: PONumber EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
-  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_NextPO'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: OrdersText) FOR 60
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Tile_Orders'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
   WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
-
-  ############################################
-  # Question 2 — Invoice header (number + today's date)
-  ############################################
-  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: QuestionHeader) FOR 60
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: $'''Order numbers''') FOR 60
+  WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_OrderNumbers'] Text: PONumber EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_Apply'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 60
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: PONumber) FOR 60
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Lnk_PONumber'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: CreateInvoiceText) FOR 60
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_CreateInvoice'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 30
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: StandardInvoiceText) FOR 30
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_StandardInvoice'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: SummaryText) FOR 60
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: InvoiceNumberLabel) FOR 60
   WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_InvoiceNumber'] Text: InvoiceNumber EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
   WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Txt_InvoiceDate'] Text: InvoiceDateText EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
-  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_NextHeader'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
-  WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
 
-  ############################################
-  # Question 3 — Attachments (Door A file input, Door B Open dialog fallback)
-  ############################################
-  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: QuestionAttach) FOR 60
-  SET Uploaded TO False
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: AddToHeaderText) FOR 60
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_AddToHeader'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 30
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: AttachmentMenuText) FOR 30
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Mnu_Attachment'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 30
+  WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: AddAttachmentText) FOR 60
 
   IF (WebAutomation.IfWebPageContains.WebPageContainsElement BrowserInstance: Browser Control: appmask['AribaPortal']['Inp_File']) THEN
    WebAutomation.PopulateTextField.PopulateTextField BrowserInstance: Browser Control: appmask['AribaPortal']['Inp_File'] Text: CurrentPdf EmulateTyping: False UnfocusAfterPopulate: True Mode: WebAutomation.PopulateTextMode.Replace
-   SET Uploaded TO True
   ELSE
-   WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_Attach'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 30
+   WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_ChooseFile'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 30
    WAIT (UIAutomation.WaitForWindow.WaitWindow FindWindowBy: UIAutomation.FindWindowBy.TitleAndOrClass Title: $'''Open''' WaitForWindowTo: UIAutomation.WaitForWindowTo.Open FocusWindow: True) FOR 15
    WAIT 1
    MouseAndKeyboard.SendKeys.SendKeys TextToSend: $'''%CurrentPdf%{Return}''' DelayBetweenKeystrokes: 10 SendTextAsHardwareKeys: False
    WAIT (UIAutomation.WaitForWindow.WaitWindow FindWindowBy: UIAutomation.FindWindowBy.TitleAndOrClass Title: $'''Open''' WaitForWindowTo: UIAutomation.WaitForWindowTo.Close FocusWindow: False) FOR 15
-   SET Uploaded TO True
   END
 
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_AddAttachment'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 60
   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: FileName) FOR 90
   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: UploadFailText) THEN
    SET FileFailed TO True
@@ -177,18 +171,13 @@ LOOP FOREACH CurrentPdf IN Pdfs
   END
 
   IF FileFailed = False THEN
-   WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_NextAttach'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+   WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_Next'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
    WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
-  END
-
-  ############################################
-  # Question 4 — Review and submit
-  ############################################
-  IF FileFailed = False THEN
-   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: QuestionReview) FOR 60
+   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: ReviewText) FOR 60
+   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: SubmitText) FOR 60
    WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_Submit'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
    WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
-   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: ConfirmNeedle) FOR 120
+   WAIT (WebAutomation.WaitForWebPageContent.WebPageToContainText BrowserInstance: Browser Text: SubmittedText) FOR 120
   END
 
   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: DuplicateText) THEN
@@ -197,12 +186,13 @@ LOOP FOREACH CurrentPdf IN Pdfs
   END
 
   WebAutomation.GetDetailsOfWebPage.GetDetails BrowserInstance: Browser Get: WebAutomation.GetDetailsOfWebPageGet.WebPageText WebPageProperty=> PageText
-  Text.ParseText.RegexParse Text: PageText TextToFind: $'''IR\\d+''' IsRegularExpression: True StartingPosition: 0 FirstOccurrenceOnly: True IgnoreCase: True Position=> ConfirmPos Match=> ConfirmationId
-
-  IF ConfirmationId = $'''''' OR FileFailed = True THEN
-   SET FileFailed TO True
-   IF FileMessage = $'''''' THEN
-    SET FileMessage TO $'''No confirmation id on page'''
+  SET ConfirmationId TO InvoiceNumber
+  IF FileFailed = False THEN
+   IF (WebAutomation.IfWebPageContains.WebPageContainsText BrowserInstance: Browser Text: SubmittedText) THEN
+    SET ConfirmationId TO InvoiceNumber
+   ELSE
+    SET FileFailed TO True
+    SET FileMessage TO $'''No Invoice submitted text on page'''
    END
   END
 
@@ -224,8 +214,8 @@ LOOP FOREACH CurrentPdf IN Pdfs
   File.WriteText File: LogPath TextToWrite: $'''%RunStartedText%,%FileName%,Done,%ConfirmationId%,%FileSeconds%,ok''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
  END
 
- IF (WebAutomation.IfWebPageContains.WebPageContainsElement BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_CreateAnother']) THEN
-  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_CreateAnother'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
+ IF (WebAutomation.IfWebPageContains.WebPageContainsElement BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_BackToWorkbench']) THEN
+  WebAutomation.Click.Click BrowserInstance: Browser Control: appmask['AribaPortal']['Btn_BackToWorkbench'] ClickType: WebAutomation.ClickType.LeftClick WaitForPageToLoadTimeout: 120
   WAIT (WebAutomation.WaitForWebPageContent.WebPageToNotContainText BrowserInstance: Browser Text: LoadingText) FOR 90
  END
 END

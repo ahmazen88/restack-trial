@@ -392,13 +392,13 @@ Do not mix `%Orders[0]%` in this flow. Use `=Index(Orders, 1)`.
 
 **Analogy.** A tray on the desk. You drop envelopes in. When you say “go,” the clerk badges in, hands each one over, and files the empty envelope in the done drawer.
 
-**Demonstration.** Paste and run [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin). Capture list: [ui-elements.md](flows/ariba-folder-upload/ui-elements.md). Map: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md).
+**Demonstration.** Paste [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin). SAP click path: [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md). Capture list: [ui-elements.md](flows/ariba-folder-upload/ui-elements.md).
 
-1. Place `*.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** (no trigger).
-2. Practice against the mock (`demo`/`demo`) until the four question waits succeed, then set `PortalUrl` to your realm.
-3. **Get files in folder** → login once → **For each** PDF: wait until **Loading** is gone, wait for the question text, fill, attach (Door A or Door B), submit, parse `IR\d+`.
-4. **On block error** Fixed 3 × 5s around one PDF. Timeouts: page 120s, idle 90s, question 60s, Open dialog 15s, confirm 120s. OCR tolerance **10**.
-5. Done / Failed / Proof / `run-log.csv`. Close the browser after the loop.
+1. Place `4500123456_INV-1001.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** (no trigger).
+2. Mock first (`demo`/`demo`), then `https://supplier.ariba.com`.
+3. **Workbench** → **Orders** → filter PO → **Create Invoice** → **Standard Invoice** → Summary → **Add to Header** → **Attachment** → Choose File → **Add Attachment** → **Next** → **Submit**.
+4. **On block error** 3 × 5s. Loading wait 90s, Open dialog 15s, OCR tolerance **10**.
+5. Done / Failed / Proof / `run-log.csv`.
 
 **On block error** around one PDF so the next file still runs. Do not use **Display select file dialog**, Outlook, SharePoint, work queues, or **SAP automation** (GUI ERP is [playbook 12](#12-sap-posting-from-excel)).
 

@@ -1,66 +1,42 @@
 # Portal uploads like Ariba
 
-**The connected flow is in** [flows/ariba-folder-upload/](flows/ariba-folder-upload/README.md). Paste `AribaFolderUpload.robin` into PAD. This page is the map of that flow: drop folder, waits, questions, and the two attach doors.
+**Connected flow:** [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin) — [how to run](flows/ariba-folder-upload/README.md)  
+**SAP documents used:** [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md)
 
-You **put PDFs in a folder** and **press Play**. No PAD trigger, no mail, no SharePoint, no work queue, no notification.
+You **put PDFs in a folder** and **press Play**. No PAD trigger, no mail, no queue, no notification.
 
-**Analogy.** A tray on the clerk’s desk. You drop envelopes in. When you say “go,” the clerk badges in, waits for the lift doors (loading overlay), answers each window question, hands over the envelope, and files it when the receipt stamp appears.
+The robin follows SAP Business Network (Ariba) public steps: **Workbench** → **Orders** → open PO → **Create Invoice** → **Standard Invoice** → **Summary** → **Add to Header** → **Attachment** → **Choose File** → **Add Attachment** → **Next** → **Submit**.
 
-## Start: the drop folder
+**Analogy.** A tray on the clerk’s desk. You drop envelopes in. When you say “go,” the clerk badges in, waits for the lift (**Loading**), finds the purchase order on the workbench, fills the starred Summary fields, hands the envelope to **Add Attachment**, and leaves when the stamp says submitted.
 
-| Folder | Role |
+## Drop folder
+
+| Path | Role |
 | --- | --- |
-| `C:\RPA\Ariba\Inbox` | You place `*.pdf` here, then run the flow |
-| `C:\RPA\Ariba\Done` | Successful uploads |
-| `C:\RPA\Ariba\Failed` | Files that did not submit (plus a screenshot) |
-| `C:\RPA\Ariba\Proof` | Success screenshots |
-| `C:\RPA\Ariba\run-log.csv` | Started, file, status, confirmation, seconds |
+| `C:\RPA\Ariba\Inbox` | PDFs. Prefer `PO_Invoice.pdf` (mock PO `4500123456`) |
+| `C:\RPA\Ariba\Done` | Submitted |
+| `C:\RPA\Ariba\Failed` | Failed + screenshot |
+| `C:\RPA\Ariba\Proof` | Success screenshot |
+| `C:\RPA\Ariba\run-log.csv` | Status and seconds |
 
-Default practice URL is the **mock portal** in `flows/ariba-folder-upload/mock-portal/` (`demo` / `demo`). Point `PortalUrl` at your Ariba realm after selectors work.
+Practice mock: `demo` / `demo`. Production: `https://supplier.ariba.com`.
 
-## Waits (do not sleep through loading)
+## Waits
 
-The robin file waits for **text to appear or Loading to vanish**. Fixed **Wait** is 1 second, and only after the OS Open dialog appears.
+Wait for **Loading** to vanish (90s) or the next SAP label to appear (60s). Open dialog 15s. File listed after **Add Attachment** 90s. Submit 120s. OCR fallback 20s, **Tolerance 10**. **On block error** 3 × 5s. Invoice date = today `MM/dd/yyyy`.
 
-| Moment | Seconds |
-| --- | ---: |
-| Launch browser | 60 |
-| Page load / SSO / home | 120 |
-| Loading overlay gone | 90 |
-| Each wizard question | 60 |
-| Open dialog | 15 |
-| File name after attach | 90 |
-| Confirmation `IR` | 120 |
-| OCR fallback | 20 |
+## Attach doors (KB0399884)
 
-Retries: **On block error** Fixed **3 × 5 seconds**, then that PDF goes to Failed and the loop continues. Invoice date is **Get current date and time** formatted `MM/dd/yyyy`. **Subtract dates** writes duration to the CSV.
-
-Image/OCR **Tolerance 10** (PAD default). Multiplier **1**.
-
-## Wizard questions the flow finds on screen
-
-Wait for the heading, then fill, then Next. Defaults match the mock. Change the `SET Question*` lines for Ariba. The robin file runs **Get files in folder** on Inbox, then this wizard.
-
-1. Purchase order
-2. Invoice header (number from file name, date = today)
-3. Attachments
-4. Review and submit
-
-If the DOM does not show the home label after three tries, **Wait for text on screen (OCR)** on the foreground window.
-
-## The two doors for a file
-
-| Door | PAD move |
+| Door | PAD |
 | --- | --- |
-| **A —** `input type=file` in the DOM | **Populate text field on web page** with the full path of `%CurrentPdf%`. Emulate typing **off**. |
-| **B —** Attach opens OS `Open` | Click Attach → **Wait for window** (15s) → **Send keys** path + Enter → wait for `Open` to close |
+| A — `input type=file` | **Populate text field on web page**, emulate typing off |
+| B — **Choose File** / Browse | **Wait for window** `Open` (15s) → **Send keys** path |
+| Then always | **Add Attachment**, wait for the file name under Attachments |
 
-Then wait until the **file name** is on the page (90s).
+Default attachment cap **10 MB**; total **100 MB** (KB0393164 / KB0399884). Buyer rules can forbid attachments.
 
 ## Where it goes wrong
 
-Empty inbox → stop successfully. MFA text `Approve sign-in` → log and exit. Duplicate / upload fail / missing `IR\d+` → screenshot, Failed folder, next PDF. Session back on Sign in → login again inside the loop.
+Empty inbox → success stop. **Approve sign-in** → exit. Duplicate invoice numbers blocked by default on the Network. **Create Invoice** missing → OC/ASN/SES rule. No **Invoice submitted** → Failed folder, next PDF.
 
-**SAP GUI is a different playbook** ([12](06-combination-playbooks.md#12-sap-posting-from-excel)).
-
-**Not in this flow:** PAD triggers, Outlook, SharePoint, work queues, Teams, **Display select file dialog**, Internet Explorer.
+**Not in this flow:** PAD triggers, Outlook, SharePoint, work queues, Teams, **Display select file dialog**, Internet Explorer, SAP GUI ([playbook 12](06-combination-playbooks.md#12-sap-posting-from-excel)).

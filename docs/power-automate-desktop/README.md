@@ -15,7 +15,7 @@ It is original reference text built from the product surface area (action names,
 6. **Each function / action (reference):** [modules/](modules/) — purpose, inputs, outputs, exceptions.
 7. **How each function works:** [05-how-each-function-works.md](05-how-each-function-works.md) — use case, demonstration, analogy for every item.
 8. **In combination:** [06-combination-playbooks.md](06-combination-playbooks.md) — 19 end-to-end playbooks.
-9. **Portal uploads (Ariba-like):** [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md) — map. Connected flow: [flows/ariba-folder-upload/](flows/ariba-folder-upload/README.md).
+9. **Portal uploads (Ariba-like):** [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). SAP sources: [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md). Flow: [flows/ariba-folder-upload/](flows/ariba-folder-upload/README.md).
 
 ## Counts (current catalog)
 
