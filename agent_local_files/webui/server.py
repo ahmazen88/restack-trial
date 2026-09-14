@@ -180,9 +180,11 @@ async def new_chat() -> JSONResponse:
 def main() -> None:
     # Keep-alive is generous because a single answer can take a few minutes on
     # CPU-only local inference.
+    # Bind all interfaces so the Cloud Agent port-forwarder can reach the UI
+    # (loopback-only binding is not reachable through the forwarded port).
     uvicorn.run(
         app,
-        host="127.0.0.1",
+        host="0.0.0.0",  # noqa: S104
         port=8000,
         timeout_keep_alive=600,
     )
