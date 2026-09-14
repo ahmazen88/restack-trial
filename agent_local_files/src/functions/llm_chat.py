@@ -57,50 +57,129 @@ def _allowed_tool_names(tools: list | None) -> set[str]:
     return names
 
 
+def _iter_json_objects(text: str) -> list:
+    """Return JSON values found in ``text`` (pure JSON or embedded in prose)."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```[a-zA-Z]*\n?", "", stripped).rstrip("`").strip()
+    tag = re.search(r"<tool_call>\s*(.+?)\s*</tool_call>", stripped, re.DOTALL)
+    if tag:
+        stripped = tag.group(1).strip()
+    try:
+        return [json.loads(stripped)]
+    except (ValueError, TypeError):
+        pass
+    # Fall back to scanning for embedded objects (e.g. the model wrote prose and
+    # then a raw {"name": ..., "parameters": ...} tool call).
+    decoder = json.JSONDecoder()
+    objects: list = []
+    index = 0
+    while index < len(stripped):
+        if stripped[index] == "{":
+            try:
+                obj, end = decoder.raw_decode(stripped[index:])
+                objects.append(obj)
+                index += end
+                continue
+            except ValueError:
+                pass
+        index += 1
+    return objects
+
+
+# Small models sometimes use short/alternate argument names when they emit a
+# tool call as text; map those back to the real parameter names.
+_ARG_ALIASES: dict[str, dict[str, str]] = {
+    "search_knowledge": {"q": "query", "search": "query", "text": "query"},
+}
+
+
+def _normalize_args(name: str, args: dict) -> dict:
+    normalized = dict(args)
+    for alias, canonical in _ARG_ALIASES.get(name, {}).items():
+        if alias in normalized and canonical not in normalized:
+            normalized[canonical] = normalized.pop(alias)
+    return normalized
+
+
+def _make_tool_call(index: int, name: str, arguments: str) -> ChatCompletionMessageToolCall:
+    return ChatCompletionMessageToolCall(
+        id=f"call_recovered_{index}",
+        type="function",
+        function=Function(name=name, arguments=arguments),
+    )
+
+
+# String argument fields to pull out per tool when the JSON is too malformed to
+# parse. write_file's content can be huge/quoted, so it is matched last/greedily.
+_STRING_FIELDS: dict[str, tuple[str, ...]] = {
+    "search_knowledge": ("query",),
+    "read_file": ("path",),
+    "list_files": ("directory",),
+    "write_file": ("path", "content"),
+}
+
+
+def _regex_recover(
+    content: str, allowed: set[str]
+) -> list[ChatCompletionMessageToolCall]:
+    """Best-effort recovery when the emitted tool call JSON is malformed."""
+    recovered: list[ChatCompletionMessageToolCall] = []
+    for index, match in enumerate(
+        re.finditer(r'"name"\s*:\s*"([a-zA-Z_]+)"', content)
+    ):
+        name = match.group(1)
+        if name not in allowed:
+            continue
+        segment = content[match.end() :]
+        args: dict[str, str] = {}
+        for field in _STRING_FIELDS.get(name, ()):
+            field_match = re.search(
+                rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"', segment
+            )
+            if field_match:
+                args[field] = (
+                    field_match.group(1)
+                    .replace('\\"', '"')
+                    .replace("\\n", "\n")
+                )
+        if args:
+            recovered.append(_make_tool_call(index, name, json.dumps(args)))
+    return recovered
+
+
 def _recover_tool_calls_from_text(
     content: str | None, allowed: set[str]
 ) -> list[ChatCompletionMessageToolCall] | None:
-    """Recover a tool call that the model emitted as plain text.
+    """Recover a tool call that the model emitted as text instead of a real one.
 
-    Some local models (e.g. qwen2.5 served by Ollama) occasionally return a tool
-    call as JSON in the message content instead of a structured ``tool_calls``
-    entry, so Ollama never parses it. The model still genuinely decided to call
-    the tool with valid arguments, so we normalise that JSON back into a real
-    tool call rather than losing the intent.
+    Local models served by Ollama (e.g. llama3.1 / qwen2.5) sometimes return a
+    tool call as JSON in the message content — either as the whole message,
+    embedded in a sentence, or as slightly malformed JSON — so Ollama never
+    parses it into ``tool_calls``. The model still genuinely decided to call the
+    tool, so we normalise that back into a real tool call rather than losing it.
     """
     if not content:
         return None
-    text = content.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text).rstrip("`").strip()
-    tag = re.search(r"<tool_call>\s*(.+?)\s*</tool_call>", text, re.DOTALL)
-    if tag:
-        text = tag.group(1).strip()
-    if not text.startswith(("{", "[")):
-        return None
-    try:
-        data = json.loads(text)
-    except (ValueError, TypeError):
-        return None
-    items = data if isinstance(data, list) else [data]
     recovered: list[ChatCompletionMessageToolCall] = []
-    for index, item in enumerate(items):
+    candidates: list = []
+    for value in _iter_json_objects(content):
+        candidates.extend(value if isinstance(value, list) else [value])
+    for index, item in enumerate(candidates):
         if not isinstance(item, dict):
             continue
         name = item.get("name")
         arguments = item.get("arguments", item.get("parameters"))
         if name not in allowed or not isinstance(arguments, dict | str):
             continue
+        if isinstance(arguments, dict):
+            arguments = _normalize_args(name, arguments)
         arguments_json = (
             arguments if isinstance(arguments, str) else json.dumps(arguments)
         )
-        recovered.append(
-            ChatCompletionMessageToolCall(
-                id=f"call_recovered_{index}",
-                type="function",
-                function=Function(name=name, arguments=arguments_json),
-            )
-        )
+        recovered.append(_make_tool_call(index, name, arguments_json))
+    if not recovered and '"name"' in content:
+        recovered = _regex_recover(content, allowed)
     return recovered or None
 
 

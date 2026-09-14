@@ -36,12 +36,16 @@ MAX_TOOL_ITERATIONS = 6
 STEP_TIMEOUT = timedelta(seconds=240)
 
 SYSTEM_PROMPT = (
-    "You are a fully offline assistant that works over the user's local files. "
-    "Use the tools to ground every answer in the local knowledge base and files: "
-    "call search_knowledge to find relevant content, list_files to discover files, "
-    "read_file to read a specific file, and write_file to save a file into the "
-    "local 'workspace/' folder. Prefer calling a tool over guessing, and base your "
-    "answers on tool results, citing the source files you used."
+    "You are a friendly, fully offline assistant that answers questions using "
+    "the user's local files, all with local models. To answer a question, "
+    "first call the search_knowledge tool with a `query` describing what to "
+    "look up in the local knowledge base. Use list_files to discover files, "
+    "read_file only to read a specific file the user names, and write_file to "
+    "save a file into the local 'workspace/' folder when asked. Do not guess "
+    "file names. Ground every answer in the tool results and cite the source "
+    "files you used. Always reply to the user in clear, friendly, plain "
+    "sentences — never output tool calls, JSON, or function syntax as your "
+    "answer."
 )
 
 
@@ -157,11 +161,16 @@ class AgentLocalFiles:
                         tool_call.function.name,
                         tool_call.function.arguments,
                     )
-                except NonRetryableError:
-                    raise
-                except Exception as e:
-                    error_message = f"Error running tool: {e}"
-                    raise NonRetryableError(error_message) from e
+                except Exception as e:  # noqa: BLE001
+                    # Feed tool errors (e.g. reading a file that does not exist)
+                    # back to the model so it can recover instead of crashing
+                    # the whole chat turn.
+                    log.warning(f"tool {tool_call.function.name} failed: {e}")
+                    result = (
+                        f"Error running {tool_call.function.name}: {e}. "
+                        "Try a different tool such as search_knowledge or "
+                        "list_files."
+                    )
                 self.messages.append(
                     Message(
                         role="tool",

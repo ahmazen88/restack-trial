@@ -3,6 +3,11 @@ from restack_ai.function import NonRetryableError, function, log
 
 from src.knowledge_base import search
 
+# Clamp how many chunks we retrieve so the answer stays grounded even when a
+# small local model asks for too few (e.g. k=0 or k=1) or too many chunks.
+MIN_K = 3
+MAX_K = 8
+
 
 class SearchKnowledgeInput(BaseModel):
     query: str = Field(description="What to look up in the local knowledge base")
@@ -19,7 +24,8 @@ async def search_knowledge(
 ) -> SearchKnowledgeOutput:
     try:
         log.info("search_knowledge started", function_input=function_input)
-        hits = search(function_input.query, k=function_input.k)
+        k = max(MIN_K, min(function_input.k, MAX_K))
+        hits = search(function_input.query, k=k)
         if not hits:
             return SearchKnowledgeOutput(
                 results="No matching content found in the local knowledge base."
