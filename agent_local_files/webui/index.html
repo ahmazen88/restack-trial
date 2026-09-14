@@ -177,6 +177,11 @@
       const sendBtn = document.getElementById("send");
       const newChatBtn = document.getElementById("newchat");
 
+      // Local CPU inference can take a couple of minutes; give the request a
+      // generous ceiling so a genuinely stuck call fails gracefully instead of
+      // spinning forever.
+      const REQUEST_TIMEOUT_MS = 420000;
+
       function scrollToBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
@@ -233,11 +238,17 @@
         autoGrow();
         setBusy(true);
         const thinking = addThinking();
+        const controller = new AbortController();
+        const timer = setTimeout(
+          () => controller.abort(),
+          REQUEST_TIMEOUT_MS
+        );
         try {
           const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message: text }),
+            signal: controller.signal,
           });
           const data = await res.json();
           thinking.remove();
@@ -248,8 +259,17 @@
           }
         } catch (err) {
           thinking.remove();
-          addBubble("assistant", "⚠️ Could not reach the assistant. " + err);
+          if (err.name === "AbortError") {
+            addBubble(
+              "assistant",
+              "⚠️ That took longer than expected and timed out. The local " +
+                "model may still be busy — please try again in a moment."
+            );
+          } else {
+            addBubble("assistant", "⚠️ Could not reach the assistant. " + err);
+          }
         } finally {
+          clearTimeout(timer);
           setBusy(false);
         }
       }
