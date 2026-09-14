@@ -7,7 +7,7 @@ dummy API key.
 
 This project uses two local models:
 
-- llama3.2: a chat model that supports tool calling. It powers the agent's
+- llama3.1:8b: a chat model that supports tool calling. It powers the agent's
   reasoning and decides which tools to call.
 - nomic-embed-text: an embedding model that turns text into 768-dimensional
   vectors. It powers semantic search over the local knowledge base.
