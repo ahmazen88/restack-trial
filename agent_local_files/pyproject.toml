@@ -11,19 +11,22 @@ dependencies = [
     "pydantic>=2.10.6",
     "watchfiles>=1.0.4",
     "python-dotenv==1.0.1",
-    "restack-ai>=0.0.91",]
+    "restack-ai>=0.0.91",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",]
 
 [project.scripts]
 dev = "src.services:watch_services"
 services = "src.services:run_services"
 schedule = "schedule:run_schedule"
 ingest = "ingest:run_ingest"
+serve = "webui.server:main"
 
 [tool.hatch.build.targets.sdist]
-include = ["src"]
+include = ["src", "webui"]
 
 [tool.hatch.build.targets.wheel]
-include = ["src"]
+include = ["src", "webui"]
 
 [build-system]
 requires = ["hatchling"]
