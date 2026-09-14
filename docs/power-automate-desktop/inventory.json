@@ -1,0 +1,2249 @@
+{
+  "product": "Power Automate for desktop",
+  "source": "Microsoft Learn actions reference (action names and parameter names)",
+  "source_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference",
+  "module_count": 52,
+  "action_count": 444,
+  "modules": [
+    {
+      "slug": "access",
+      "title": "Access",
+      "summary": "Open, query, and close local Microsoft Access databases.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/access",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Launch Access",
+          "anchor": "launchaccess"
+        },
+        {
+          "name": "Read Access table",
+          "anchor": "readaccesstable"
+        },
+        {
+          "name": "Run Access query",
+          "anchor": "runaccessquery"
+        },
+        {
+          "name": "Run Access macro",
+          "anchor": "runaccessmacro"
+        },
+        {
+          "name": "Close Access",
+          "anchor": "closeaccess"
+        }
+      ]
+    },
+    {
+      "slug": "activedirectory",
+      "title": "Active Directory",
+      "summary": "Connect to Active Directory and manage users, groups, and objects.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/activedirectory",
+      "action_count": 15,
+      "actions": [
+        {
+          "name": "Create group",
+          "anchor": "creategroup"
+        },
+        {
+          "name": "Get group info",
+          "anchor": "getgroupinfo"
+        },
+        {
+          "name": "Get group members",
+          "anchor": "getgroupmembers"
+        },
+        {
+          "name": "Modify group",
+          "anchor": "modifygroupaction"
+        },
+        {
+          "name": "Create object",
+          "anchor": "createobject"
+        },
+        {
+          "name": "Delete object",
+          "anchor": "deleteobject"
+        },
+        {
+          "name": "Move object",
+          "anchor": "moveobject"
+        },
+        {
+          "name": "Rename object",
+          "anchor": "renameobject"
+        },
+        {
+          "name": "Create user",
+          "anchor": "createuser"
+        },
+        {
+          "name": "Get user info",
+          "anchor": "getuserinfo"
+        },
+        {
+          "name": "Modify user",
+          "anchor": "modifyuseraction"
+        },
+        {
+          "name": "Unlock user",
+          "anchor": "unlockuser"
+        },
+        {
+          "name": "Update user info",
+          "anchor": "updateuserinfo"
+        },
+        {
+          "name": "Connect to server",
+          "anchor": "connecttoserveraction"
+        },
+        {
+          "name": "Close connection",
+          "anchor": "closeconnection"
+        }
+      ]
+    },
+    {
+      "slug": "aibuilder",
+      "title": "AI Builder (preview)",
+      "summary": "Call AI Builder models from a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/aibuilder",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Create text with GPT (preview)",
+          "anchor": "callgpt"
+        }
+      ]
+    },
+    {
+      "slug": "aws",
+      "title": "AWS",
+      "summary": "Manage Amazon EC2, S3, and related AWS resources from a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/aws",
+      "action_count": 15,
+      "actions": [
+        {
+          "name": "Start EC2 instance",
+          "anchor": "startec2instance"
+        },
+        {
+          "name": "Stop EC2 instance",
+          "anchor": "stopec2instance"
+        },
+        {
+          "name": "Reboot EC2 instance",
+          "anchor": "rebootec2instance"
+        },
+        {
+          "name": "Get available EC2 instances",
+          "anchor": "getavailableec2instances"
+        },
+        {
+          "name": "Describe instances",
+          "anchor": "describeec2instance"
+        },
+        {
+          "name": "Create snapshot",
+          "anchor": "createsnapshot"
+        },
+        {
+          "name": "Describe snapshots",
+          "anchor": "describesnapshots"
+        },
+        {
+          "name": "Delete snapshot",
+          "anchor": "deletesnapshot"
+        },
+        {
+          "name": "Create volume",
+          "anchor": "createvolumeaction"
+        },
+        {
+          "name": "Attach volume",
+          "anchor": "attachvolume"
+        },
+        {
+          "name": "Detach volume",
+          "anchor": "detachvolume"
+        },
+        {
+          "name": "Describe volumes",
+          "anchor": "describevolumes"
+        },
+        {
+          "name": "Delete volume",
+          "anchor": "deletevolume"
+        },
+        {
+          "name": "Create EC2 session",
+          "anchor": "createec2sessionaction"
+        },
+        {
+          "name": "End EC2 session",
+          "anchor": "endec2session"
+        }
+      ]
+    },
+    {
+      "slug": "azure",
+      "title": "Azure",
+      "summary": "Manage Azure resource groups, disks, blobs, and related cloud resources.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/azure",
+      "action_count": 20,
+      "actions": [
+        {
+          "name": "Get resource groups",
+          "anchor": "getresourcegroups"
+        },
+        {
+          "name": "Create resource group",
+          "anchor": "createresourcegroup"
+        },
+        {
+          "name": "Delete resource group",
+          "anchor": "deleteresourcegroup"
+        },
+        {
+          "name": "Get disks",
+          "anchor": "getdisksaction"
+        },
+        {
+          "name": "Attach disk",
+          "anchor": "attachdisk"
+        },
+        {
+          "name": "Detach disk",
+          "anchor": "detachdisk"
+        },
+        {
+          "name": "Create managed disk",
+          "anchor": "createmanageddiskaction"
+        },
+        {
+          "name": "Delete disk",
+          "anchor": "deletedisk"
+        },
+        {
+          "name": "Get snapshots",
+          "anchor": "getsnapshotsaction"
+        },
+        {
+          "name": "Create snapshot",
+          "anchor": "createsnapshot"
+        },
+        {
+          "name": "Delete snapshot",
+          "anchor": "deletesnapshot"
+        },
+        {
+          "name": "Get virtual machines",
+          "anchor": "getvirtualmachines"
+        },
+        {
+          "name": "Describe virtual machine",
+          "anchor": "describevirtualmachineaction"
+        },
+        {
+          "name": "Start virtual machine",
+          "anchor": "startvirtualmachine"
+        },
+        {
+          "name": "Stop virtual machine",
+          "anchor": "stopvirtualmachine"
+        },
+        {
+          "name": "Shut down virtual machine",
+          "anchor": "shutdownvirtualmachine"
+        },
+        {
+          "name": "Restart virtual machine",
+          "anchor": "restartvirtualmachine"
+        },
+        {
+          "name": "Create session",
+          "anchor": "createsessionaction"
+        },
+        {
+          "name": "Get subscriptions",
+          "anchor": "getsubscriptions"
+        },
+        {
+          "name": "End session",
+          "anchor": "endsession"
+        }
+      ]
+    },
+    {
+      "slug": "clipboard",
+      "title": "Clipboard",
+      "summary": "Read, write, and clear Windows clipboard text.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/clipboard",
+      "action_count": 3,
+      "actions": [
+        {
+          "name": "Get clipboard text",
+          "anchor": "gettext"
+        },
+        {
+          "name": "Set clipboard Text",
+          "anchor": "settext"
+        },
+        {
+          "name": "Clear clipboard contents",
+          "anchor": "clear"
+        }
+      ]
+    },
+    {
+      "slug": "cloudconnectors",
+      "title": "Cloud connectors",
+      "summary": "Run Power Automate cloud connector operations inside a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/cloudconnectors",
+      "action_count": 0,
+      "actions": []
+    },
+    {
+      "slug": "cmd",
+      "title": "CMD session",
+      "summary": "Open a command prompt session and send commands interactively.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/cmd",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Open CMD session",
+          "anchor": "open"
+        },
+        {
+          "name": "Read from CMD session",
+          "anchor": "readfromcmdsession"
+        },
+        {
+          "name": "Write to CMD session",
+          "anchor": "write"
+        },
+        {
+          "name": "Wait for text on CMD session",
+          "anchor": "waitfortext"
+        },
+        {
+          "name": "Close CMD session",
+          "anchor": "close"
+        }
+      ]
+    },
+    {
+      "slug": "compression",
+      "title": "Compression",
+      "summary": "Zip and unzip files and folders.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/compression",
+      "action_count": 2,
+      "actions": [
+        {
+          "name": "ZIP files",
+          "anchor": "zipfiles"
+        },
+        {
+          "name": "Unzip files",
+          "anchor": "unzipfiles"
+        }
+      ]
+    },
+    {
+      "slug": "conditionals",
+      "title": "Conditionals",
+      "summary": "Branch the flow with If, Else if, Else, Switch, and Case.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/conditionals",
+      "action_count": 6,
+      "actions": [
+        {
+          "name": "Case",
+          "anchor": "case"
+        },
+        {
+          "name": "Default case",
+          "anchor": "casedefault"
+        },
+        {
+          "name": "Else",
+          "anchor": "else"
+        },
+        {
+          "name": "Else if",
+          "anchor": "elseif"
+        },
+        {
+          "name": "If",
+          "anchor": "if"
+        },
+        {
+          "name": "Switch",
+          "anchor": "switch"
+        }
+      ]
+    },
+    {
+      "slug": "cryptography",
+      "title": "Cryptography",
+      "summary": "Hash, encrypt, decrypt, and encode values.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/cryptography",
+      "action_count": 8,
+      "actions": [
+        {
+          "name": "Encrypt text with AES",
+          "anchor": "encrypttextaction"
+        },
+        {
+          "name": "Decrypt text with AES",
+          "anchor": "decrypttextaction"
+        },
+        {
+          "name": "Encrypt from file with AES",
+          "anchor": "encryptfromfileaction"
+        },
+        {
+          "name": "Decrypt to file with AES",
+          "anchor": "decrypttofileaction"
+        },
+        {
+          "name": "Hash text",
+          "anchor": "hashtext"
+        },
+        {
+          "name": "Hash from file",
+          "anchor": "hashfromfile"
+        },
+        {
+          "name": "Hash text with key",
+          "anchor": "hashtextwithkey"
+        },
+        {
+          "name": "Hash from file with key",
+          "anchor": "hashfromfilewithkey"
+        }
+      ]
+    },
+    {
+      "slug": "custommodule",
+      "title": "Custom actions",
+      "summary": "Use organization-uploaded custom action modules in a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/custommodule",
+      "action_count": 0,
+      "actions": []
+    },
+    {
+      "slug": "cyberark",
+      "title": "CyberArk",
+      "summary": "Retrieve secrets from CyberArk vaults at runtime.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/cyberark",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Get password from CyberArk",
+          "anchor": "getpasswordbase"
+        }
+      ]
+    },
+    {
+      "slug": "database",
+      "title": "Database",
+      "summary": "Open SQL connections and run statements against databases.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/database",
+      "action_count": 2,
+      "actions": [
+        {
+          "name": "Open SQL connection",
+          "anchor": "connect"
+        },
+        {
+          "name": "Close SQL connection",
+          "anchor": "close"
+        }
+      ]
+    },
+    {
+      "slug": "datetime",
+      "title": "Date time",
+      "summary": "Read the current datetime and add or subtract time units.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/datetime",
+      "action_count": 3,
+      "actions": [
+        {
+          "name": "Add to datetime",
+          "anchor": "add"
+        },
+        {
+          "name": "Subtract dates",
+          "anchor": "subtract"
+        },
+        {
+          "name": "Get current date and time",
+          "anchor": "getcurrentdatetime"
+        }
+      ]
+    },
+    {
+      "slug": "display",
+      "title": "Message boxes",
+      "summary": "Show dialogs, input boxes, and custom forms to the user.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/display",
+      "action_count": 7,
+      "actions": [
+        {
+          "name": "Display message",
+          "anchor": "showmessagedialog"
+        },
+        {
+          "name": "Display input dialog",
+          "anchor": "inputdialog"
+        },
+        {
+          "name": "Display select date dialog",
+          "anchor": "selectdatedialog"
+        },
+        {
+          "name": "Display select from list dialog",
+          "anchor": "selectfromlistdialog"
+        },
+        {
+          "name": "Display select  file dialog",
+          "anchor": "selectfiledialog"
+        },
+        {
+          "name": "Display select folder dialog",
+          "anchor": "selectfolder"
+        },
+        {
+          "name": "Display custom form",
+          "anchor": "showcustomdialog"
+        }
+      ]
+    },
+    {
+      "slug": "email",
+      "title": "Email",
+      "summary": "Send and retrieve mail through IMAP, POP3, and SMTP.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/email",
+      "action_count": 3,
+      "actions": [
+        {
+          "name": "Retrieve email messages",
+          "anchor": "retrieveemails"
+        },
+        {
+          "name": "Process email messages",
+          "anchor": "processemails"
+        },
+        {
+          "name": "Send email",
+          "anchor": "sendemail"
+        }
+      ]
+    },
+    {
+      "slug": "excel",
+      "title": "Excel",
+      "summary": "Launch Excel, read and write cells, and manage worksheets and macros.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/excel",
+      "action_count": 41,
+      "actions": [
+        {
+          "name": "Resize columns/rows in Excel worksheet",
+          "anchor": "resizecolumnsorrowsaction"
+        },
+        {
+          "name": "Run Excel macro",
+          "anchor": "runmacro"
+        },
+        {
+          "name": "Get active Excel worksheet",
+          "anchor": "getactiveworksheet"
+        },
+        {
+          "name": "Get all Excel worksheets",
+          "anchor": "getallworksheets"
+        },
+        {
+          "name": "Delete Excel worksheet",
+          "anchor": "deleteworksheet"
+        },
+        {
+          "name": "Rename Excel worksheet",
+          "anchor": "renameworksheet"
+        },
+        {
+          "name": "Copy Excel worksheet",
+          "anchor": "copyexcelworksheet"
+        },
+        {
+          "name": "Activate cell in Excel worksheet",
+          "anchor": "activatecellinexcel"
+        },
+        {
+          "name": "Select cells in Excel worksheet",
+          "anchor": "selectcellsfromexcel"
+        },
+        {
+          "name": "Get selected cell range from Excel worksheet",
+          "anchor": "getselectedcellrange"
+        },
+        {
+          "name": "Copy cells from Excel worksheet",
+          "anchor": "copycellsfromexcel"
+        },
+        {
+          "name": "Paste cells to Excel worksheet",
+          "anchor": "pastecellstoexcel"
+        },
+        {
+          "name": "Delete from Excel worksheet",
+          "anchor": "deletecellsaction"
+        },
+        {
+          "name": "Insert row to Excel worksheet",
+          "anchor": "insertrow"
+        },
+        {
+          "name": "Delete row from Excel worksheet",
+          "anchor": "deleterow"
+        },
+        {
+          "name": "Insert column to Excel worksheet",
+          "anchor": "insertcolumn"
+        },
+        {
+          "name": "Delete column from Excel worksheet",
+          "anchor": "deletecolumn"
+        },
+        {
+          "name": "Find and replace cells in Excel worksheet",
+          "anchor": "findandreplaceaction"
+        },
+        {
+          "name": "Get first free row on column from Excel worksheet",
+          "anchor": "getfirstfreerowoncolumn"
+        },
+        {
+          "name": "Read formula from Excel",
+          "anchor": "readcellformula"
+        },
+        {
+          "name": "Get table range from Excel worksheet",
+          "anchor": "gettablerange"
+        },
+        {
+          "name": "Auto fill cells in Excel worksheet",
+          "anchor": "autofillcells"
+        },
+        {
+          "name": "Append cells in Excel worksheet",
+          "anchor": "appendcells"
+        },
+        {
+          "name": "Lookup range in Excel worksheet",
+          "anchor": "lookuprange"
+        },
+        {
+          "name": "Set color of cells in Excel worksheet",
+          "anchor": "setcolor"
+        },
+        {
+          "name": "Launch Excel",
+          "anchor": "launchexcel"
+        },
+        {
+          "name": "Attach to running Excel",
+          "anchor": "attach"
+        },
+        {
+          "name": "Read from Excel worksheet",
+          "anchor": "readfromexcel"
+        },
+        {
+          "name": "Get active cell on Excel worksheet",
+          "anchor": "getactivecell"
+        },
+        {
+          "name": "Save Excel",
+          "anchor": "saveexcel"
+        },
+        {
+          "name": "Write to Excel worksheet",
+          "anchor": "writetoexcel"
+        },
+        {
+          "name": "Close Excel",
+          "anchor": "closeexcel"
+        },
+        {
+          "name": "Set active Excel worksheet",
+          "anchor": "setactiveworksheet"
+        },
+        {
+          "name": "Add new worksheet",
+          "anchor": "addworksheet"
+        },
+        {
+          "name": "Get first free column/row from Excel worksheet",
+          "anchor": "getfirstfreecolumnrow"
+        },
+        {
+          "name": "Get column name on Excel worksheet",
+          "anchor": "getcolumnname"
+        },
+        {
+          "name": "Clear cells in Excel worksheet",
+          "anchor": "clearcellsfromexcel"
+        },
+        {
+          "name": "Sort cells in Excel worksheet",
+          "anchor": "sortcellsfromexcel"
+        },
+        {
+          "name": "Filter cells in Excel worksheet",
+          "anchor": "filtercellsfromexcel"
+        },
+        {
+          "name": "Clear filters in Excel worksheet",
+          "anchor": "clearfilterfromexcel"
+        },
+        {
+          "name": "Get empty cell",
+          "anchor": "getemptycellfromexcel"
+        }
+      ]
+    },
+    {
+      "slug": "exchange",
+      "title": "Exchange Server",
+      "summary": "Connect to Exchange and process mailbox messages.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/exchange",
+      "action_count": 4,
+      "actions": [
+        {
+          "name": "Connect to Exchange server",
+          "anchor": "connecttoexchangeserver"
+        },
+        {
+          "name": "Retrieve Exchange email messages",
+          "anchor": "retrieveexchangemessages"
+        },
+        {
+          "name": "Send Exchange email message",
+          "anchor": "sendmessage"
+        },
+        {
+          "name": "Process Exchange email messages",
+          "anchor": "processexchangemessages"
+        }
+      ]
+    },
+    {
+      "slug": "file",
+      "title": "File",
+      "summary": "Create, copy, move, read, write, and convert files.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/file",
+      "action_count": 16,
+      "actions": [
+        {
+          "name": "If file exists",
+          "anchor": "iffileaction"
+        },
+        {
+          "name": "Wait for file",
+          "anchor": "waitforfileaction"
+        },
+        {
+          "name": "Copy file(s)",
+          "anchor": "copy"
+        },
+        {
+          "name": "Move file(s)",
+          "anchor": "move"
+        },
+        {
+          "name": "Delete file(s)",
+          "anchor": "delete"
+        },
+        {
+          "name": "Rename file(s)",
+          "anchor": "renamefiles"
+        },
+        {
+          "name": "Read text from file",
+          "anchor": "readtextfromfile"
+        },
+        {
+          "name": "Write text to file",
+          "anchor": "writetext"
+        },
+        {
+          "name": "Read from CSV file",
+          "anchor": "readfromcsvfile"
+        },
+        {
+          "name": "Write to CSV file",
+          "anchor": "writetocsvfile"
+        },
+        {
+          "name": "Get file path part",
+          "anchor": "getpathpart"
+        },
+        {
+          "name": "Get temporary file",
+          "anchor": "gettemppath"
+        },
+        {
+          "name": "Convert file to Base64",
+          "anchor": "convertfiletobase64action"
+        },
+        {
+          "name": "Convert Base64 to file",
+          "anchor": "convertbase64tofileaction"
+        },
+        {
+          "name": "Convert file to binary data",
+          "anchor": "convertfiletobinaryaction"
+        },
+        {
+          "name": "Convert binary data to file",
+          "anchor": "convertbinarytofileaction"
+        }
+      ]
+    },
+    {
+      "slug": "flowcontrol",
+      "title": "Flow control",
+      "summary": "Control execution order, errors, subflows, waits, and regions.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/flowcontrol",
+      "action_count": 14,
+      "actions": [
+        {
+          "name": "If safe stop requested",
+          "anchor": "ifsafestopaction"
+        },
+        {
+          "name": "Comment",
+          "anchor": "comment"
+        },
+        {
+          "name": "End",
+          "anchor": "end"
+        },
+        {
+          "name": "End region",
+          "anchor": "endregion"
+        },
+        {
+          "name": "Exit subflow",
+          "anchor": "exitfunction"
+        },
+        {
+          "name": "Get last error",
+          "anchor": "getlasterror"
+        },
+        {
+          "name": "Go to",
+          "anchor": "goto"
+        },
+        {
+          "name": "Label",
+          "anchor": "label"
+        },
+        {
+          "name": "Throw custom error",
+          "anchor": ""
+        },
+        {
+          "name": "On block error",
+          "anchor": "block"
+        },
+        {
+          "name": "Region",
+          "anchor": "region"
+        },
+        {
+          "name": "Run subflow",
+          "anchor": "callfunction"
+        },
+        {
+          "name": "Stop flow",
+          "anchor": "exit"
+        },
+        {
+          "name": "Wait",
+          "anchor": "wait"
+        }
+      ]
+    },
+    {
+      "slug": "folder",
+      "title": "Folder",
+      "summary": "Create, copy, move, list, and delete folders.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/folder",
+      "action_count": 10,
+      "actions": [
+        {
+          "name": "If folder exists",
+          "anchor": "iffolderexistsaction"
+        },
+        {
+          "name": "Get files in folder",
+          "anchor": "getfiles"
+        },
+        {
+          "name": "Get subfolders in folder",
+          "anchor": "getsubfolders"
+        },
+        {
+          "name": "Create folder",
+          "anchor": "create"
+        },
+        {
+          "name": "Delete folder",
+          "anchor": "delete"
+        },
+        {
+          "name": "Empty folder",
+          "anchor": "empty"
+        },
+        {
+          "name": "Copy folder",
+          "anchor": "copy"
+        },
+        {
+          "name": "Move folder",
+          "anchor": "move"
+        },
+        {
+          "name": "Rename folder",
+          "anchor": "rename"
+        },
+        {
+          "name": "Get special folder",
+          "anchor": "getspecialfolder"
+        }
+      ]
+    },
+    {
+      "slug": "ftp",
+      "title": "FTP",
+      "summary": "Connect to FTP/FTPS servers and transfer files.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/ftp",
+      "action_count": 15,
+      "actions": [
+        {
+          "name": "Open FTP connection",
+          "anchor": "openconnection"
+        },
+        {
+          "name": "List FTP directory",
+          "anchor": "listdirectory"
+        },
+        {
+          "name": "Open secure FTP connection",
+          "anchor": "opensecureconnection"
+        },
+        {
+          "name": "Close connection",
+          "anchor": "closeconnection"
+        },
+        {
+          "name": "Change working directory",
+          "anchor": "changeworkingdirectory"
+        },
+        {
+          "name": "Download file(s) from FTP",
+          "anchor": "downloadfiles"
+        },
+        {
+          "name": "Download folder(s) from FTP",
+          "anchor": "downloadfolders"
+        },
+        {
+          "name": "Upload File(s) to FTP",
+          "anchor": "uploadfiles"
+        },
+        {
+          "name": "Upload folder(s) to FTP",
+          "anchor": "uploadfolders"
+        },
+        {
+          "name": "Delete FTP file",
+          "anchor": "deletefiles"
+        },
+        {
+          "name": "Rename FTP File",
+          "anchor": "renamefile"
+        },
+        {
+          "name": "Create FTP directory",
+          "anchor": "createdirectory"
+        },
+        {
+          "name": "Delete FTP directory",
+          "anchor": "deletedirectory"
+        },
+        {
+          "name": "Invoke FTP command",
+          "anchor": "invokecommand"
+        },
+        {
+          "name": "Synchronize directories",
+          "anchor": "synchronizedirectoryaction"
+        }
+      ]
+    },
+    {
+      "slug": "googlecognitive",
+      "title": "Google Cognitive",
+      "summary": "Call Google Cloud Vision and Natural Language APIs.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/googlecognitive",
+      "action_count": 9,
+      "actions": [
+        {
+          "name": "Analyze sentiment",
+          "anchor": "analyzesentimentgoogle"
+        },
+        {
+          "name": "Analyze entities",
+          "anchor": "analyzeentitiesgoogle"
+        },
+        {
+          "name": "Analyze syntax",
+          "anchor": "analyzesyntaxgoogle"
+        },
+        {
+          "name": "Label detection",
+          "anchor": "labeldetectiongoogle"
+        },
+        {
+          "name": "Landmark detection",
+          "anchor": "landmarkdetectiongoogle"
+        },
+        {
+          "name": "Text Detection",
+          "anchor": "textdetectiongoogle"
+        },
+        {
+          "name": "Logo detection",
+          "anchor": "logodetectiongoogle"
+        },
+        {
+          "name": "Image properties detection",
+          "anchor": "imagepropertiesdetectiongoogle"
+        },
+        {
+          "name": "Safe search detection",
+          "anchor": "safesearchdetectiongoogle"
+        }
+      ]
+    },
+    {
+      "slug": "ibmcognitive",
+      "title": "IBM Cognitive",
+      "summary": "Call IBM Watson language and visual recognition APIs.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/ibmcognitive",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Convert document",
+          "anchor": "convertdocumentibm"
+        },
+        {
+          "name": "Translate",
+          "anchor": "translateibm"
+        },
+        {
+          "name": "Identify language",
+          "anchor": "identifylanguage"
+        },
+        {
+          "name": "Analyze tone",
+          "anchor": "analyzetoneibm"
+        },
+        {
+          "name": "Classify Image",
+          "anchor": "classifyimageibm"
+        }
+      ]
+    },
+    {
+      "slug": "logging",
+      "title": "Logging",
+      "summary": "Write custom log entries during a desktop flow run.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/logging",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Log message",
+          "anchor": "logmessage"
+        }
+      ]
+    },
+    {
+      "slug": "loops",
+      "title": "Loops",
+      "summary": "Repeat actions with Loop, Loop condition, and For each.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/loops",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Exit loop",
+          "anchor": "break"
+        },
+        {
+          "name": "For each",
+          "anchor": "foreach"
+        },
+        {
+          "name": "Loop",
+          "anchor": "loop"
+        },
+        {
+          "name": "Loop condition",
+          "anchor": "while"
+        },
+        {
+          "name": "Next loop",
+          "anchor": "continue"
+        }
+      ]
+    },
+    {
+      "slug": "microsoftcognitive",
+      "title": "Microsoft Cognitive",
+      "summary": "Call Azure Cognitive Services for text, vision, and language.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/microsoftcognitive",
+      "action_count": 8,
+      "actions": [
+        {
+          "name": "Spell check",
+          "anchor": "spellcheck"
+        },
+        {
+          "name": "Analyze image",
+          "anchor": "analyzeimagemicrosoft"
+        },
+        {
+          "name": "Describe image",
+          "anchor": "describeimagemicrosoft"
+        },
+        {
+          "name": "OCR",
+          "anchor": "ocrmicrosoft"
+        },
+        {
+          "name": "Tag image",
+          "anchor": "tagimagemicrosoft"
+        },
+        {
+          "name": "Detect language",
+          "anchor": "detectlanguage"
+        },
+        {
+          "name": "Key phrases",
+          "anchor": "keyphrases"
+        },
+        {
+          "name": "Sentiment",
+          "anchor": "sentiment"
+        }
+      ]
+    },
+    {
+      "slug": "mouseandkeyboard",
+      "title": "Mouse and keyboard",
+      "summary": "Move the mouse, send clicks and keystrokes, and wait for input.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/mouseandkeyboard",
+      "action_count": 12,
+      "actions": [
+        {
+          "name": "Block Input",
+          "anchor": "blockinput"
+        },
+        {
+          "name": "Get mouse position",
+          "anchor": "getmouseposition"
+        },
+        {
+          "name": "Move mouse",
+          "anchor": "movemouse"
+        },
+        {
+          "name": "Move mouse to image",
+          "anchor": "movemousetoimagebase"
+        },
+        {
+          "name": "Move mouse to text on screen (OCR)",
+          "anchor": "movemousetotextonscreenwithocraction"
+        },
+        {
+          "name": "Send mouse click",
+          "anchor": "sendmouseclick"
+        },
+        {
+          "name": "Send keys",
+          "anchor": "sendkeys"
+        },
+        {
+          "name": "Press/release key",
+          "anchor": "pressreleasekey"
+        },
+        {
+          "name": "Set key state",
+          "anchor": "setkeystate"
+        },
+        {
+          "name": "Wait for mouse",
+          "anchor": "waitformouseaction"
+        },
+        {
+          "name": "Get keyboard identifier",
+          "anchor": "getkeyboardlayout"
+        },
+        {
+          "name": "Wait for shortcut key",
+          "anchor": "waitforshortcutkeyaction"
+        }
+      ]
+    },
+    {
+      "slug": "ocr",
+      "title": "OCR",
+      "summary": "Extract or wait for on-screen text with Windows or Tesseract OCR.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/ocr",
+      "action_count": 2,
+      "actions": [
+        {
+          "name": "Wait for text on screen (OCR)",
+          "anchor": "waittextonscreenaction"
+        },
+        {
+          "name": "Extract text with OCR",
+          "anchor": "extracttextwithocr"
+        }
+      ]
+    },
+    {
+      "slug": "office365outlook",
+      "title": "Office 365 Outlook",
+      "summary": "Use the Office 365 Outlook cloud connector from a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/office365outlook",
+      "action_count": 0,
+      "actions": []
+    },
+    {
+      "slug": "outlook",
+      "title": "Outlook",
+      "summary": "Automate the local Outlook desktop client.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/outlook",
+      "action_count": 7,
+      "actions": [
+        {
+          "name": "Launch Outlook",
+          "anchor": "launch"
+        },
+        {
+          "name": "Retrieve email messages from Outlook",
+          "anchor": "retrieveemailmessages"
+        },
+        {
+          "name": "Send email through Outlook",
+          "anchor": "sendemailthroughoutlook"
+        },
+        {
+          "name": "Process email messages in Outlook",
+          "anchor": "processemailmessages"
+        },
+        {
+          "name": "Save Outlook email messages",
+          "anchor": "saveoutlookemailmessages"
+        },
+        {
+          "name": "Respond to Outlook mail message",
+          "anchor": "respondtomailmessage"
+        },
+        {
+          "name": "Close Outlook",
+          "anchor": "close"
+        }
+      ]
+    },
+    {
+      "slug": "pdf",
+      "title": "PDF",
+      "summary": "Extract text, tables, and images from PDFs and merge or split files.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/pdf",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Extract text from PDF",
+          "anchor": "extracttextfrompdfaction"
+        },
+        {
+          "name": "Extract tables from PDF",
+          "anchor": "extracttablesfrompdfaction"
+        },
+        {
+          "name": "Extract images from PDF",
+          "anchor": "extractimagesfrompdfaction"
+        },
+        {
+          "name": "Extract PDF file pages to new PDF file",
+          "anchor": "extractpages"
+        },
+        {
+          "name": "Merge PDF files",
+          "anchor": "mergefiles"
+        }
+      ]
+    },
+    {
+      "slug": "powerautomateenvironment",
+      "title": "Power Automate environment",
+      "summary": "Read Dataverse / Power Platform environment variables.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/powerautomateenvironment",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Retrieve environment variable",
+          "anchor": "retrieveenvironmentvariable"
+        }
+      ]
+    },
+    {
+      "slug": "powerautomatesecretvariables",
+      "title": "Power Automate secret variables",
+      "summary": "Fetch credentials stored in the Power Automate environment.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/powerautomatesecretvariables",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Get credential",
+          "anchor": "getcredentialaction"
+        }
+      ]
+    },
+    {
+      "slug": "runflow",
+      "title": "Run flow",
+      "summary": "Call another desktop flow and wait for its outputs.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/runflow",
+      "action_count": 1,
+      "actions": [
+        {
+          "name": "Run desktop flow",
+          "anchor": "runflow"
+        }
+      ]
+    },
+    {
+      "slug": "sap",
+      "title": "SAP automation",
+      "summary": "Drive SAP GUI: login, transactions, and UI element interaction.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/sap",
+      "action_count": 11,
+      "actions": [
+        {
+          "name": "Launch SAP",
+          "anchor": "saplogin"
+        },
+        {
+          "name": "Attach",
+          "anchor": "attachtorunning"
+        },
+        {
+          "name": "Create new SAP session",
+          "anchor": "createnewsession"
+        },
+        {
+          "name": "Select SAP navigation item",
+          "anchor": "selectnavigationbaritem"
+        },
+        {
+          "name": "Select SAP menu item",
+          "anchor": "sapselectmenuitem"
+        },
+        {
+          "name": "Close SAP connection",
+          "anchor": "closesapconnection"
+        },
+        {
+          "name": "Start SAP transaction",
+          "anchor": "starttransaction"
+        },
+        {
+          "name": "End SAP transaction",
+          "anchor": "endtransaction"
+        },
+        {
+          "name": "Click SAP UI element",
+          "anchor": "clicksapguielement"
+        },
+        {
+          "name": "Get details of SAP UI element",
+          "anchor": "getsapelementdetail"
+        },
+        {
+          "name": "Populate SAP text field in element",
+          "anchor": "populatetextfield"
+        }
+      ]
+    },
+    {
+      "slug": "scripting",
+      "title": "Scripting",
+      "summary": "Run DOS, VBScript, JavaScript, PowerShell, Python, and .NET scripts.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/scripting",
+      "action_count": 6,
+      "actions": [
+        {
+          "name": "Run DOS command",
+          "anchor": "rundoscommand"
+        },
+        {
+          "name": "Run VBScript",
+          "anchor": "runvbscript"
+        },
+        {
+          "name": "Run JavaScript",
+          "anchor": "runjavascript"
+        },
+        {
+          "name": "Run PowerShell script",
+          "anchor": "runpowershellscript"
+        },
+        {
+          "name": "Run Python script",
+          "anchor": "runpythonscript"
+        },
+        {
+          "name": "Run .NET script",
+          "anchor": "rundotnetscript"
+        }
+      ]
+    },
+    {
+      "slug": "services",
+      "title": "Windows services",
+      "summary": "Start, stop, pause, resume, and wait for Windows services.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/services",
+      "action_count": 6,
+      "actions": [
+        {
+          "name": "If service",
+          "anchor": "ifserviceaction"
+        },
+        {
+          "name": "Wait for service",
+          "anchor": "waitforserviceaction"
+        },
+        {
+          "name": "Start service",
+          "anchor": "start"
+        },
+        {
+          "name": "Stop service",
+          "anchor": "stop"
+        },
+        {
+          "name": "Pause service",
+          "anchor": "pause"
+        },
+        {
+          "name": "Resume service",
+          "anchor": "resume"
+        }
+      ]
+    },
+    {
+      "slug": "sharepoint",
+      "title": "SharePoint",
+      "summary": "Use the SharePoint cloud connector from a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/sharepoint",
+      "action_count": 0,
+      "actions": []
+    },
+    {
+      "slug": "system",
+      "title": "System",
+      "summary": "Run processes, ping hosts, and manage Windows environment variables.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/system",
+      "action_count": 8,
+      "actions": [
+        {
+          "name": "If process",
+          "anchor": "ifprocessaction"
+        },
+        {
+          "name": "Wait for process",
+          "anchor": "waitprocessaction"
+        },
+        {
+          "name": "Run application",
+          "anchor": "runapplicationbase"
+        },
+        {
+          "name": "Terminate process",
+          "anchor": "terminateprocess"
+        },
+        {
+          "name": "Ping",
+          "anchor": "ping"
+        },
+        {
+          "name": "Set Windows environment variable",
+          "anchor": "setenvironmentvariable"
+        },
+        {
+          "name": "Get Windows environment variable",
+          "anchor": "getenvironmentvariable"
+        },
+        {
+          "name": "Delete Windows environment variable",
+          "anchor": "deleteenvironmentvariable"
+        }
+      ]
+    },
+    {
+      "slug": "terminalemulation",
+      "title": "Terminal emulation",
+      "summary": "Automate mainframe and terminal sessions (HLLAPI / terminal emulators).",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/terminalemulation",
+      "action_count": 8,
+      "actions": [
+        {
+          "name": "Open terminal session",
+          "anchor": "openterminalsession"
+        },
+        {
+          "name": "Close terminal session",
+          "anchor": "closesession"
+        },
+        {
+          "name": "Move cursor on terminal session",
+          "anchor": "movecursor"
+        },
+        {
+          "name": "Get text from terminal session",
+          "anchor": "gettextfromterminalsession"
+        },
+        {
+          "name": "Set text on terminal session",
+          "anchor": "settextonterminalsession"
+        },
+        {
+          "name": "Send key to terminal session",
+          "anchor": "sendkey"
+        },
+        {
+          "name": "Wait for text on terminal session",
+          "anchor": "waitfortextonterminalsession"
+        },
+        {
+          "name": "Search for text on terminal session",
+          "anchor": "searchfortextonterminalsession"
+        }
+      ]
+    },
+    {
+      "slug": "testing",
+      "title": "Testing",
+      "summary": "Build desktop-flow test cases with Assert and Test a desktop flow.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/testing",
+      "action_count": 2,
+      "actions": [
+        {
+          "name": "Test a desktop flow",
+          "anchor": "runtestflow"
+        },
+        {
+          "name": "Assert",
+          "anchor": "assertaction"
+        }
+      ]
+    },
+    {
+      "slug": "text",
+      "title": "Text",
+      "summary": "Parse, split, join, convert, and transform text values.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/text",
+      "action_count": 19,
+      "actions": [
+        {
+          "name": "Append line to text",
+          "anchor": "appendline"
+        },
+        {
+          "name": "Get subtext",
+          "anchor": "getsubtextbase"
+        },
+        {
+          "name": "Crop text",
+          "anchor": "croptextaction"
+        },
+        {
+          "name": "Pad text",
+          "anchor": "pad"
+        },
+        {
+          "name": "Trim text",
+          "anchor": "trim"
+        },
+        {
+          "name": "Reverse text",
+          "anchor": "reverse"
+        },
+        {
+          "name": "Change text case",
+          "anchor": "changecase"
+        },
+        {
+          "name": "Convert text to number",
+          "anchor": "tonumber"
+        },
+        {
+          "name": "Convert number to text",
+          "anchor": "fromnumber"
+        },
+        {
+          "name": "Convert text to datetime",
+          "anchor": "converttexttodatetime"
+        },
+        {
+          "name": "Convert datetime to text",
+          "anchor": "convertdatetimetotext"
+        },
+        {
+          "name": "Create random text",
+          "anchor": "random"
+        },
+        {
+          "name": "Join text",
+          "anchor": "jointext"
+        },
+        {
+          "name": "Split text",
+          "anchor": "splittext"
+        },
+        {
+          "name": "Parse text",
+          "anchor": "parsetext"
+        },
+        {
+          "name": "Replace text",
+          "anchor": "replace"
+        },
+        {
+          "name": "Escape text for regular expression",
+          "anchor": "escapeforregularexpression"
+        },
+        {
+          "name": "Recognize entities in text",
+          "anchor": "recognizeentitiesintext"
+        },
+        {
+          "name": "Create HTML content",
+          "anchor": "createhtmlcontentaction"
+        }
+      ]
+    },
+    {
+      "slug": "uiautomation",
+      "title": "UI automation",
+      "summary": "Click, type, extract, and wait on Windows UI elements and images.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/uiautomation",
+      "action_count": 33,
+      "actions": [
+        {
+          "name": "Get details of window",
+          "anchor": "getwindowdetails"
+        },
+        {
+          "name": "Get details of a UI element in window",
+          "anchor": "getelementdetails"
+        },
+        {
+          "name": "Get selected checkboxes in window",
+          "anchor": "getselectedcheckboxesinwindow"
+        },
+        {
+          "name": "Get selected radio button in window",
+          "anchor": "getselectedradiobuttoninwindow"
+        },
+        {
+          "name": "Extract data from window",
+          "anchor": "extractdatafromwindow"
+        },
+        {
+          "name": "Extract data from table",
+          "anchor": "extractdatafromtable"
+        },
+        {
+          "name": "Take screenshot of UI element",
+          "anchor": "takescreenshot"
+        },
+        {
+          "name": "Focus text field in window",
+          "anchor": "focustextfield"
+        },
+        {
+          "name": "Populate text field in window",
+          "anchor": "populatetextfield"
+        },
+        {
+          "name": "Press button in window",
+          "anchor": "pressbutton"
+        },
+        {
+          "name": "Select radio button in window",
+          "anchor": "selectradiobutton"
+        },
+        {
+          "name": "Set checkbox state in window",
+          "anchor": "setcheckboxstate"
+        },
+        {
+          "name": "Set drop-down list value in window",
+          "anchor": "setdropdownlistvalueinwindow"
+        },
+        {
+          "name": "Get window",
+          "anchor": "getwindowbase"
+        },
+        {
+          "name": "Focus window",
+          "anchor": "focuswindowbase"
+        },
+        {
+          "name": "Set window state",
+          "anchor": "setwindowstatebase"
+        },
+        {
+          "name": "Set window visibility",
+          "anchor": "setwindowvisibilitybase"
+        },
+        {
+          "name": "Move window",
+          "anchor": "movewindowbase"
+        },
+        {
+          "name": "Resize window",
+          "anchor": "resizewindowbase"
+        },
+        {
+          "name": "Close window",
+          "anchor": "closewindowbase"
+        },
+        {
+          "name": "If window contains",
+          "anchor": "ifwindowcontainsaction"
+        },
+        {
+          "name": "Wait for window content",
+          "anchor": "waitforwindowcontentaction"
+        },
+        {
+          "name": "If image",
+          "anchor": "ifimageaction"
+        },
+        {
+          "name": "Use desktop",
+          "anchor": "usedesktop"
+        },
+        {
+          "name": "Select tab in window",
+          "anchor": "selecttab"
+        },
+        {
+          "name": "Wait for image",
+          "anchor": "waitforimageaction"
+        },
+        {
+          "name": "Hover mouse over UI element in window",
+          "anchor": "hoveronelement"
+        },
+        {
+          "name": "Click UI element in window",
+          "anchor": "click"
+        },
+        {
+          "name": "Select menu option in window",
+          "anchor": "selectmenuoption"
+        },
+        {
+          "name": "Drag and drop UI element in window",
+          "anchor": "draganddropelement"
+        },
+        {
+          "name": "Expand/collapse tree node in window",
+          "anchor": "expandcollapsetreenode"
+        },
+        {
+          "name": "If window",
+          "anchor": "ifwindowaction"
+        },
+        {
+          "name": "Wait for window",
+          "anchor": "waitforwindowaction"
+        }
+      ]
+    },
+    {
+      "slug": "variables",
+      "title": "Variables",
+      "summary": "Set variables and work with lists, data tables, JSON, and Power Fx.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/variables",
+      "action_count": 36,
+      "actions": [
+        {
+          "name": "Create new data table",
+          "anchor": "createnewdatatable"
+        },
+        {
+          "name": "Insert row into data table",
+          "anchor": "addrowtodatatable"
+        },
+        {
+          "name": "Delete row from data table",
+          "anchor": "deleterowfromdatatable"
+        },
+        {
+          "name": "Update data table item",
+          "anchor": "modifydatatableitem"
+        },
+        {
+          "name": "Find or replace in data table",
+          "anchor": "findorreplaceindatatable"
+        },
+        {
+          "name": "Insert column into data table",
+          "anchor": "addcolumntodatatableaction"
+        },
+        {
+          "name": "Delete column from data table",
+          "anchor": "deletecolumnfromdatatableaction"
+        },
+        {
+          "name": "Delete empty rows from data table",
+          "anchor": "deleteemptyrowsfromdatatableaction"
+        },
+        {
+          "name": "Delete duplicate rows from data table",
+          "anchor": "deleteduplicaterowsfromdatatableaction"
+        },
+        {
+          "name": "Clear data table",
+          "anchor": "cleardatatableaction"
+        },
+        {
+          "name": "Sort data table",
+          "anchor": "sortdatatableaction"
+        },
+        {
+          "name": "Filter data table",
+          "anchor": "filterdatatableaction"
+        },
+        {
+          "name": "Merge data tables",
+          "anchor": "mergedatatablesaction"
+        },
+        {
+          "name": "Join data tables",
+          "anchor": "joindatatableaction"
+        },
+        {
+          "name": "Read from CSV text variable",
+          "anchor": "generatedatatablefromcsv"
+        },
+        {
+          "name": "Convert data table to text",
+          "anchor": "convertdatatabletocsvaction"
+        },
+        {
+          "name": "Truncate number",
+          "anchor": "truncatenumber"
+        },
+        {
+          "name": "Generate random number",
+          "anchor": "generaterandomnumber"
+        },
+        {
+          "name": "Clear list",
+          "anchor": "clearlist"
+        },
+        {
+          "name": "Remove item from list",
+          "anchor": "removeitemfromlist"
+        },
+        {
+          "name": "Sort list",
+          "anchor": "sortlistbase"
+        },
+        {
+          "name": "Shuffle list",
+          "anchor": "shufflelist"
+        },
+        {
+          "name": "Merge lists",
+          "anchor": "mergelists"
+        },
+        {
+          "name": "Reverse list",
+          "anchor": "reverselist"
+        },
+        {
+          "name": "Remove duplicate items from list",
+          "anchor": "removeduplicateitemsfromlist"
+        },
+        {
+          "name": "Find common list items",
+          "anchor": "findcommonlistitems"
+        },
+        {
+          "name": "Subtract lists",
+          "anchor": "subtractlists"
+        },
+        {
+          "name": "Retrieve data table column into list",
+          "anchor": "retrievedatatablecolumnintolist"
+        },
+        {
+          "name": "Convert JSON to custom object",
+          "anchor": "convertjsontocustomobject"
+        },
+        {
+          "name": "Convert custom object to JSON",
+          "anchor": "convertcustomobjecttojson"
+        },
+        {
+          "name": "Add item to list",
+          "anchor": "additemtolist"
+        },
+        {
+          "name": "Create new list",
+          "anchor": "createnewlist"
+        },
+        {
+          "name": "Increase variable",
+          "anchor": "increasevariable"
+        },
+        {
+          "name": "Decrease variable",
+          "anchor": "decreasevariable"
+        },
+        {
+          "name": "Run Power Fx expression",
+          "anchor": ""
+        },
+        {
+          "name": "Set variable",
+          "anchor": "assign"
+        }
+      ]
+    },
+    {
+      "slug": "web",
+      "title": "HTTP",
+      "summary": "Call REST and SOAP endpoints and download files over HTTP.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/web",
+      "action_count": 3,
+      "actions": [
+        {
+          "name": "Download from web",
+          "anchor": "downloadfromweb"
+        },
+        {
+          "name": "Invoke SOAP web service",
+          "anchor": "invokesoapserviceaction"
+        },
+        {
+          "name": "Invoke web service",
+          "anchor": "invokewebservicebase"
+        }
+      ]
+    },
+    {
+      "slug": "webautomation",
+      "title": "Browser automation",
+      "summary": "Launch browsers and interact with web pages and web elements.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/webautomation",
+      "action_count": 23,
+      "actions": [
+        {
+          "name": "Extract data from web page",
+          "anchor": "extractdata"
+        },
+        {
+          "name": "Get details of web page",
+          "anchor": "getdetailsofwebpage"
+        },
+        {
+          "name": "Get details of element on web page",
+          "anchor": "getdetailsofelement"
+        },
+        {
+          "name": "Take screenshot of web page",
+          "anchor": "takescreenshotbase"
+        },
+        {
+          "name": "Focus text field on web page",
+          "anchor": "focusbase"
+        },
+        {
+          "name": "Populate text field on web page",
+          "anchor": "populatetextfieldbase"
+        },
+        {
+          "name": "Set check box state on web page",
+          "anchor": "setcheckboxstatebase"
+        },
+        {
+          "name": "Select radio button on web page",
+          "anchor": "selectradiobuttonbase"
+        },
+        {
+          "name": "Set drop-down list value on web page",
+          "anchor": "setdropdownlistvaluebase"
+        },
+        {
+          "name": "Press button on web page",
+          "anchor": "pressbuttonbase"
+        },
+        {
+          "name": "If web page contains",
+          "anchor": "ifwebpagecontainsaction"
+        },
+        {
+          "name": "Wait for web page content",
+          "anchor": "waitforwebpagecontentaction"
+        },
+        {
+          "name": "Launch new Internet Explorer",
+          "anchor": "launchinternetexplorerbase"
+        },
+        {
+          "name": "Launch new Firefox",
+          "anchor": "launchfirefoxbase"
+        },
+        {
+          "name": "Launch new Chrome",
+          "anchor": "launchchromebase"
+        },
+        {
+          "name": "Launch new Microsoft Edge",
+          "anchor": ""
+        },
+        {
+          "name": "Create new tab",
+          "anchor": "createnewtabbase"
+        },
+        {
+          "name": "Go to web page",
+          "anchor": "gotowebpagebase"
+        },
+        {
+          "name": "Click link on web page",
+          "anchor": "clickbase"
+        },
+        {
+          "name": "Click download link on web page",
+          "anchor": "clickdownloadlink"
+        },
+        {
+          "name": "Run JavaScript function on web page",
+          "anchor": "executejavascript"
+        },
+        {
+          "name": "Hover mouse over element on web page",
+          "anchor": "hoveroverelement"
+        },
+        {
+          "name": "Close web browser",
+          "anchor": "closewebbrowser"
+        }
+      ]
+    },
+    {
+      "slug": "word",
+      "title": "Word",
+      "summary": "Launch Word and read, write, or replace document content.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/word",
+      "action_count": 8,
+      "actions": [
+        {
+          "name": "Launch Word",
+          "anchor": "launchword"
+        },
+        {
+          "name": "Attach to running Word",
+          "anchor": "attachtorunningword"
+        },
+        {
+          "name": "Save Word",
+          "anchor": "saveword"
+        },
+        {
+          "name": "Close Word",
+          "anchor": "closeword"
+        },
+        {
+          "name": "Read from Word document",
+          "anchor": "readfromword"
+        },
+        {
+          "name": "Write to Word document",
+          "anchor": "writetoword"
+        },
+        {
+          "name": "Insert image in Word document",
+          "anchor": "insertimagetoword"
+        },
+        {
+          "name": "Find and replace words in Word document",
+          "anchor": "findandreplaceword"
+        }
+      ]
+    },
+    {
+      "slug": "workqueues",
+      "title": "Work queues",
+      "summary": "Add, process, and update Power Automate work queue items.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/workqueues",
+      "action_count": 5,
+      "actions": [
+        {
+          "name": "Process work queue items",
+          "anchor": ""
+        },
+        {
+          "name": "Add work queue item",
+          "anchor": ""
+        },
+        {
+          "name": "Add multiple work queue items",
+          "anchor": ""
+        },
+        {
+          "name": "Requeue item with delay",
+          "anchor": ""
+        },
+        {
+          "name": "Get work queue items by filter",
+          "anchor": ""
+        }
+      ]
+    },
+    {
+      "slug": "workstation",
+      "title": "Workstation",
+      "summary": "Control the local workstation: screenshots, printers, lock, shutdown.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/workstation",
+      "action_count": 13,
+      "actions": [
+        {
+          "name": "Print document",
+          "anchor": "printdocument"
+        },
+        {
+          "name": "Get default printer",
+          "anchor": "getdefaultprinter"
+        },
+        {
+          "name": "Set default printer",
+          "anchor": "setdefaultprinter"
+        },
+        {
+          "name": "Show desktop",
+          "anchor": "showdesktop"
+        },
+        {
+          "name": "Lock workstation",
+          "anchor": "lockworkstation"
+        },
+        {
+          "name": "Play sound",
+          "anchor": "playsoundbase"
+        },
+        {
+          "name": "Empty recycle bin",
+          "anchor": "emptyrecyclebin"
+        },
+        {
+          "name": "Take screenshot",
+          "anchor": "takescreenshotbase"
+        },
+        {
+          "name": "Control screen saver",
+          "anchor": "controlscreensaver"
+        },
+        {
+          "name": "Get screen resolution",
+          "anchor": "getscreenresolution"
+        },
+        {
+          "name": "Set screen resolution",
+          "anchor": "setscreenresolution"
+        },
+        {
+          "name": "Log off user",
+          "anchor": "logoffuser"
+        },
+        {
+          "name": "Shutdown computer",
+          "anchor": "shutdowncomputer"
+        }
+      ]
+    },
+    {
+      "slug": "xml",
+      "title": "XML",
+      "summary": "Read, query, and edit XML documents and nodes.",
+      "learn_url": "https://learn.microsoft.com/en-us/power-automate/desktop-flows/actions-reference/xml",
+      "action_count": 10,
+      "actions": [
+        {
+          "name": "Read XML from file",
+          "anchor": "readfromfile"
+        },
+        {
+          "name": "Write XML to file",
+          "anchor": "writexmltofile"
+        },
+        {
+          "name": "Execute XPath expression",
+          "anchor": "executexpathquery"
+        },
+        {
+          "name": "Get XML element attribute",
+          "anchor": "getxmlelementattribute"
+        },
+        {
+          "name": "Set XML element attribute",
+          "anchor": "setelementattribute"
+        },
+        {
+          "name": "Remove XML element attribute",
+          "anchor": "removeelementattribute"
+        },
+        {
+          "name": "Get XML element value",
+          "anchor": "getxmlelementvalue"
+        },
+        {
+          "name": "Set XML element value",
+          "anchor": "setelementvalue"
+        },
+        {
+          "name": "Insert XML element",
+          "anchor": "insertelement"
+        },
+        {
+          "name": "Remove XML element",
+          "anchor": "removeelement"
+        }
+      ]
+    }
+  ]
+}
