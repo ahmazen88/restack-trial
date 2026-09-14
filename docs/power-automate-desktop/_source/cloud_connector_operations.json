@@ -1,0 +1,742 @@
+[
+  {
+    "module": "sharepoint",
+    "name": "Update file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Delete file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get file content using path"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get file content"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Create file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "List folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get all lists and libraries"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get file metadata"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get file metadata using path"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get folder metadata"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get folder metadata using path"
+  },
+  {
+    "module": "sharepoint",
+    "name": "List root folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Extract folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get lists"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Create sharing link for a file or folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Copy file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Move file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Copy folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Move folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Check out file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Discard check out"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Check in file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get list views"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Add attachment"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Set content approval status"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Stop sharing an item or a file"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Update file properties"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Update file properties using AI Builder model results"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get file properties"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get files (properties only)"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Create item"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Create new folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Delete attachment"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Delete item"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Generate document using Microsoft Syntex"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get attachment content"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get attachments"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get changes for an item or a file (properties only)"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Update item"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get item"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Get items"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Create new document set"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Grant access to an item or a folder"
+  },
+  {
+    "module": "sharepoint",
+    "name": "Send an HTTP request to SharePoint"
+  },
+  {
+    "module": "onenote",
+    "name": "Create a page in Quick Notes"
+  },
+  {
+    "module": "onenote",
+    "name": "Create page in a section"
+  },
+  {
+    "module": "onenote",
+    "name": "Create section in a notebook"
+  },
+  {
+    "module": "onenote",
+    "name": "Delete a page"
+  },
+  {
+    "module": "onenote",
+    "name": "Get page content"
+  },
+  {
+    "module": "onenote",
+    "name": "Get pages for a specific section"
+  },
+  {
+    "module": "onenote",
+    "name": "Get recent notebooks"
+  },
+  {
+    "module": "onenote",
+    "name": "Get sections in notebook"
+  },
+  {
+    "module": "onenote",
+    "name": "Update page content"
+  },
+  {
+    "module": "word-online",
+    "name": "Convert Word Document to PDF"
+  },
+  {
+    "module": "word-online",
+    "name": "Populate a Microsoft Word template"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Create contact (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Create event (V4)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Delete contact (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Delete email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Delete event (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Export email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Find meeting times (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Flag email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Forward an email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get Attachment (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get calendar view of events (V3)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get calendars (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get contact (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get contacts (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get emails (V3)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get event (V3)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get events (V4)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get room lists (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get rooms (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Get rooms in room list (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Mark as read or unread (V3)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Move email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Reply to email (V3)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Respond to an event invite (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Send an email (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Send an email from a shared mailbox (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Set up automatic replies (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Update contact (V2)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Update event (V4)"
+  },
+  {
+    "module": "office365outlook",
+    "name": "Send an HTTP request"
+  },
+  {
+    "module": "rss",
+    "name": "List all RSS feed items"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Add a member to a tag"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Add a member to a team"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Create a channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Create a chat"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Create a tag for a team"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Create a team"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Create a Teams meeting"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Delete a member from a tag"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Delete a tag"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Get a team"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Get an @mention token for a tag"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Get an @mention token for a user"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Get message details"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Get messages"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List all tags for a team"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List channels"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List chats"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List members"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List teams"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "List the members for a tag"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Post a feed notification"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Post card in a chat or channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Post message in a chat or channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Reply with a message in a channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Reply with adaptive card in a channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Update an adaptive card in a chat or channel"
+  },
+  {
+    "module": "microsoft-teams",
+    "name": "Send a Microsoft Graph HTTP request"
+  },
+  {
+    "module": "microsoft-forms",
+    "name": "Get response details"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Add a new row to selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Delete a row from selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Download a file or an image from selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Get a row by ID from selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "List rows from selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Perform a bound action in selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Perform an unbound action in selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Relate rows in selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Unrelate rows in selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Upload a file or an image to selected environment"
+  },
+  {
+    "module": "microsoft-dataverse",
+    "name": "Upsert a row in selected environment"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Copy file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Copy file using path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Create file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Create share link"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Create share link by path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Delete file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Extract archive to folder"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Find files in folder"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Find files in folder by path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Get file content"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Get file content using path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Get file metadata"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Get file metadata using path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Get file thumbnail"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "List files in folder"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "List files in root folder"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Move or rename a file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Move or rename a file using path"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Update file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Upload file from URL"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Convert file"
+  },
+  {
+    "module": "onedrive-business",
+    "name": "Convert file using path"
+  },
+  {
+    "module": "excel-online",
+    "name": "Add a key column to a table"
+  },
+  {
+    "module": "excel-online",
+    "name": "Add a row into a table"
+  },
+  {
+    "module": "excel-online",
+    "name": "Create table"
+  },
+  {
+    "module": "excel-online",
+    "name": "Create worksheet"
+  },
+  {
+    "module": "excel-online",
+    "name": "Delete a row"
+  },
+  {
+    "module": "excel-online",
+    "name": "Get a row"
+  },
+  {
+    "module": "excel-online",
+    "name": "Get tables"
+  },
+  {
+    "module": "excel-online",
+    "name": "Get worksheets"
+  },
+  {
+    "module": "excel-online",
+    "name": "List rows present in a table"
+  },
+  {
+    "module": "excel-online",
+    "name": "Run script"
+  },
+  {
+    "module": "excel-online",
+    "name": "Run script from SharePoint library"
+  },
+  {
+    "module": "excel-online",
+    "name": "Update a row"
+  },
+  {
+    "module": "onedrive",
+    "name": "Convert file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Convert file using path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Copy file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Copy file using path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Create file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Create share link"
+  },
+  {
+    "module": "onedrive",
+    "name": "Create share link by path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Delete file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Extract archive to folder"
+  },
+  {
+    "module": "onedrive",
+    "name": "Find files in folder"
+  },
+  {
+    "module": "onedrive",
+    "name": "Find files in folder by path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file content"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file content using path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file metadata"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file metadata using path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file thumbnail"
+  },
+  {
+    "module": "onedrive",
+    "name": "List files in folder"
+  },
+  {
+    "module": "onedrive",
+    "name": "List files in root folder"
+  },
+  {
+    "module": "onedrive",
+    "name": "Move or rename a file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Move or rename a file using path"
+  },
+  {
+    "module": "onedrive",
+    "name": "Update file"
+  },
+  {
+    "module": "onedrive",
+    "name": "Upload file from URL"
+  },
+  {
+    "module": "onedrive",
+    "name": "Add file tag"
+  },
+  {
+    "module": "onedrive",
+    "name": "Get file tags"
+  },
+  {
+    "module": "onedrive",
+    "name": "Remove file tag"
+  }
+]

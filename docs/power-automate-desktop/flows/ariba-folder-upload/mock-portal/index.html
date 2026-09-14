@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SAP Business Network (PAD mock)</title>
+  <style>
+    body { font-family: Segoe UI, sans-serif; margin: 0; background: #f3f3f3; color: #242424; }
+    header { background: #0f4c81; color: #fff; padding: 12px 24px; display: flex; gap: 24px; align-items: center; }
+    header button { background: transparent; color: #fff; border: 0; cursor: pointer; font-size: 1rem; }
+    header button.active { text-decoration: underline; }
+    main { max-width: 860px; margin: 24px auto; background: #fff; padding: 24px; border-radius: 8px; }
+    label { display: block; margin: 12px 0 4px; font-weight: 600; }
+    input[type=text], input[type=password] { width: 100%; padding: 8px; box-sizing: border-box; }
+    button.primary { margin-top: 12px; padding: 8px 16px; background: #0f4c81; color: #fff; border: 0; cursor: pointer; }
+    button.secondary { margin-top: 12px; padding: 8px 16px; background: #616161; color: #fff; border: 0; cursor: pointer; }
+    .hidden { display: none !important; }
+    .tile { display: inline-block; padding: 24px; margin: 8px 8px 0 0; border: 1px solid #d1d1d1; cursor: pointer; min-width: 140px; }
+    .menu { display: inline-block; margin-left: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    #loading {
+      position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center;
+      font-size: 1.4rem; z-index: 9;
+    }
+    #loading.visible { display: flex; }
+    .banner { padding: 8px 12px; margin: 12px 0; border-radius: 4px; }
+    .error { background: #fde7e9; color: #a80000; }
+    .ok { background: #dff6dd; color: #0b6a0b; }
+    .star { color: #a80000; }
+    #attach-list { font-family: Consolas, monospace; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading</div>
+  <header id="app-header" class="hidden">
+    <strong>SAP Business Network</strong>
+    <button id="tab-workbench" type="button">Workbench</button>
+  </header>
+  <main>
+    <section id="screen-login">
+      <h1>Sign in</h1>
+      <label for="txt-username">User name</label>
+      <input id="txt-username" type="text" />
+      <label for="txt-password">Password</label>
+      <input id="txt-password" type="password" />
+      <button id="btn-signin" class="primary" type="button">Sign in</button>
+      <p id="login-error" class="banner error hidden">Approve sign-in</p>
+    </section>
+
+    <section id="screen-workbench" class="hidden">
+      <h1>Workbench</h1>
+      <div id="tile-orders" class="tile" role="button" tabindex="0">Orders</div>
+      <div class="tile">Invoices</div>
+    </section>
+
+    <section id="screen-orders" class="hidden">
+      <h1>Orders</h1>
+      <p>Edit filter</p>
+      <label for="txt-order-numbers">Order numbers</label>
+      <input id="txt-order-numbers" type="text" />
+      <label><input id="radio-exact" type="radio" name="match" checked /> Exact match</label>
+      <button id="btn-apply" class="primary" type="button">Apply</button>
+      <table>
+        <thead><tr><th>PO number</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr id="row-po" class="hidden">
+            <td><a id="lnk-po" href="#">4500123456</a></td>
+            <td>Ordered</td>
+          </tr>
+        </tbody>
+      </table>
+      <p id="orders-empty" class="banner error hidden">No orders match</p>
+    </section>
+
+    <section id="screen-po" class="hidden">
+      <h1>Purchase order 4500123456</h1>
+      <button id="btn-create-invoice" class="primary" type="button">Create Invoice</button>
+      <div id="menu-invoice-type" class="menu hidden">
+        <button id="btn-standard-invoice" class="secondary" type="button">Standard Invoice</button>
+      </div>
+    </section>
+
+    <section id="screen-create" class="hidden">
+      <h1>Create Invoice</h1>
+      <h2>Summary</h2>
+      <label for="txt-invoice-number">Invoice Number <span class="star">*</span></label>
+      <input id="txt-invoice-number" type="text" />
+      <label for="txt-invoice-date">Invoice Date <span class="star">*</span></label>
+      <input id="txt-invoice-date" type="text" placeholder="MM/dd/yyyy" />
+      <p>Add to Header</p>
+      <button id="btn-add-to-header" class="secondary" type="button">Add to Header</button>
+      <div id="menu-header" class="hidden">
+        <button id="btn-menu-attachment" class="secondary" type="button">Attachment</button>
+      </div>
+      <div id="attachment-section" class="hidden">
+        <h2>Attachments</h2>
+        <label for="file-input">Choose File</label>
+        <input id="file-input" type="file" accept=".pdf,.png,.jpg,.tif,.tiff" />
+        <button id="btn-choose-file" class="secondary" type="button">Choose File</button>
+        <button id="btn-add-attachment" class="primary" type="button">Add Attachment</button>
+        <div id="attach-list"></div>
+        <p id="attach-error" class="banner error hidden">failed to upload</p>
+      </div>
+      <h2>Line Items</h2>
+      <p>Include toggle is green. Quantity 1.</p>
+      <button id="btn-next" class="primary" type="button">Next</button>
+    </section>
+
+    <section id="screen-review" class="hidden">
+      <h1>Review</h1>
+      <p id="review-summary"></p>
+      <button id="btn-previous" class="secondary" type="button">Previous</button>
+      <button id="btn-submit" class="primary" type="button">Submit</button>
+    </section>
+
+    <section id="screen-done" class="hidden">
+      <p id="confirm-banner" class="banner ok">Invoice submitted</p>
+      <p id="related-doc"></p>
+      <button id="btn-another" class="secondary" type="button">Workbench</button>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const submitted = new Set();
+    let pendingFile = "";
+    let attachedFile = "";
+
+    function show(id) {
+      ["screen-login","screen-workbench","screen-orders","screen-po","screen-create","screen-review","screen-done"]
+        .forEach((s) => $(s).classList.toggle("hidden", s !== id));
+      $("app-header").classList.toggle("hidden", id === "screen-login");
+    }
+
+    function withLoading(next) {
+      $("loading").classList.add("visible");
+      window.setTimeout(() => {
+        $("loading").classList.remove("visible");
+        next();
+      }, 1800);
+    }
+
+    $("btn-signin").onclick = () => {
+      if ($("txt-username").value === "mfa") {
+        $("login-error").textContent = "Approve sign-in";
+        $("login-error").classList.remove("hidden");
+        return;
+      }
+      if ($("txt-username").value !== "demo" || $("txt-password").value !== "demo") {
+        $("login-error").textContent = "Sign in failed";
+        $("login-error").classList.remove("hidden");
+        return;
+      }
+      $("login-error").classList.add("hidden");
+      withLoading(() => show("screen-workbench"));
+    };
+
+    $("tab-workbench").onclick = () => withLoading(() => show("screen-workbench"));
+    $("tile-orders").onclick = () => withLoading(() => show("screen-orders"));
+
+    $("btn-apply").onclick = () => {
+      const ok = $("txt-order-numbers").value.trim() === "4500123456" && $("radio-exact").checked;
+      $("row-po").classList.toggle("hidden", !ok);
+      $("orders-empty").classList.toggle("hidden", ok);
+    };
+
+    $("lnk-po").onclick = (e) => {
+      e.preventDefault();
+      withLoading(() => show("screen-po"));
+    };
+
+    $("btn-create-invoice").onclick = () => $("menu-invoice-type").classList.remove("hidden");
+    $("btn-standard-invoice").onclick = () => withLoading(() => {
+      $("menu-invoice-type").classList.add("hidden");
+      show("screen-create");
+    });
+
+    $("btn-add-to-header").onclick = () => $("menu-header").classList.remove("hidden");
+    $("btn-menu-attachment").onclick = () => {
+      $("menu-header").classList.add("hidden");
+      $("attachment-section").classList.remove("hidden");
+    };
+
+    $("file-input").onchange = () => {
+      const f = $("file-input").files[0];
+      pendingFile = f ? f.name : "";
+    };
+    $("btn-choose-file").onclick = () => $("file-input").click();
+
+    $("btn-add-attachment").onclick = () => {
+      if (!pendingFile) {
+        $("attach-error").classList.remove("hidden");
+        return;
+      }
+      attachedFile = pendingFile;
+      $("attach-list").textContent = attachedFile;
+      $("attach-error").classList.add("hidden");
+    };
+
+    $("btn-next").onclick = () => {
+      if (!attachedFile) {
+        $("attach-error").classList.remove("hidden");
+        return;
+      }
+      $("review-summary").textContent =
+        "PO 4500123456 / " + $("txt-invoice-number").value + " / " + attachedFile;
+      withLoading(() => show("screen-review"));
+    };
+
+    $("btn-previous").onclick = () => show("screen-create");
+
+    $("btn-submit").onclick = () => {
+      const inv = $("txt-invoice-number").value || "unknown";
+      if (submitted.has(inv)) {
+        $("confirm-banner").className = "banner error";
+        $("confirm-banner").textContent = "Duplicate invoice";
+        $("related-doc").textContent = "";
+        show("screen-done");
+        return;
+      }
+      submitted.add(inv);
+      withLoading(() => {
+        $("confirm-banner").className = "banner ok";
+        $("confirm-banner").textContent = "Invoice submitted";
+        $("related-doc").textContent = "Related document " + inv + " on purchase order 4500123456";
+        show("screen-done");
+      });
+    };
+
+    $("btn-another").onclick = () => {
+      pendingFile = "";
+      attachedFile = "";
+      $("file-input").value = "";
+      $("attach-list").textContent = "";
+      $("attachment-section").classList.add("hidden");
+      show("screen-workbench");
+    };
+  </script>
+</body>
+</html>

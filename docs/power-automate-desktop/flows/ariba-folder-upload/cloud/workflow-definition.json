@@ -1,0 +1,160 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "10.0.0.1",
+  "parameters": {
+    "$authentication": {
+      "defaultValue": {},
+      "type": "SecureObject"
+    },
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Button",
+      "metadata": {
+        "operationMetadataId": "3c8e2a10-1b4f-4d7a-9e2c-0a1b2c3d4e5f"
+      },
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "title": "Portal URL",
+              "type": "string",
+              "x-ms-dynamically-added": true,
+              "description": "Mock http://127.0.0.1:8765/index.html or https://supplier.ariba.com. Leave blank for the mock default.",
+              "x-ms-content-hint": "TEXT"
+            },
+            "text_1": {
+              "title": "Drop folder",
+              "type": "string",
+              "x-ms-dynamically-added": true,
+              "description": "Folder of PDFs. Leave blank for C:\\RPA\\Ariba\\Inbox.",
+              "x-ms-content-hint": "TEXT"
+            },
+            "text_2": {
+              "title": "Username",
+              "type": "string",
+              "x-ms-dynamically-added": true,
+              "description": "SAP Business Network user, or demo for the mock. Leave blank for demo.",
+              "x-ms-content-hint": "TEXT"
+            },
+            "password": {
+              "title": "Password",
+              "type": "string",
+              "format": "password",
+              "x-ms-dynamically-added": true,
+              "description": "Leave blank for demo on the mock portal.",
+              "x-ms-content-hint": "PASSWORD"
+            }
+          },
+          "required": []
+        }
+      }
+    }
+  },
+  "actions": {
+    "Resolve_run_inputs": {
+      "type": "Compose",
+      "runAfter": {},
+      "metadata": {
+        "operationMetadataId": "4d9f3b21-2c5e-4e8b-af3d-1b2c3d4e5f60"
+      },
+      "inputs": {
+        "PortalUrl": "@if(empty(triggerBody()?['text']), 'http://127.0.0.1:8765/index.html', triggerBody()?['text'])",
+        "DropFolder": "@if(empty(triggerBody()?['text_1']), 'C:\\RPA\\Ariba\\Inbox', triggerBody()?['text_1'])",
+        "Username": "@if(empty(triggerBody()?['text_2']), 'demo', triggerBody()?['text_2'])"
+      }
+    },
+    "Run_a_flow_built_with_Power_Automate_for_desktop": {
+      "type": "OpenApiConnection",
+      "runAfter": {
+        "Resolve_run_inputs": [
+          "Succeeded"
+        ]
+      },
+      "metadata": {
+        "operationMetadataId": "5e0a4c32-3d6f-4f9c-b04e-2c3d4e5f6071",
+        "uiFlowIdPlaceholder": "00000000-0000-0000-0000-000000000001"
+      },
+      "runtimeConfiguration": {
+        "timeout": "PT2H"
+      },
+      "inputs": {
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_uiflow",
+          "connectionName": "shared_uiflow",
+          "connectionReferenceName": "shared_uiflow",
+          "operationId": "RunUIFlow_V2"
+        },
+        "parameters": {
+          "uiFlowId": "00000000-0000-0000-0000-000000000001",
+          "runMode": "attended",
+          "runSession": "local",
+          "runPriority": "normal",
+          "item/PortalUrl": "@outputs('Resolve_run_inputs')?['PortalUrl']",
+          "item/DropFolder": "@outputs('Resolve_run_inputs')?['DropFolder']",
+          "item/Username": "@outputs('Resolve_run_inputs')?['Username']",
+          "item/Password": "@if(empty(triggerBody()?['password']), 'demo', triggerBody()?['password'])"
+        }
+      }
+    },
+    "Compose_Run_summary": {
+      "type": "Compose",
+      "runAfter": {
+        "Run_a_flow_built_with_Power_Automate_for_desktop": [
+          "Succeeded"
+        ]
+      },
+      "metadata": {
+        "operationMetadataId": "6f1b5d43-4e70-40ad-c15f-3d4e5f607182"
+      },
+      "inputs": "@concat('Processed=', coalesce(outputs('Run_a_flow_built_with_Power_Automate_for_desktop')?['body/ProcessedCount'], ''), ' Failed=', coalesce(outputs('Run_a_flow_built_with_Power_Automate_for_desktop')?['body/FailedCount'], ''), ' LastConfirmationId=', coalesce(outputs('Run_a_flow_built_with_Power_Automate_for_desktop')?['body/LastConfirmationId'], ''))"
+    },
+    "If_desktop_reported_failures": {
+      "type": "If",
+      "runAfter": {
+        "Compose_Run_summary": [
+          "Succeeded"
+        ]
+      },
+      "metadata": {
+        "operationMetadataId": "702c6e54-5f81-41be-d260-4e5f60718293"
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@int(coalesce(outputs('Run_a_flow_built_with_Power_Automate_for_desktop')?['body/FailedCount'], '0'))",
+              0
+            ]
+          }
+        ]
+      },
+      "actions": {
+        "Fail_cloud_run": {
+          "type": "Terminate",
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "813d7f65-6092-42cf-e371-5f60718293a4"
+          },
+          "inputs": {
+            "runStatus": "Failed",
+            "runError": {
+              "code": "DesktopFlowReportedFailures",
+              "message": "@outputs('Compose_Run_summary')"
+            }
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      }
+    }
+  },
+  "outputs": {}
+}
