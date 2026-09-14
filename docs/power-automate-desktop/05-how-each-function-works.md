@@ -12,7 +12,7 @@
 | Designer / console usable items (35) | How the workshop itself works |
 | Variable data types (39) | What each “jar shape” is |
 | Actions used **together** | [Combination playbooks](06-combination-playbooks.md) |
-| Portal file uploads (Ariba, Coupa, …) | [Portal uploads like Ariba](07-portal-uploads-ariba.md) |
+| Portal file uploads (Ariba, Coupa, …) | [Portal uploads like Ariba](07-portal-uploads-ariba.md) — drop PDFs in a folder, run the flow |
 
 **This set does not replace Microsoft Learn** for:
 

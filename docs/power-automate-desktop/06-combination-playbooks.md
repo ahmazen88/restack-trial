@@ -4,7 +4,7 @@ Single actions rarely finish a business job. These playbooks show **how function
 
 Replace Contoso paths, UI elements, and mailboxes with yours. Keep Launch/Close pairs and convert file ↔ binary around cloud connectors.
 
-Portal file uploads (Ariba, Coupa, and similar) have a dedicated maker guide: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Playbook 19 is the short version of that guide.
+Portal file uploads (Ariba, Coupa, and similar) have a dedicated maker guide: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Playbook 19 is the short version: drop PDFs in a folder, run the flow.
 
 ## 1. Invoice PDF in Outlook → Excel log → archive folder
 
@@ -386,27 +386,26 @@ Do not mix `%Orders[0]%` in this flow. Use `=Index(Orders, 1)`.
 
 ---
 
-## 19. Ariba-style portal upload: invoice PDF → submit → confirmation
+## 19. Ariba-style portal upload: drop PDF in a folder → submit
 
-**Use case.** AP must create a PO-flip invoice on SAP Business Network (Ariba) or a similar supplier portal, attach the legal PDF, and store the confirmation id. There is no usable upload API.
+**Use case.** You place invoice PDFs in `C:\RPA\Ariba\Inbox` and run the desktop flow. It attaches each file on SAP Business Network (Ariba) or a similar portal and moves the PDF to Done. No trigger, no mail pull, no queue.
 
-**Analogy.** A courier badges in at the lobby, walks to Accounts Payable, hands over a sealed envelope, and does not leave until the clerk stamps a receipt.
+**Analogy.** A tray on the desk. You drop envelopes in. When you say “go,” the clerk badges in, hands each one over, and files the empty envelope in the done drawer.
 
-**Demonstration.** Full capture, iframe notes, and the reusable `UploadAttachment` subflow: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Short path:
+**Demonstration.** Full capture: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Short path:
 
-1. **If file exists** `%InvoicePath%` (absolute path on the bot PC). Cloud/Outlook files: save or **Convert binary data to file** first.
-2. **Get credential** `AribaSupplier` → **Launch new Microsoft Edge** `%PortalUrl%` (realm from environment, not hard-coded).
-3. **Wait for web page content** → **Populate text field on web page** / **Press button on web page** (login). MFA: attended pause or fail closed.
-4. Navigate Create Invoice / PO-flip; fill PO, invoice number, date, amount (**Set drop-down list value on web page** as needed).
-5. **Upload (pick one door):**
-   - **Door A:** **Populate text field on web page** on `input type=file` with `%InvoicePath%` (no emulate typing).
-   - **Door B (typical Ariba Attach):** **Press button on web page** (Attach) → **Wait for window** Open → **Populate text field in window** File name → **Press button in window** Open → wait for the dialog to close.
-6. **Wait for web page content** (file name on the attachment list) → **Press button on web page** Review / Submit.
-7. **Get details of element on web page** / **Extract data from web page** → `%ConfirmationId%` → screenshot → Excel log → **Move file(s)** to Done → **Close web browser**.
+1. Place `*.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** in PAD (no trigger).
+2. **Get files in folder** `*.pdf`. **If** count = 0 → **Stop flow**.
+3. **Get credential** `AribaSupplier` → **Launch new Microsoft Edge** `%PortalUrl%` → login.
+4. **For each** PDF: navigate Create Invoice, fill the header (invoice number from **Get file path part**), then upload:
+   - **Door A:** **Populate text field on web page** on `input type=file` with the PDF path (no emulate typing).
+   - **Door B (typical Ariba Attach):** **Press button on web page** (Attach) → **Wait for window** Open → **Populate text field in window** File name → **Press button in window** Open.
+5. **Wait for web page content** (file name on the list) → Submit → **Move file(s)** to Done (or Failed + screenshot on error).
+6. **Close web browser** after the loop.
 
-**On block error:** screenshot, log, **Update work queue item** failed. Do not use **Display select file dialog** (attended picker, not a portal door). Do not use **SAP automation** (that is GUI ERP, [playbook 12](#12-sap-posting-from-excel)).
+**On block error** around one PDF so the next file still runs. Do not use **Display select file dialog**, Outlook, SharePoint, work queues, or **SAP automation** (GUI ERP is [playbook 12](#12-sap-posting-from-excel)).
 
-**Functions in combination.** Browser automation + UI automation (OS file picker) + File/Folder + Get credential + Excel or work queues + Outlook/SharePoint inbound.
+**Functions in combination.** Folder + File + Browser automation + UI automation (OS file picker) + Get credential + For each.
 
 ---
 
@@ -423,6 +422,6 @@ Do not mix `%Orders[0]%` in this flow. Use `=Index(Orders, 1)`.
 | Human in the loop | Message boxes | If on button pressed |
 | Secret | Get credential / CyberArk | Sensitive variables |
 | Nightly notify | Teams or Outlook | Get last error, screenshot |
-| Portal upload (Ariba-like) | Browser, UI automation, File | File input **or** OS Open dialog; wait for file name |
+| Portal upload (Ariba-like) | Folder, Browser, UI automation | Drop PDFs in Inbox; file input **or** OS Open dialog |
 
 For per-function use case, demonstration, and analogy, open [how-it-works/README.md](how-it-works/README.md).

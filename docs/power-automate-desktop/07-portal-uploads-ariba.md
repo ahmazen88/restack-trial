@@ -1,220 +1,139 @@
 # Portal uploads like Ariba
 
-Procurement portals (SAP Business Network / Ariba, Coupa, Jaggaer, Ivalua, Oracle Supplier Portal, Fieldglass) almost never give AP a clean API for “attach this PDF and submit.” The bot has to **log in, walk a wizard, put a file on the page, wait until the portal admits it has the file, then submit**.
+You **put invoice PDFs in a folder** and **run the desktop flow**. No mail pull, no SharePoint, no work queue, no PAD trigger, no notification. The folder is the inbox.
 
-This note is the working pattern for that job. Playbook [19 in the combination set](06-combination-playbooks.md#19-ariba-style-portal-upload-invoice-pdf--submit--confirmation) is the short version. Use this page when you are actually building the flow.
+The bot then **logs in** to the procurement portal (SAP Business Network / Ariba, or Coupa, Jaggaer, and the like), **attaches each PDF**, **submits**, and **moves the file** to Done.
 
-**Analogy for the whole job.** A courier with a sealed envelope. They show a badge at the lobby (login), take the elevator to Accounts Payable (navigate), hand the envelope to the clerk (upload), wait until the clerk stamps a receipt number (confirmation), and only then leave the building (close browser). The hard part is not walking — it is **how that clerk accepts the envelope**.
+**Analogy.** A tray on the clerk’s desk. You drop envelopes in the tray. When you say “go,” the clerk badges in, hands each envelope to Accounts Payable, waits for a receipt stamp, and moves the envelope to the done drawer.
+
+Playbook [19](06-combination-playbooks.md#19-ariba-style-portal-upload-drop-pdf-in-a-folder--submit) is the short version.
+
+## Start: the drop folder
+
+| Folder | Role |
+| --- | --- |
+| `C:\RPA\Ariba\Inbox` | You place `*.pdf` here, then run the flow |
+| `C:\RPA\Ariba\Done` | Successful uploads |
+| `C:\RPA\Ariba\Failed` | Files that did not submit |
+
+How you start it: **Play** in the PAD console (or Run from the flow designer). The first actions are **Get files in folder**, not a trigger.
+
+1. **If folder exists** `C:\RPA\Ariba\Inbox` (else **Create folder**)
+2. **Get files in folder** `C:\RPA\Ariba\Inbox\*.pdf` → `%Pdfs%`
+3. **If** `%Pdfs.Count% = 0` → **Stop flow** (nothing to upload)
+4. Then login once and **For each** `%CurrentPdf%` in `%Pdfs%`
+
+Name the PDF so the invoice number is obvious, for example `INV-1001.pdf`. **Get file path part** on `%CurrentPdf%` gives `%FileNameNoExtension%` → use that as `%InvoiceNumber%` on the portal. Add PO / date / amount on the page by hand in the recorded fields, or **Extract text from PDF** if those values are printed on the image.
 
 ## The two doors for a file
 
-Every Ariba-like page uses one of two doors. Capture **both** as subflows. Detect which door you are on with **If web page contains** (hidden `input type=file`) versus **If window** (OS Open dialog after Attach).
+Every Ariba-like Attach control uses one of two doors. After you click Attach, find out which:
 
-| Door | What you see | PAD move | Unattended? |
-| --- | --- | --- | --- |
-| **A — HTML file input** | A real `<input type="file">` in the DOM (often hidden, styled as “Browse”) | **Populate text field on web page** with the **full local path** (`C:\RPA\Ariba\Inbox\INV-1001.pdf`). Do **not** emulate typing. | Yes |
-| **B — Windows Open dialog** | Attach / paperclip / “Add attachment” opens the OS picker (`Open`, `File Upload`, locale titles like `Öffnen`) | **Press button on web page** (Attach) → **Wait for window** → **Populate text field in window** (File name) → **Press button in window** (Open) | Yes, if the unattended session has a desktop |
-| **Attended pick (not a portal door)** | Human must choose which PDF | **Display select file dialog** | **No** — that action cannot run non-interactively |
+| Door | What you see | PAD move |
+| --- | --- | --- |
+| **A — HTML file input** | A real `<input type="file">` (often hidden behind Browse) | **Populate text field on web page** with the **full path** of `%CurrentPdf%`. Do **not** emulate typing. |
+| **B — Windows Open dialog** | Attach / paperclip opens the OS picker (`Open`, `File Upload`, locale titles like `Öffnen`) | **Press button on web page** (Attach) → **Wait for window** → **Populate text field in window** (File name) → **Press button in window** (Open) |
 
-Door A is quieter and faster. Door B is what Ariba, Coupa, and most “pretty” dropzones actually do: the visible control is a `<div>` or `<button>`, and the OS dialog is a **Windows** window, not a web element. After you click Attach, **leave Browser automation** and use **UI automation** on that dialog.
+Door B is what most Ariba Attach buttons do. The picker is a **Windows** window. Leave Browser automation and use **UI automation** on that dialog.
 
-Do not use **Run JavaScript function on web page** to set `input.files`. Browsers block that for security. PAD’s own populate-on-file-input works because the browser extension sets the value; injected script does not.
+Do not use **Display select file dialog** (that asks a person to pick a file — you already dropped it in the folder). Do not use **Run JavaScript function on web page** to set `input.files` (browsers block it).
 
 ```text
-                     ┌─ input[type=file] in DOM? ──► Door A: Populate text field on web page
-Click Attach / Browse ─┤
-                     └─ OS picker appears? ────────► Door B: Wait for window → File name → Open
+Place PDFs in Inbox → Run flow → Get files in folder
+        │
+        ▼
+  Click Attach / Browse
+        ├─ input[type=file] in DOM?  → Door A: Populate text field on web page
+        └─ OS picker appears?        → Door B: Wait for window → File name → Open
 ```
 
-## Use case (Ariba invoice image)
+## Demonstration: folder → stamp
 
-AP has a PO-backed invoice PDF (from Outlook, a watch folder, or SharePoint). A supplier or shared-services clerk must create the invoice on **SAP Business Network** (classic Ariba Network / Invoice Collaboration), attach the legal image, and keep the confirmation (IR / invoice request id) in Excel.
+Replace realm URL, UI elements, and folders with yours. Keep Launch/Close pairs.
 
-Same skeleton covers:
+### 0. Values you set in the flow
 
-- Catalog / CIF / price-file upload
-- ASN / ship-notice attachments
-- RFP response documents
-- Supplier certificates (insurance, tax forms)
-
-Only the navigation and field names change.
-
-## Demonstration: one invoice, start to stamp
-
-Replace realm URL, UI elements, and folders with yours. Keep Launch/Close pairs. File path must exist **on the machine that runs PAD** before Attach.
-
-### 0. Inputs (flow variables)
-
-| Variable | Example | Source |
+| Variable | Example | How |
 | --- | --- | --- |
-| `%PortalUrl%` | `https://contoso.procurement.ariba.com` | **Retrieve environment variable** (DEV vs PROD realm) |
-| `%PortalCred%` | username + password | **Get credential** (`AribaSupplier`) — never plain text |
-| `%InvoicePath%` | `C:\RPA\Ariba\Inbox\INV-1001.pdf` | Work queue, Outlook save, or SharePoint download |
-| `%PONumber%` | `4500123456` | Excel / queue payload |
-| `%InvoiceNumber%` | `INV-1001` | Same |
-| `%InvoiceDate%` | `2026-09-14` | Same |
-| `%Amount%` | `1250.00` | Same |
+| `%DropFolder%` | `C:\RPA\Ariba\Inbox` | **Set variable** |
+| `%PortalUrl%` | `https://contoso.procurement.ariba.com` | **Set variable** (your realm) |
+| `%PortalCred%` | username + password | **Get credential** (`AribaSupplier`) |
 
-If the PDF still lives in SharePoint or Outlook, **get it onto disk first**. Cloud connectors produce binary; **Convert binary data to file** (or **Save Outlook email messages**) before any upload. Portals cannot read `%BinaryData%`.
+### 1. Take the PDFs from the tray
 
-### 1. Guard the file
+1. **Get files in folder** `%DropFolder%` filter `*.pdf`
+2. **If** `%Pdfs.Count% = 0` → **Stop flow**
+3. **For each** later uses `%CurrentPdf%`. Guard: **Get file path part** → `%FileExtension%` should be `pdf`
 
-1. **If file exists** `%InvoicePath%` — else **Throw custom error** `Invoice image missing`
-2. **Get file path part** → `%FileName%`, `%FileExtension%` — extension in `pdf,tif,tiff,jpg,png,xlsx,zip` (match the portal allow-list)
-3. Skip empty-looking names. Ariba attachments are often capped (commonly 10–100 MB per file, sometimes a count cap). Fail **before** login if the file is impossible.
+### 2. Open the browser once
 
-Optional: **Extract text from PDF** + **Parse text** to confirm the invoice number in the image matches `%InvoiceNumber%` so you do not attach the wrong envelope.
+1. **Launch new Microsoft Edge** or **Launch new Chrome** → `%PortalUrl%`
+2. **Wait for web page content** (Sign in, or the home tile)
+3. **Populate text field on web page** (user / password from `%PortalCred%`)
+4. **Press button on web page** (Sign in)
 
-### 2. Open a real browser (not IE)
+If MFA appears, complete it yourself on an attended run, then continue. Do not add a notification or a second flow for that.
 
-1. **Launch new Microsoft Edge** or **Launch new Chrome**
-   - Initial URL: `%PortalUrl%`
-   - Attach to running browser **only** when you must reuse an SSO cookie / MFA session (attended). Unattended: launch clean, then **Get credential**.
-2. **Wait for web page content** (Sign in, or the post-SSO home tile). Timeouts of 60–120 seconds are normal on Ariba.
-3. If login fields are present:
-   - **Populate text field on web page** (user)
-   - **Populate text field on web page** (password from `%PortalCred%`, sensitive)
-   - **Press button on web page** (Sign in)
-4. MFA / SSO interstitial: **If web page contains** “Approve sign-in” → attended **Display message** “Complete MFA, then OK” or fail unattended with a clear error. Do not spin on a 6-digit box.
+**Analogy.** Badge at the lobby once. Then walk every envelope from the tray.
 
-**Analogy.** Badge at the lobby. If the guard asks for a second factor, a person has to wave; the courier robot cannot.
+### 3. For each PDF: create invoice and attach
 
-### 3. Walk to “create invoice”
+Inside **For each** `%Pdfs%`:
 
-Ariba shells change by realm (classic frameset vs Guided Buying vs new Network UI). Record **your** tiles. A typical supplier path:
+1. **Get file path part** → `%InvoiceNumber%` from `%FileNameNoExtension%`
+2. Navigate Create Invoice / PO-flip (your tiles)
+3. Fill the header fields the portal requires
+4. Put the file on the page (Door A or Door B) using `%CurrentPdf%` as the path
+5. **Wait for web page content** until the file **name** shows on the attachment list
+6. **Press button on web page** Review / Submit
+7. **Wait for web page content** (success or error banner)
+8. On success: **Get details of element on web page** → `%ConfirmationId%` → **Move file(s)** `%CurrentPdf%` to `C:\RPA\Ariba\Done`
+9. On error: **Take screenshot of web page** → **Move file(s)** to `C:\RPA\Ariba\Failed`
 
-1. **Wait for web page content** (Inbox / Orders / Invoices tile)
-2. **Click link on web page** or **Press button on web page** (Create Invoice / PO-Flip / Non-PO Invoice)
-3. **Wait for web page content** (PO number field or invoice header)
-4. **Populate text field on web page** `%PONumber%` → search → open the PO
-5. Fill header: invoice number, date, amount, tax as required
-   - **Set drop-down list value on web page** for currency / tax
-   - **Set check box state on web page** for “This is a credit memo” only when it is
+**On block error** around the per-file steps so one bad PDF does not stop the rest. Login stays open for the whole **For each**.
 
-**Iframes.** Classic Ariba nests the form in one or more frames. Capture the UI element **from the inner page** (recorder includes the frame in the selector). If Click hits the chrome and does nothing:
+**Iframes.** Classic Ariba nests the form in frames. Capture the UI element **from the inner page**. There is no separate “switch iframe” action; the selector is the switch. If Click does nothing, wait for an inner label, then try **Send physical click**.
 
-- Re-capture inside the frame after the frame has loaded (**Wait for web page content** on an inner label)
-- Turn on **Send physical click** on **Click link on web page**
-- Last resort: **UI automation** against the browser window (weaker selectors)
+### 4. Close
 
-There is no separate “switch iframe” action in PAD. The selector is the switch.
+After the loop: **Close web browser**.
 
-### 4. Put the file on the page (the actual upload)
+## Door A and Door B (the attach step)
 
-**Door A — file input in the DOM**
+**Door A**
 
-1. **Wait for web page content** (Attach / Browse / paperclip)
-2. If the input is hidden, you can still target it if the recorder sees `input[type=file]`
-3. **Populate text field on web page**
-   - UI element: the file input
-   - Text: `%InvoicePath%` (absolute path)
-   - Populate using physical keystrokes: **Off**
-   - Emulate typing: **Off**
-4. **Wait for web page content** until the file **name** appears next to Attach (or a progress control disappears)
+1. **Wait for web page content** (Attach / Browse)
+2. **Populate text field on web page** on the file input, Text = `%CurrentPdf%`, emulate typing **Off**
+3. **Wait for web page content** (file name visible)
 
-**Door B — OS Open dialog (most Ariba Attach buttons)**
+**Door B** (typical Ariba)
 
-1. **Press button on web page** (Add attachment / Browse / paperclip)
-2. **Wait for window** title contains `Open` (also record `File Upload`, `Choose File`, and the OS language title)
-3. **Focus window** (the dialog)
-4. **Focus text field in window** (File name)
-5. **Populate text field in window** `%InvoicePath%`
-6. **Press button in window** (Open) — or **Send keys** `{Enter}` only if the Open button selector is flaky
-7. **Wait for window** to **close** (dialog gone) so you do not type into the next invoice
-8. Back in the browser: **Wait for web page content** (file name on the attachment list)
+1. **Press button on web page** (Add attachment)
+2. **Wait for window** title contains `Open`
+3. **Focus window** → **Focus text field in window** (File name)
+4. **Populate text field in window** `%CurrentPdf%`
+5. **Press button in window** (Open)
+6. Wait until that dialog is gone
+7. **Wait for web page content** (file name on the list)
 
-Multiple files: **For each** path in `%AttachmentList%`, repeat Door A or B. Some realms allow one “invoice image” plus extra supporting docs — use the correct paperclip for each.
-
-Dropzones that only accept drag-and-drop: look for a hidden file input first (Door A). **Drag and drop UI element in window** onto a browser dropzone is brittle; prefer Browse.
-
-**Analogy.** Door A is sliding the envelope under a slot that already has the right width. Door B is ringing the bell, waiting for the clerk to open the hatch, and placing the envelope in their hands.
-
-### 5. Submit and keep the stamp
-
-1. **Press button on web page** (Next / Review / Submit) — wizards often have **two** submits (validate, then confirm)
-2. **Wait for web page content** (“successfully submitted”, IR number, or error banner)
-3. **If web page contains** an error banner → **Get details of element on web page** → **Throw custom error** with that text
-4. **Extract data from web page** or **Get details of element on web page** → `%ConfirmationId%`
-5. **Take screenshot of web page** to `C:\RPA\Ariba\Proof\%InvoiceNumber%.png` (audit)
-6. **Launch Excel** log → **Get first free column/row** → **Write to Excel worksheet** (PO, invoice, confirmation, timestamp, file name) → **Save Excel** / **Close Excel**
-7. **Move file(s)** PDF to `C:\RPA\Ariba\Done\%CurrentDate%\`
-8. **Close web browser**
-
-Parse the confirmation with **Parse text** (`IR\d+`, `INV\d+`, or whatever your realm prints). Do not leave the page until `%ConfirmationId%` is non-empty.
-
-## Reusable subflow: `UploadAttachment`
-
-Put this in every portal project. Main only passes `%Browser%` and `%InvoicePath%`.
-
-**Subflow `UploadAttachment`**
-
-1. **If web page contains** UI element `FileInput` (hidden or visible)
-   - **Populate text field on web page** `%InvoicePath%` (no emulate typing)
-2. **Else**
-   - **Press button on web page** `AttachButton`
-   - **Wait for window** `OpenDialog` (timeout 15s)
-   - **If window** not found → **Throw custom error** `Attachment picker did not open`
-   - **Populate text field in window** File name = `%InvoicePath%`
-   - **Press button in window** Open
-   - **Wait for window** `OpenDialog` closes
-3. **Wait for web page content** `AttachedFileName` (use **Get file path part** name as the text to wait for)
-4. **If web page contains** “failed to upload” / virus / file type → **Throw custom error**
-
-Call it from invoice, catalog, ASN, and RFP flows. Only the button UI element changes (input variable `%AttachButton%`).
-
-## Combination with mail, queues, and Excel
-
-**Inbound PDF → portal** (AP factory)
-
-1. **Launch Outlook** → **Retrieve email messages from Outlook** (unread, has attachment)
-2. **Save Outlook email messages** to `C:\RPA\Ariba\Inbox`
-3. **Process a work queue item** (or **For each** file)
-4. Run the demonstration above
-5. **Update work queue item** processed / generic exception
-6. **Process email messages in Outlook** (mark read)
-
-**SharePoint drop → portal**
-
-1. **List folder** / **Get file content**
-2. **Convert binary data to file** `C:\RPA\Ariba\Inbox\%Name%`
-3. Same upload
-4. **Move file** on SharePoint to `/Submitted`
-
-**Many invoices, one login**
-
-Login is expensive (SSO, MFA, Ariba slowness). **Get credential** + launch **once**, then **For each** queue item: navigate → upload → submit → log. On session timeout (**If web page contains** Sign in), call `Login` again and retry the **same** item. **On block error** around one item so a bad PDF does not kill the batch.
+Put Door A/B in a subflow `UploadAttachment` that takes `%Browser%` and `%CurrentPdf%` if you reuse it.
 
 ## Ariba-shaped gotchas
 
-| Symptom | What is going on | What to do |
-| --- | --- | --- |
-| Attach click does nothing | Overlay, iframe, or the real button is a child span | Re-capture; physical click; wait for overlay |
-| Populate file input “succeeds” but no file | You populated a visible text box, not `type=file`, or emulate-typing was on | Door A only on the file input; keystrokes off |
-| Open dialog not found | Locale title, or the picker is a Chrome window not “Open” | Capture the window with the recorder; use **If window contains** File name |
-| Dialog found, path typed into the **page** | Focus never moved to the dialog | **Focus window** on the dialog before populate |
-| Works attended, fails unattended | MFA, **Display select file dialog**, or no desktop for Door B | Credential + Door A/B; no message-box picker |
-| Timeout after 10 minutes | Ariba idle logout | Shorter items; heartbeat click; re-login |
-| Duplicate invoice | Realm rejects same supplier+invoice number | **If web page contains** duplicate → mark queue item failed, do not retry forever |
-| DEV uploaded to PROD | Hard-coded URL | `%PortalUrl%` from environment |
-| Selector broke after a Network UI refresh | Dynamic ids | Prefer name/text/role in the UI element; repair in the designer |
-| File on a share path | Portal picker runs as the bot user and may not see `\\fileserver\...` | Copy to `C:\RPA\...` first (**Copy file(s)**) |
+| Symptom | What to do |
+| --- | --- |
+| Inbox empty and the flow “does nothing” | That is correct — **Stop flow** when `%Pdfs.Count% = 0` |
+| Populate “succeeds” but no file | You filled a visible text box, not `type=file`, or emulate-typing was on |
+| Open dialog not found | Record the real window title (locale); **Focus window** before typing the path |
+| Path typed into the **page** | Focus never moved to the Open dialog |
+| Attach click does nothing | Iframe or overlay — re-capture inside the frame; physical click |
+| Duplicate invoice | Move that PDF to Failed; go to the next file |
+| DEV vs PROD | Change `%PortalUrl%` in **Set variable**, do not hard-code in ten places |
 
-**SAP GUI is a different playbook.** Posting in SAP ERP (`FB60`, MIRO) uses **SAP automation** ([playbook 12](06-combination-playbooks.md#12-sap-posting-from-excel)). Ariba Network is a **website**. Do not mix SAP GUI actions with the browser upload.
-
-## Same doors, other portals
-
-| Portal | Typical upload | Notes |
-| --- | --- | --- |
-| SAP Business Network / Ariba | Invoice image, catalog, ASN, RFP | Iframes, slow waits, realm URLs |
-| Coupa | Invoice / expense attachments | Often Door B; watch for multiple nested modals |
-| Jaggaer / Bravo | Bid envelopes, catalogs | Wizard + mandatory attachment types |
-| Ivalua | Supplier docs | Dropzone + hidden file input (try Door A first) |
-| Oracle Supplier Portal | Invoice attachments | ADF iframes; physical click |
-| Fieldglass | Timesheet / SOW docs | Similar Door B |
-| “Any” vendor portal | Proof of delivery, claims | This same `UploadAttachment` subflow |
+**SAP GUI is a different playbook.** Posting in SAP ERP (`FB60`, MIRO) uses **SAP automation** ([playbook 12](06-combination-playbooks.md#12-sap-posting-from-excel)). Ariba Network is a **website**.
 
 ## Functions in combination
 
-Browser automation (Launch, Wait, Populate, Press, Extract, Screenshot, Close) + UI automation (Wait for window, Focus, Populate, Press) + File/Folder + **Get credential** + Excel or work queues + Outlook or SharePoint for the inbound file + **On block error** + optional PDF text check.
+Folder (**Get files in folder**, **Move file(s)**) + File (**Get file path part**) + Browser automation + UI automation (OS Open dialog) + **Get credential** + Loops (**For each**) + **On block error**.
 
-**Not in this combination:** **Display select file dialog** (human picker), **Run JavaScript** to stuff `input.files`, **Launch new Internet Explorer**.
+**Not in this flow:** PAD **triggers**, Outlook, SharePoint, work queues, Teams/email notifications, **Display select file dialog**, **Launch new Internet Explorer**.
