@@ -1,0 +1,10 @@
+{
+  "name": "Restack AI Python Examples",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "ports": [
+    { "name": "Restack Developer UI", "port": 5233 },
+    { "name": "Restack API", "port": 6233 },
+    { "name": "Offline Chat UI", "port": 8000 }
+  ]
+}
