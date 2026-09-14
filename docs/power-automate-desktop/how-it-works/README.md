@@ -80,4 +80,4 @@ Companion chapters for [How each function works (hub)](../05-how-each-function-w
 | [Power Fx functions](power-fx.md) | 130 |
 | [Designer items and data types](designer-and-data-types.md) | 74 |
 
-Cross-module flows: [Combination playbooks](../06-combination-playbooks.md).
+Cross-module flows: [Combination playbooks](../06-combination-playbooks.md). Portal file uploads: [Portal uploads like Ariba](../07-portal-uploads-ariba.md).

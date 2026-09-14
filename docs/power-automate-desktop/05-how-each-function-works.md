@@ -12,6 +12,7 @@
 | Designer / console usable items (35) | How the workshop itself works |
 | Variable data types (39) | What each “jar shape” is |
 | Actions used **together** | [Combination playbooks](06-combination-playbooks.md) |
+| Portal file uploads (Ariba, Coupa, …) | [Portal uploads like Ariba](07-portal-uploads-ariba.md) |
 
 **This set does not replace Microsoft Learn** for:
 
@@ -37,6 +38,7 @@ Classic flows use `%Variable%` and **0-based** indexes. Power Fx flows use `=` a
 
 - [How-it-works index (every function)](how-it-works/README.md)
 - [Combination playbooks (actions together)](06-combination-playbooks.md)
+- [Portal uploads like Ariba](07-portal-uploads-ariba.md)
 - [Inventory](00-inventory.md) if you need the raw list
 
 Example of the four-block shape (Clipboard):

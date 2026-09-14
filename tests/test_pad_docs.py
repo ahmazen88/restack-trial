@@ -151,10 +151,29 @@ class PadDocsTests(unittest.TestCase):
 
     def test_combination_playbooks_exist(self) -> None:
         text = (DOCS / "06-combination-playbooks.md").read_text(encoding="utf-8")
-        self.assertGreaterEqual(text.count("## "), 18)
+        self.assertGreaterEqual(text.count("## "), 19)
         self.assertIn("**Use case.**", text)
         self.assertIn("**Analogy.**", text)
         self.assertIn("**Demonstration.**", text)
+        self.assertIn("## 19. Ariba-style portal upload", text)
+
+    def test_portal_uploads_ariba_guide(self) -> None:
+        text = (DOCS / "07-portal-uploads-ariba.md").read_text(encoding="utf-8")
+        self.assertIn("## Use case", text)
+        self.assertIn("**Analogy", text)
+        self.assertIn("## Demonstration", text)
+        self.assertIn("Populate text field on web page", text)
+        self.assertIn("Wait for window", text)
+        self.assertIn("Populate text field in window", text)
+        self.assertIn("Get credential", text)
+        self.assertIn("input type=file", text)
+        self.assertIn("UploadAttachment", text)
+        self.assertIn("Retrieve environment variable", text)
+        self.assertIn("cannot run non-interactively", text)
+        readme = (DOCS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("07-portal-uploads-ariba.md", readme)
+        combo = (DOCS / "06-combination-playbooks.md").read_text(encoding="utf-8")
+        self.assertIn("07-portal-uploads-ariba.md", combo)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,8 @@ It is original reference text built from the product surface area (action names,
 5. **Classic `%` expressions:** [04-expression-syntax.md](04-expression-syntax.md)
 6. **Each function / action (reference):** [modules/](modules/) — purpose, inputs, outputs, exceptions.
 7. **How each function works:** [05-how-each-function-works.md](05-how-each-function-works.md) — use case, demonstration, analogy for every item.
-8. **In combination:** [06-combination-playbooks.md](06-combination-playbooks.md) — 18 end-to-end playbooks.
+8. **In combination:** [06-combination-playbooks.md](06-combination-playbooks.md) — 19 end-to-end playbooks.
+9. **Portal uploads (Ariba-like):** [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md) — HTML file input vs Windows Open dialog, iframes, submit, confirmation.
 
 ## Counts (current catalog)
 
