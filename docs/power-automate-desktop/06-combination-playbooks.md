@@ -392,7 +392,7 @@ Do not mix `%Orders[0]%` in this flow. Use `=Index(Orders, 1)`.
 
 **Analogy.** A tray on the desk. You drop envelopes in. When you say “go,” the clerk badges in, hands each one over, and files the empty envelope in the done drawer.
 
-**Demonstration.** Paste [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin). SAP click path: [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md). Capture list: [ui-elements.md](flows/ariba-folder-upload/ui-elements.md).
+**Demonstration.** Import [AribaFolderUpload-package.zip](flows/ariba-folder-upload/cloud/AribaFolderUpload-package.zip) ([cloud README](flows/ariba-folder-upload/cloud/README.md)), paste [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin) into PAD, then bind that desktop flow in **Run a flow built with Power Automate for desktop**. SAP click path: [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md). Capture list: [ui-elements.md](flows/ariba-folder-upload/ui-elements.md).
 
 1. Place `4500123456_INV-1001.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** (no trigger).
 2. Mock first (`demo`/`demo`), then `https://supplier.ariba.com`.

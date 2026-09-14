@@ -1,9 +1,10 @@
 # Portal uploads like Ariba
 
-**Connected flow:** [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin) — [how to run](flows/ariba-folder-upload/README.md)  
+**Power Automate cloud flow (import):** [AribaFolderUpload-package.zip](flows/ariba-folder-upload/cloud/AribaFolderUpload-package.zip) — [import steps](flows/ariba-folder-upload/cloud/README.md)  
+**Desktop flow (paste):** [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin) — [how to run](flows/ariba-folder-upload/README.md)  
 **SAP documents used:** [ariba-sources.md](flows/ariba-folder-upload/ariba-sources.md)
 
-You **put PDFs in a folder** and **press Play**. No PAD trigger, no mail, no queue, no notification.
+You **put PDFs in a folder** and **Run** the [cloud package](flows/ariba-folder-upload/cloud/AribaFolderUpload-package.zip) (or **Play** in PAD). No PAD trigger, no mail, no queue, no notification.
 
 The robin follows SAP Business Network (Ariba) public steps: **Workbench** → **Orders** → open PO → **Create Invoice** → **Standard Invoice** → **Summary** → **Add to Header** → **Attachment** → **Choose File** → **Add Attachment** → **Next** → **Submit**.
 

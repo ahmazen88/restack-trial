@@ -1,0 +1,73 @@
+{
+  "desktopFlowName": "AribaFolderUpload",
+  "cloudFlowDisplayName": "Ariba folder upload",
+  "connector": "shared_uiflow",
+  "operationId": "RunUIFlow_V2",
+  "trigger": "manual",
+  "runMode": "attended",
+  "runSession": "local",
+  "runPriority": "normal",
+  "timeout": "PT2H",
+  "packageFile": "AribaFolderUpload-package.zip",
+  "uiFlowIdPlaceholder": "00000000-0000-0000-0000-000000000001",
+  "uiFlowIdNote": "After import, open the cloud flow and pick the AribaFolderUpload desktop flow. Copy the real id from https://make.powerautomate.com/manage/environments/{env}/uiflows/{id}/details",
+  "inputs": [
+    {
+      "name": "PortalUrl",
+      "type": "string",
+      "sensitive": false,
+      "padMark": "Input",
+      "triggerProperty": "text",
+      "itemKey": "item/PortalUrl",
+      "default": "http://127.0.0.1:8765/index.html",
+      "production": "https://supplier.ariba.com"
+    },
+    {
+      "name": "DropFolder",
+      "type": "string",
+      "sensitive": false,
+      "padMark": "Input",
+      "triggerProperty": "text_1",
+      "itemKey": "item/DropFolder",
+      "default": "C:\\RPA\\Ariba\\Inbox"
+    },
+    {
+      "name": "Username",
+      "type": "string",
+      "sensitive": false,
+      "padMark": "Input",
+      "triggerProperty": "text_2",
+      "itemKey": "item/Username",
+      "default": "demo"
+    },
+    {
+      "name": "Password",
+      "type": "string",
+      "sensitive": true,
+      "padMark": "Input",
+      "triggerProperty": "password",
+      "itemKey": "item/Password",
+      "default": "demo"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "ProcessedCount",
+      "type": "number",
+      "padMark": "Output",
+      "bodyPath": "body/ProcessedCount"
+    },
+    {
+      "name": "FailedCount",
+      "type": "number",
+      "padMark": "Output",
+      "bodyPath": "body/FailedCount"
+    },
+    {
+      "name": "LastConfirmationId",
+      "type": "string",
+      "padMark": "Output",
+      "bodyPath": "body/LastConfirmationId"
+    }
+  ]
+}

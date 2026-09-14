@@ -2,22 +2,32 @@
 # Drop PDFs in Inbox, press Play. No PAD trigger.
 # Click path from SAP KB0397437 / KB0399884 / Guide to Invoicing — see ariba-sources.md
 #
-# INPUT: PortalUrl, DropFolder, Username, Password
-# OUTPUT: ProcessedCount, FailedCount, LastConfirmationId
+# INPUT (mark in Variables pane; cloud RunUIFlow_V2 item keys):
+#   PortalUrl, DropFolder, Username, Password (Password = sensitive)
+# OUTPUT (mark in Variables pane): ProcessedCount, FailedCount, LastConfirmationId
+# Empty inputs keep the defaults below so Play still works without the cloud flow.
 #
 # Timeouts (seconds): launch 60, Ariba page 120, Loading gone 90, screen text 60,
 # Open dialog 15, file listed 90, submit 120, OCR 20, settle 1.
 # Retry: On block error Fixed 3 x 5s per PDF. OCR/image Tolerance 10, multiplier 1.
 # Name PDFs PO_Invoice.pdf (example 4500123456_INV-1001.pdf). Mock PO is 4500123456.
 
-SET PortalUrl TO $'''http://127.0.0.1:8765/index.html'''
-SET DropFolder TO $'''C:\\RPA\\Ariba\\Inbox'''
+IF PortalUrl = $'''''' THEN
+ SET PortalUrl TO $'''http://127.0.0.1:8765/index.html'''
+END
+IF DropFolder = $'''''' THEN
+ SET DropFolder TO $'''C:\\RPA\\Ariba\\Inbox'''
+END
 SET DoneFolder TO $'''C:\\RPA\\Ariba\\Done'''
 SET FailedFolder TO $'''C:\\RPA\\Ariba\\Failed'''
 SET ProofFolder TO $'''C:\\RPA\\Ariba\\Proof'''
 SET LogPath TO $'''C:\\RPA\\Ariba\\run-log.csv'''
-SET Username TO $'''demo'''
-SET Password TO $'''demo'''
+IF Username = $'''''' THEN
+ SET Username TO $'''demo'''
+END
+IF Password = $'''''' THEN
+ SET Password TO $'''demo'''
+END
 SET LoadingText TO $'''Loading'''
 SET SignInText TO $'''Sign in'''
 SET WorkbenchText TO $'''Workbench'''

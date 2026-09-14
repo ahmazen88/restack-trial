@@ -1,16 +1,21 @@
 # Connected flow: folder drop → SAP Business Network invoice
 
-Paste `AribaFolderUpload.robin` into Power Automate for desktop. The click path matches SAP’s public Ariba / Business Network docs in [ariba-sources.md](ariba-sources.md), not a generic four-question wizard.
+Two artifacts:
 
-Drop `4500123456_INV-1001.pdf` (or `INV-1001.pdf` against the mock PO) in `C:\RPA\Ariba\Inbox` and press **Play**. No PAD trigger.
+1. **Cloud (import this):** [`cloud/AribaFolderUpload-package.zip`](cloud/AribaFolderUpload-package.zip) — instant flow, **Manually trigger a flow** → **Run a flow built with Power Automate for desktop** (`RunUIFlow_V2`). How to import: [`cloud/README.md`](cloud/README.md).
+2. **Desktop (paste this):** [`AribaFolderUpload.robin`](AribaFolderUpload.robin) — the clicks. Microsoft cannot import a `.robin` as a desktop flow; paste it into PAD, then pick that flow in the cloud action.
+
+The click path matches SAP’s public Ariba / Business Network docs in [ariba-sources.md](ariba-sources.md), not a generic four-question wizard.
+
+Drop `4500123456_INV-1001.pdf` (or `INV-1001.pdf` against the mock PO) in `C:\RPA\Ariba\Inbox` and **Run** the cloud flow (or **Play** in PAD). No PAD trigger, no schedule, no mail.
 
 ## What you run
 
 1. Capture **AribaPortal** controls ([ui-elements.md](ui-elements.md)).
 2. Paste the robin into **Main**.
 3. **On block error**: Fixed, 3 × 5 seconds, continue from **end of the block**.
-4. Mark Input/Output variables (cloud **Run a desktop flow** interface later).
-5. Practice on the mock, then set `PortalUrl` to `https://supplier.ariba.com`.
+4. Mark Input/Output variables so the cloud action can pass `PortalUrl`, `DropFolder`, `Username`, `Password` and read `ProcessedCount`, `FailedCount`, `LastConfirmationId`.
+5. Import the zip, bind this desktop flow + the machine connection, then Run. Practice on the mock, then set Portal URL to `https://supplier.ariba.com`.
 
 ```bash
 python3 -m http.server 8765 --directory docs/power-automate-desktop/flows/ariba-folder-upload/mock-portal
@@ -43,8 +48,8 @@ Mock sign-in: `demo` / `demo`. User `mfa` → **Approve sign-in**. Mock PO **450
 | Submit | 120 |
 | OCR fallback | 20 |
 
-Do not sleep 10–30s through loading. Image/OCR **Tolerance is 10**, multiplier **1**.
+Do not sleep 10–30s through loading. Image/OCR **Tolerance is 10**, multiplier **1**. Cloud action timeout is **2 hours** (`PT2H`).
 
 ## Where it goes wrong
 
-Empty inbox → `CleanExit`. MFA text → stop. Duplicate invoice numbers are rejected by default on the Network. Missing **Add Attachment** after Choose File leaves an empty Attachments list. Create Invoice greyed out → buyer rules (OC / ASN / SES). Attachment default **10 MB**, total **100 MB** (SAP KBA 0393164 / 0399884). One PDF failure does not stop the batch.
+Empty inbox → `CleanExit`. MFA text → stop. Duplicate invoice numbers are rejected by default on the Network. Missing **Add Attachment** after Choose File leaves an empty Attachments list. Create Invoice greyed out → buyer rules (OC / ASN / SES). Attachment default **10 MB**, total **100 MB** (SAP KBA 0393164 / 0399884). One PDF failure does not stop the batch; the cloud run fails if `FailedCount` > 0.

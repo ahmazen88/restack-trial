@@ -162,6 +162,7 @@ class PadDocsTests(unittest.TestCase):
         self.assertIn("## Drop folder", text)
         self.assertIn("**Analogy", text)
         self.assertIn("AribaFolderUpload.robin", text)
+        self.assertIn("AribaFolderUpload-package.zip", text)
         self.assertIn("Populate text field on web page", text)
         self.assertIn("Wait for window", text)
         self.assertIn("Send keys", text)
@@ -177,6 +178,7 @@ class PadDocsTests(unittest.TestCase):
         self.assertIn("flows/ariba-folder-upload", readme)
         combo = (DOCS / "06-combination-playbooks.md").read_text(encoding="utf-8")
         self.assertIn("AribaFolderUpload.robin", combo)
+        self.assertIn("AribaFolderUpload-package.zip", combo)
 
     def test_connected_ariba_folder_upload_flow(self) -> None:
         flow_dir = DOCS / "flows" / "ariba-folder-upload"
@@ -185,6 +187,7 @@ class PadDocsTests(unittest.TestCase):
         captures = (flow_dir / "ui-elements.md").read_text(encoding="utf-8")
         how = (flow_dir / "README.md").read_text(encoding="utf-8")
 
+        self.assertIn("IF PortalUrl = $'''''' THEN", robin)
         self.assertIn("Folder.GetFiles", robin)
         self.assertIn("ON BLOCK ERROR", robin)
         self.assertIn("WebAutomation.LaunchEdge.LaunchEdge", robin)
@@ -248,6 +251,8 @@ class PadDocsTests(unittest.TestCase):
         self.assertIn("Loading", mock)
         self.assertIn("Invoice submitted", mock)
         self.assertIn("KB0399884", (flow_dir / "ariba-sources.md").read_text(encoding="utf-8"))
+        self.assertTrue((flow_dir / "cloud" / "workflow-definition.json").is_file())
+        self.assertIn("RunUIFlow_V2", (flow_dir / "cloud" / "README.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
