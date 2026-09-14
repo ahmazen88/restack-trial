@@ -120,6 +120,42 @@ class PadDocsTests(unittest.TestCase):
         )
         self.assertTrue(action["exceptions"])
 
+    def test_how_it_works_covers_every_native_action(self) -> None:
+        how = DOCS / "how-it-works"
+        missing = []
+        for action in self.data["native_actions"]:
+            path = how / f"native-{action['module']}.md"
+            if not path.is_file():
+                missing.append(f"file {path.name}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            if f"### {action['name']}\n" not in text:
+                missing.append(action["id"])
+            if "**Use case.**" not in text or "**Demonstration.**" not in text:
+                missing.append(f"blocks {action['module']}")
+            if "**Analogy.**" not in text or "**In combination.**" not in text:
+                missing.append(f"combo {action['module']}")
+        self.assertEqual(missing[:8], [], msg=f"{len(missing)} how-it-works gaps")
+
+    def test_how_it_works_covers_power_fx_and_cloud(self) -> None:
+        fx = (DOCS / "how-it-works" / "power-fx.md").read_text(encoding="utf-8")
+        self.assertEqual(fx.count("**Use case.**"), 130)
+        cloud_count = 0
+        for action in self.data["cloud_connector_operations"]:
+            path = DOCS / "how-it-works" / f"cloud-{action['module']}.md"
+            self.assertTrue(path.is_file(), action["module"])
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(f"### {action['name']}\n", text)
+            cloud_count += 1
+        self.assertGreaterEqual(cloud_count, 150)
+
+    def test_combination_playbooks_exist(self) -> None:
+        text = (DOCS / "06-combination-playbooks.md").read_text(encoding="utf-8")
+        self.assertGreaterEqual(text.count("## "), 18)
+        self.assertIn("**Use case.**", text)
+        self.assertIn("**Analogy.**", text)
+        self.assertIn("**Demonstration.**", text)
+
 
 if __name__ == "__main__":
     unittest.main()

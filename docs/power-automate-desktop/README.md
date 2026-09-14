@@ -12,7 +12,9 @@ It is original reference text built from the product surface area (action names,
 3. **Data types:** [02-data-types.md](02-data-types.md)
 4. **Power Fx functions:** [03-power-fx-functions.md](03-power-fx-functions.md)
 5. **Classic `%` expressions:** [04-expression-syntax.md](04-expression-syntax.md)
-6. **Each function / action:** [modules/](modules/) — one page per module.
+6. **Each function / action (reference):** [modules/](modules/) — purpose, inputs, outputs, exceptions.
+7. **How each function works:** [05-how-each-function-works.md](05-how-each-function-works.md) — use case, demonstration, analogy for every item.
+8. **In combination:** [06-combination-playbooks.md](06-combination-playbooks.md) — 18 end-to-end playbooks.
 
 ## Counts (current catalog)
 
@@ -52,6 +54,7 @@ If a local clone of [MicrosoftDocs/power-automate-docs](https://github.com/Micro
 
 ```bash
 python3 scripts/generate_pad_docs.py /path/to/power-automate-docs/articles/desktop-flows/actions-reference
+python3 scripts/generate_pad_how_it_works.py
 ```
 
-Default path: `/tmp/pad-docs/articles/desktop-flows/actions-reference`.
+Default action-reference path: `/tmp/pad-docs/articles/desktop-flows/actions-reference`. The how-it-works generator reads `inventory.json` only.
