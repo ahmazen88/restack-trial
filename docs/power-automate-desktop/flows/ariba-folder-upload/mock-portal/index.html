@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Contoso supplier portal (PAD mock)</title>
+  <style>
+    body { font-family: Segoe UI, sans-serif; margin: 0; background: #f3f3f3; color: #242424; }
+    header { background: #0f4c81; color: #fff; padding: 12px 24px; }
+    main { max-width: 720px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 1px 4px #0002; }
+    label { display: block; margin: 12px 0 4px; font-weight: 600; }
+    input[type=text], input[type=password], input[type=date] { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { margin-top: 16px; padding: 8px 16px; background: #0f4c81; color: #fff; border: 0; cursor: pointer; }
+    button.secondary { background: #616161; }
+    .question { font-size: 1.15rem; margin-bottom: 8px; }
+    .hidden { display: none; }
+    #loading {
+      position: fixed; inset: 0; background: #fff; display: none; align-items: center; justify-content: center;
+      font-size: 1.4rem; z-index: 9;
+    }
+    #loading.visible { display: flex; }
+    .banner { padding: 8px 12px; margin: 12px 0; border-radius: 4px; }
+    .error { background: #fde7e9; color: #a80000; }
+    .ok { background: #dff6dd; color: #0b6a0b; }
+    .attach-list { margin-top: 8px; font-family: Consolas, monospace; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading</div>
+  <header>Contoso supplier portal — mock for PAD capture</header>
+  <main>
+    <section id="screen-login">
+      <h1>Sign in</h1>
+      <label for="txt-username">User name</label>
+      <input id="txt-username" type="text" autocomplete="username" />
+      <label for="txt-password">Password</label>
+      <input id="txt-password" type="password" autocomplete="current-password" />
+      <button id="btn-signin" type="button">Sign in</button>
+      <p id="login-error" class="banner error hidden">Approve sign-in</p>
+    </section>
+
+    <section id="screen-home" class="hidden">
+      <h1>Home</h1>
+      <p>Inbox — create an invoice against a purchase order.</p>
+      <button id="btn-create-invoice" type="button">Create Invoice</button>
+    </section>
+
+    <section id="screen-q1" class="hidden">
+      <p class="question" id="q1-label">Question 1 of 4 — Purchase order</p>
+      <label for="txt-po">PO number</label>
+      <input id="txt-po" type="text" />
+      <button id="btn-next-q1" type="button">Next</button>
+    </section>
+
+    <section id="screen-q2" class="hidden">
+      <p class="question" id="q2-label">Question 2 of 4 — Invoice header</p>
+      <label for="txt-invoice-number">Invoice number</label>
+      <input id="txt-invoice-number" type="text" />
+      <label for="txt-invoice-date">Invoice date</label>
+      <input id="txt-invoice-date" type="text" placeholder="MM/dd/yyyy" />
+      <button id="btn-next-q2" type="button">Next</button>
+    </section>
+
+    <section id="screen-q3" class="hidden">
+      <p class="question" id="q3-label">Question 3 of 4 — Attachments</p>
+      <label for="file-input">Invoice image</label>
+      <input id="file-input" type="file" accept=".pdf,.png,.jpg" />
+      <button id="btn-attach" type="button">Add attachment</button>
+      <div id="attach-list" class="attach-list"></div>
+      <p id="attach-error" class="banner error hidden">failed to upload</p>
+      <button id="btn-next-q3" type="button">Next</button>
+    </section>
+
+    <section id="screen-q4" class="hidden">
+      <p class="question" id="q4-label">Question 4 of 4 — Review and submit</p>
+      <p id="review-summary"></p>
+      <button id="btn-submit" type="button">Submit</button>
+    </section>
+
+    <section id="screen-done" class="hidden">
+      <p id="confirm-banner" class="banner ok">Invoice submitted successfully. Confirmation IR1042</p>
+      <button id="btn-another" class="secondary" type="button">Create another</button>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const submitted = new Set();
+    let currentFileName = "";
+
+    function show(id) {
+      ["screen-login","screen-home","screen-q1","screen-q2","screen-q3","screen-q4","screen-done"]
+        .forEach((s) => $(s).classList.toggle("hidden", s !== id));
+    }
+
+    function withLoading(next) {
+      $("loading").classList.add("visible");
+      window.setTimeout(() => {
+        $("loading").classList.remove("visible");
+        next();
+      }, 1800);
+    }
+
+    $("btn-signin").onclick = () => {
+      if ($("txt-username").value === "mfa") {
+        $("login-error").classList.remove("hidden");
+        return;
+      }
+      if ($("txt-username").value !== "demo" || $("txt-password").value !== "demo") {
+        $("login-error").textContent = "Sign in failed";
+        $("login-error").classList.remove("hidden");
+        return;
+      }
+      $("login-error").classList.add("hidden");
+      withLoading(() => show("screen-home"));
+    };
+
+    $("btn-create-invoice").onclick = () => withLoading(() => show("screen-q1"));
+    $("btn-next-q1").onclick = () => withLoading(() => show("screen-q2"));
+    $("btn-next-q2").onclick = () => withLoading(() => show("screen-q3"));
+
+    $("file-input").onchange = () => {
+      const f = $("file-input").files[0];
+      currentFileName = f ? f.name : "";
+      $("attach-list").textContent = currentFileName;
+    };
+
+    $("btn-attach").onclick = () => $("file-input").click();
+
+    $("btn-next-q3").onclick = () => {
+      if (!currentFileName) {
+        $("attach-error").classList.remove("hidden");
+        return;
+      }
+      $("attach-error").classList.add("hidden");
+      $("review-summary").textContent =
+        "PO " + $("txt-po").value + " / " + $("txt-invoice-number").value + " / file " + currentFileName;
+      withLoading(() => show("screen-q4"));
+    };
+
+    $("btn-submit").onclick = () => {
+      const inv = $("txt-invoice-number").value || "unknown";
+      if (submitted.has(inv)) {
+        $("confirm-banner").className = "banner error";
+        $("confirm-banner").textContent = "Duplicate invoice";
+        show("screen-done");
+        return;
+      }
+      submitted.add(inv);
+      withLoading(() => {
+        $("confirm-banner").className = "banner ok";
+        $("confirm-banner").textContent = "Invoice submitted successfully. Confirmation IR1042";
+        show("screen-done");
+      });
+    };
+
+    $("btn-another").onclick = () => {
+      currentFileName = "";
+      $("file-input").value = "";
+      $("attach-list").textContent = "";
+      show("screen-home");
+    };
+  </script>
+</body>
+</html>

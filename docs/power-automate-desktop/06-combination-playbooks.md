@@ -4,7 +4,7 @@ Single actions rarely finish a business job. These playbooks show **how function
 
 Replace Contoso paths, UI elements, and mailboxes with yours. Keep Launch/Close pairs and convert file ↔ binary around cloud connectors.
 
-Portal file uploads (Ariba, Coupa, and similar) have a dedicated maker guide: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Playbook 19 is the short version: drop PDFs in a folder, run the flow.
+Portal file uploads (Ariba, Coupa, and similar): paste the connected flow in [flows/ariba-folder-upload/](flows/ariba-folder-upload/README.md). Playbook 19 is the short version.
 
 ## 1. Invoice PDF in Outlook → Excel log → archive folder
 
@@ -392,20 +392,17 @@ Do not mix `%Orders[0]%` in this flow. Use `=Index(Orders, 1)`.
 
 **Analogy.** A tray on the desk. You drop envelopes in. When you say “go,” the clerk badges in, hands each one over, and files the empty envelope in the done drawer.
 
-**Demonstration.** Full capture: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md). Short path:
+**Demonstration.** Paste and run [AribaFolderUpload.robin](flows/ariba-folder-upload/AribaFolderUpload.robin). Capture list: [ui-elements.md](flows/ariba-folder-upload/ui-elements.md). Map: [07-portal-uploads-ariba.md](07-portal-uploads-ariba.md).
 
-1. Place `*.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** in PAD (no trigger).
-2. **Get files in folder** `*.pdf`. **If** count = 0 → **Stop flow**.
-3. **Get credential** `AribaSupplier` → **Launch new Microsoft Edge** `%PortalUrl%` → login.
-4. **For each** PDF: navigate Create Invoice, fill the header (invoice number from **Get file path part**), then upload:
-   - **Door A:** **Populate text field on web page** on `input type=file` with the PDF path (no emulate typing).
-   - **Door B (typical Ariba Attach):** **Press button on web page** (Attach) → **Wait for window** Open → **Populate text field in window** File name → **Press button in window** Open.
-5. **Wait for web page content** (file name on the list) → Submit → **Move file(s)** to Done (or Failed + screenshot on error).
-6. **Close web browser** after the loop.
+1. Place `*.pdf` in `C:\RPA\Ariba\Inbox`. Press **Play** (no trigger).
+2. Practice against the mock (`demo`/`demo`) until the four question waits succeed, then set `PortalUrl` to your realm.
+3. **Get files in folder** → login once → **For each** PDF: wait until **Loading** is gone, wait for the question text, fill, attach (Door A or Door B), submit, parse `IR\d+`.
+4. **On block error** Fixed 3 × 5s around one PDF. Timeouts: page 120s, idle 90s, question 60s, Open dialog 15s, confirm 120s. OCR tolerance **10**.
+5. Done / Failed / Proof / `run-log.csv`. Close the browser after the loop.
 
 **On block error** around one PDF so the next file still runs. Do not use **Display select file dialog**, Outlook, SharePoint, work queues, or **SAP automation** (GUI ERP is [playbook 12](#12-sap-posting-from-excel)).
 
-**Functions in combination.** Folder + File + Browser automation + UI automation (OS file picker) + Get credential + For each.
+**Functions in combination.** Folder + File + Browser automation + UI automation + OCR fallback + For each + On block error.
 
 ---
 

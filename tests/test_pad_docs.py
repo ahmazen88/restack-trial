@@ -161,22 +161,83 @@ class PadDocsTests(unittest.TestCase):
         text = (DOCS / "07-portal-uploads-ariba.md").read_text(encoding="utf-8")
         self.assertIn("## Start: the drop folder", text)
         self.assertIn("**Analogy", text)
-        self.assertIn("## Demonstration", text)
+        self.assertIn("AribaFolderUpload.robin", text)
         self.assertIn("Populate text field on web page", text)
         self.assertIn("Wait for window", text)
-        self.assertIn("Populate text field in window", text)
-        self.assertIn("Get credential", text)
+        self.assertIn("Send keys", text)
         self.assertIn("type=file", text)
-        self.assertIn("UploadAttachment", text)
         self.assertIn("Get files in folder", text)
         self.assertIn("C:\\RPA\\Ariba\\Inbox", text)
-        self.assertIn("no PAD trigger", text)
+        self.assertIn("No PAD trigger", text)
         self.assertNotIn("Launch Outlook", text)
         self.assertNotIn("Process a work queue item", text)
         readme = (DOCS / "README.md").read_text(encoding="utf-8")
         self.assertIn("07-portal-uploads-ariba.md", readme)
+        self.assertIn("flows/ariba-folder-upload", readme)
         combo = (DOCS / "06-combination-playbooks.md").read_text(encoding="utf-8")
-        self.assertIn("07-portal-uploads-ariba.md", combo)
+        self.assertIn("AribaFolderUpload.robin", combo)
+
+    def test_connected_ariba_folder_upload_flow(self) -> None:
+        flow_dir = DOCS / "flows" / "ariba-folder-upload"
+        robin = (flow_dir / "AribaFolderUpload.robin").read_text(encoding="utf-8")
+        mock = (flow_dir / "mock-portal" / "index.html").read_text(encoding="utf-8")
+        captures = (flow_dir / "ui-elements.md").read_text(encoding="utf-8")
+        how = (flow_dir / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Folder.GetFiles", robin)
+        self.assertIn("ON BLOCK ERROR", robin)
+        self.assertIn("WebAutomation.LaunchEdge.LaunchEdge", robin)
+        self.assertIn("WebPageToNotContainText", robin)
+        self.assertIn("WebPageToContainText", robin)
+        self.assertIn("OCR.WaitForTextOnScreen", robin)
+        self.assertIn("UIAutomation.WaitForWindow", robin)
+        self.assertIn("MouseAndKeyboard.SendKeys", robin)
+        self.assertIn("DateTime.GetCurrentDateTime", robin)
+        self.assertIn("DateTime.Subtract", robin)
+        self.assertIn("Text.ParseText", robin)
+        self.assertNotIn("UI element event trigger", robin)
+        self.assertNotIn("LaunchOutlook", robin)
+        self.assertNotIn("Display.SelectFileDialog", robin)
+
+        questions = [
+            "Question 1 of 4 — Purchase order",
+            "Question 2 of 4 — Invoice header",
+            "Question 3 of 4 — Attachments",
+            "Question 4 of 4 — Review and submit",
+        ]
+        for label in questions:
+            self.assertIn(label, robin)
+            self.assertIn(label, mock)
+
+        for name in (
+            "Txt_Username",
+            "Txt_Password",
+            "Btn_SignIn",
+            "Btn_CreateInvoice",
+            "Txt_PONumber",
+            "Btn_NextPO",
+            "Txt_InvoiceNumber",
+            "Txt_InvoiceDate",
+            "Btn_NextHeader",
+            "Inp_File",
+            "Btn_Attach",
+            "Btn_NextAttach",
+            "Btn_Submit",
+            "Btn_CreateAnother",
+        ):
+            self.assertIn(f"['{name}']", robin)
+            self.assertIn(f"`{name}`", captures)
+
+        self.assertIn("FOR 90", robin)
+        self.assertIn("FOR 120", robin)
+        self.assertIn("FOR 15", robin)
+        self.assertIn("FOR 60", robin)
+        self.assertIn("Timeout: 20", robin)
+        self.assertIn("Tolerance is 10", how)
+        self.assertIn("127.0.0.1:8765", robin)
+        self.assertIn('id="file-input"', mock)
+        self.assertIn("Loading", mock)
+        self.assertIn("IR1042", mock)
 
 
 if __name__ == "__main__":
