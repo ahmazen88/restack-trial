@@ -39,11 +39,15 @@ Manual Trigger → HTTP Request (`GET https://httpbin.org/json`) → Set fields 
 
 In the editor: **…** menu → **Import from File**. Then **Execute workflow**.
 
-CLI (with n8n already running from the same data folder, in another terminal):
+CLI (with n8n already running from the same data folder):
 
 ```bash
-npx --yes n8n@2.40.7 import:workflow --input=workflows/hello-n8n.json
+python3 scripts/run_hello.py
 ```
+
+That logs in as the local owner, imports the workflow if needed, and runs it until `status=success`.
+
+If n8n crashes on `isolated-vm` / expression engine, you started it with Node 22 then switched to Node 24. Delete the npx cache (`rm -rf ~/.npm/_npx`) and run `./start.sh` again so native addons rebuild.
 
 ## What this is not
 

@@ -8,11 +8,13 @@ import os
 import time
 import urllib.error
 import urllib.request
+from http.cookiejar import CookieJar
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = os.environ.get("N8N_BASE_URL", "http://localhost:5678")
 WORKFLOW_PATH = ROOT / "workflows" / "hello-n8n.json"
+TRIGGER = "When clicking ‘Execute workflow’"
 
 
 def load_owner() -> tuple[str, str]:
@@ -34,12 +36,16 @@ def load_owner() -> tuple[str, str]:
     return email, password
 
 
+def opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+
+
 def request(
+    http: urllib.request.OpenerDirector,
     method: str,
     path: str,
     data: dict | None = None,
-    cookie: str | None = None,
-) -> tuple[int, dict | str, str | None]:
+) -> tuple[int, dict | str]:
     body = None if data is None else json.dumps(data).encode()
     req = urllib.request.Request(
         f"{BASE}{path}",
@@ -47,32 +53,28 @@ def request(
         method=method,
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    if cookie:
-        req.add_header("Cookie", cookie)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with http.open(req, timeout=90) as resp:
             raw = resp.read().decode()
-            set_cookie = resp.headers.get("Set-Cookie")
-            parsed: dict | str
             try:
-                parsed = json.loads(raw) if raw else {}
+                parsed: dict | str = json.loads(raw) if raw else {}
             except json.JSONDecodeError:
                 parsed = raw
-            return resp.status, parsed, set_cookie
+            return resp.status, parsed
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode()
         try:
             parsed = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
             parsed = raw
-        return exc.code, parsed, exc.headers.get("Set-Cookie")
+        return exc.code, parsed
 
 
-def wait_ready(timeout_s: int = 180) -> None:
+def wait_ready(http: urllib.request.OpenerDirector, timeout_s: int = 180) -> None:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            status, _, _ = request("GET", "/healthz")
+            status, _ = request(http, "GET", "/healthz")
             if status == 200:
                 return
         except Exception:
@@ -81,49 +83,66 @@ def wait_ready(timeout_s: int = 180) -> None:
     raise SystemExit(f"n8n did not become ready at {BASE}")
 
 
-def cookie_header(set_cookie: str | None) -> str | None:
-    if not set_cookie:
+def find_workflow(http: urllib.request.OpenerDirector, name: str) -> str | None:
+    status, payload = request(http, "GET", "/rest/workflows")
+    if status != 200 or not isinstance(payload, dict):
         return None
-    return set_cookie.split(";", 1)[0]
+    for row in payload.get("data", []):
+        if row.get("name") == name:
+            return str(row["id"])
+    return None
 
 
 def main() -> None:
-    wait_ready()
+    http = opener()
+    wait_ready(http)
     email, password = load_owner()
-    status, payload, set_cookie = request(
+    status, payload = request(
+        http,
         "POST",
         "/rest/login",
         {"emailOrLdapLoginId": email, "password": password},
     )
-    cookie = cookie_header(set_cookie)
-    if status not in (200, 201) or not cookie:
-        # n8n 1.x used email/password
-        status, payload, set_cookie = request(
-            "POST",
-            "/rest/login",
-            {"email": email, "password": password},
-        )
-        cookie = cookie_header(set_cookie)
-    if status not in (200, 201) or not cookie:
+    if status not in (200, 201):
         raise SystemExit(f"login failed {status}: {payload}")
 
     workflow = json.loads(WORKFLOW_PATH.read_text())
-    status, created, _ = request("POST", "/rest/workflows", workflow, cookie)
-    if status not in (200, 201):
-        raise SystemExit(f"import failed {status}: {created}")
-    if not isinstance(created, dict):
-        raise SystemExit(f"unexpected import payload: {created}")
-    workflow_id = created.get("id") or created.get("data", {}).get("id")
-    print(f"imported workflow id={workflow_id} status={status}")
+    name = workflow.get("name", "Hello n8n")
+    workflow_id = find_workflow(http, name)
+    if workflow_id is None:
+        status, created = request(http, "POST", "/rest/workflows", workflow)
+        if status not in (200, 201) or not isinstance(created, dict):
+            raise SystemExit(f"import failed {status}: {created}")
+        workflow_id = str(created.get("id") or created.get("data", {}).get("id"))
+        print(f"imported workflow id={workflow_id}")
+    else:
+        print(f"reusing workflow id={workflow_id}")
 
-    run_body = {
-        "workflowData": created if "nodes" in created else workflow,
-    }
-    status, run, _ = request("POST", "/rest/workflows/run", run_body, cookie)
-    print(f"run status={status}")
-    print(json.dumps(run if isinstance(run, dict) else {"raw": run}, indent=2)[:4000])
-    if status not in (200, 201):
-        raise SystemExit("workflow run failed")
+    status, run = request(
+        http,
+        "POST",
+        f"/rest/workflows/{workflow_id}/run",
+        {"triggerToStartFrom": {"name": TRIGGER}},
+    )
+    if status not in (200, 201) or not isinstance(run, dict):
+        raise SystemExit(f"run failed {status}: {run}")
+    execution_id = str(run.get("data", {}).get("executionId") or run.get("executionId"))
+    print(f"execution id={execution_id}")
+
+    for _ in range(30):
+        status, execution = request(http, "GET", f"/rest/executions/{execution_id}")
+        if status == 200 and isinstance(execution, dict):
+            data = execution.get("data", execution)
+            exec_status = data.get("status")
+            finished = data.get("finished")
+            print(f"execution status={exec_status} finished={finished}")
+            if exec_status in {"success", "error", "crashed", "canceled"} or finished:
+                if exec_status != "success":
+                    raise SystemExit(f"workflow did not succeed: {exec_status}")
+                print("hello n8n run succeeded")
+                return
+        time.sleep(1)
+    raise SystemExit("timed out waiting for execution")
 
 
 if __name__ == "__main__":
