@@ -1,0 +1,4 @@
+.n8n-data/
+.local-owner.env
+.env
+*.log

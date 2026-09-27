@@ -1,0 +1,84 @@
+{
+  "name": "Hello n8n",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1e2c3d4-1111-2222-3333-444455556666",
+      "name": "When clicking ‘Execute workflow’",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://httpbin.org/json",
+        "options": {}
+      },
+      "id": "b2e3c4d5-1111-2222-3333-444455556666",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c3e4d5e6-1111-2222-3333-444455556666",
+              "name": "title",
+              "value": "={{ $json.slideshow.title }}",
+              "type": "string"
+            },
+            {
+              "id": "d4e5f6a7-1111-2222-3333-444455556666",
+              "name": "author",
+              "value": "={{ $json.slideshow.author }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e5f6a7b8-1111-2222-3333-444455556666",
+      "name": "Set fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Set fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f6a7b8c9-1111-2222-3333-444455556666",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
