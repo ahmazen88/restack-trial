@@ -7,4 +7,5 @@ venv
 .vscode
 uv.lock
 n8n/.n8n-data/
+n8n/.n8n-node/
 n8n/.local-owner.env

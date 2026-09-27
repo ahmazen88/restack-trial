@@ -6,6 +6,37 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 N8N_VERSION="${N8N_VERSION:-2.40.7}"
+NODE24_VERSION="${NODE24_VERSION:-24.21.0}"
+NODE_HOME="${NODE_HOME:-$ROOT/.n8n-node}"
+
+node_major() {
+  node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0
+}
+
+ensure_node24() {
+  if [[ "$(node_major)" -ge 24 ]]; then
+    return 0
+  fi
+  if [[ -x "$NODE_HOME/bin/node" ]]; then
+    export PATH="$NODE_HOME/bin:$PATH"
+    return 0
+  fi
+  local archive="node-v${NODE24_VERSION}-linux-x64"
+  local url="https://nodejs.org/dist/v${NODE24_VERSION}/${archive}.tar.xz"
+  echo "n8n ${N8N_VERSION} needs Node 24+. Installing ${archive} into ${NODE_HOME}"
+  local tmp
+  tmp="$(mktemp -d)"
+  curl -fsSL "$url" -o "$tmp/node.tar.xz"
+  tar -xJf "$tmp/node.tar.xz" -C "$tmp"
+  rm -rf "$NODE_HOME"
+  mv "$tmp/$archive" "$NODE_HOME"
+  rm -rf "$tmp"
+  export PATH="$NODE_HOME/bin:$PATH"
+}
+
+ensure_node24
+echo "Node $(node -v) ($(command -v node))"
+
 export N8N_USER_FOLDER="${N8N_USER_FOLDER:-$ROOT/.n8n-data}"
 export N8N_HOST="${N8N_HOST:-localhost}"
 export N8N_PORT="${N8N_PORT:-5678}"

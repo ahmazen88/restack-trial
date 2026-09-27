@@ -6,7 +6,7 @@ n8n still shows a **local owner** login. That password lives on this instance on
 
 ## Start
 
-Needs Node.js 20.19–24.x (this environment has Node 22). Docker is not required for this 2.x npm install.
+Needs **Node.js 24+** (`n8n@2.40.7`). If `node` is older, `start.sh` downloads Node 24.21.0 into gitignored `n8n/.n8n-node/`. Docker is not required for this 2.x npm install.
 
 ```bash
 cd n8n
