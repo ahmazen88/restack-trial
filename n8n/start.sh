@@ -16,11 +16,22 @@ export N8N_PERSONALIZATION_ENABLED="${N8N_PERSONALIZATION_ENABLED:-false}"
 export N8N_VERSION_NOTIFICATIONS_ENABLED="${N8N_VERSION_NOTIFICATIONS_ENABLED:-false}"
 export N8N_HIRING_BANNER_ENABLED="${N8N_HIRING_BANNER_ENABLED:-false}"
 
+# Load KEY=VALUE without bash-expanding bcrypt hashes ($2b$10$...).
+load_env_file() {
+  local file="$1" line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ "$value" == \'*\' || "$value" == \"*\" ]]; then
+      value="${value:1:-1}"
+    fi
+    export "${key}=${value}"
+  done < "$file"
+}
+
 if [[ -f "$ROOT/.local-owner.env" ]]; then
-  # shellcheck disable=SC1091
-  set -a
-  source "$ROOT/.local-owner.env"
-  set +a
+  load_env_file "$ROOT/.local-owner.env"
 fi
 
 if [[ -n "${N8N_INSTANCE_OWNER_PASSWORD_HASH:-}" ]]; then
