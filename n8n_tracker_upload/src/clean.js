@@ -1,7 +1,9 @@
 // Clean Rows
 // 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).
 // 2. ALIASES = other headings the SharePoint tracker might use for the same column.
-// 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types.
+// 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types
+//             (the Column dropdown in the Data Table node shows each type, e.g. "Invoice (number)").
+//             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.
 // 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).
 const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Received_Date', 'Allocated_Date', 'Invoice_Date'];
 const ALIASES = {
@@ -13,7 +15,7 @@ const ALIASES = {
   Allocated_Date: ['allocated date', 'date allocated', 'allocated'],
   Invoice_Date: ['invoice date', 'inv date'],
 };
-const TYPES = {};
+const TYPES = { Invoice: 'number', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
 const KEY = 'Invoice';
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -29,8 +31,9 @@ const convert = (col, v) => {
     return Number.isFinite(n) ? n : null;
   }
   if (TYPES[col] === 'date') {
-    const d = typeof v === 'number' ? new Date(Date.UTC(1899, 11, 30) + v * 86400000) : new Date(v);
-    return isNaN(d) ? null : d.toISOString();
+    const serial = typeof v === 'number' ? v : /^\d{4,6}(\.\d+)?$/.test(String(v).trim()) ? Number(v) : null;
+    const d = serial !== null ? new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000) : new Date(v);
+    return isNaN(d) ? null : d.toISOString().slice(0, 10);
   }
   return String(v).trim();
 };

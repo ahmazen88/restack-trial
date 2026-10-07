@@ -6,25 +6,26 @@ const run = (code, input, nodes = {}) =>
   new Function('$', '$input', code)((n) => ({ all: () => nodes[n], first: () => nodes[n][0] }), { all: () => input });
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } console.log('ok -', m); };
 
+// Shaped like the real tracker: numeric invoice numbers, Excel serial dates
 const sheet = [
-  { 'Invoice No': 'INV-001', Amount: '1,250.00', 'Customer Name': ' ACME ', 'Company Code': 'CC10', 'Received Date': '10/1/26', Notes: 'x' },
-  { 'Invoice No': 'INV-002', Amount: '300', 'Customer Name': 'Beta', 'Company Code': 'CC20' },
-  { 'Invoice No': '', Amount: '1550', 'Customer Name': 'TOTAL' },
-  { 'Invoice No': 'INV-001', Amount: '1,300.00', 'Customer Name': 'ACME', 'Company Code': 'CC10' },
+  { 'Invoice': 7001211479, Value: '1,250.00', Customer: ' RIO TINTO ALCAN INC ', 'Company Code': 'CC10', Received_Date: 46118, Allocated_Date: '46118', Invoice_Date: 46107 },
+  { 'Invoice No': '7001211480', Value: 300, Customer: 'SALT RIVER PROJECT', 'Company Code': 'CC20', Received_Date: '10/7/2026' },
+  { 'Invoice': '', Value: '1550', Customer: 'TOTAL' },
+  { 'Invoice': 7001211479, Value: '1,300.00', Customer: 'RIO TINTO ALCAN INC', 'Company Code': 'CC10', Received_Date: 46119 },
 ].map((json) => ({ json }));
 
 const out = run(src('clean.js'), sheet).map((i) => i.json);
-assert(out.length === 2, 'drops blank-key row and de-duplicates INV-001');
-assert(out[0].Value === '1,300.00', 'last duplicate wins, value kept as text by default');
-assert(out[1].Customer === 'Beta' && out[0].Customer === 'ACME', 'maps Customer Name and trims');
-assert(!('Notes' in out[0]), 'drops columns not in the Data Table');
-assert(out[1].Received_Date === null, 'missing columns sent as null');
-
-const typed = src('clean.js').replace('const TYPES = {};', "const TYPES = { Value: 'number', Received_Date: 'date' };");
-const t = run(typed, sheet).map((i) => i.json);
-assert(t[1].Value === 300, 'number type conversion');
-const first = run(typed, [sheet[0]]).map((i) => i.json)[0];
-assert(first.Value === 1250 && first.Received_Date.startsWith('2026-10-0'), 'date type conversion');
+const a = out.find((r) => r.Invoice === 7001211479);
+const b = out.find((r) => r.Invoice === 7001211480);
+assert(out.length === 2, 'drops blank-key row and de-duplicates the repeated invoice');
+assert(typeof a.Invoice === 'number' && typeof b.Invoice === 'number', 'Invoice sent as a number');
+assert(a.Value === '1,300.00' && a.Received_Date === '2026-04-07', 'last duplicate wins');
+assert(a.Customer === 'RIO TINTO ALCAN INC', 'trims text');
+assert(b.Received_Date.startsWith('2026-10-0'), 'normal date text converted');
+const first = run(src('clean.js'), [sheet[0]]).map((i) => i.json)[0];
+assert(first.Received_Date === '2026-04-06' && first.Allocated_Date === '2026-04-06' && first.Invoice_Date === '2026-03-26',
+  'Excel serial dates (number or text) become YYYY-MM-DD');
+assert(b.Allocated_Date === null, 'missing columns sent as null');
 
 const s = run(src('summary.js'), [], {
   'Read Tracker Sheet': sheet, 'Clean Rows': out.map((json) => ({ json })),
