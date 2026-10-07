@@ -2,7 +2,7 @@
 // 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).
 // 2. ALIASES = other headings the SharePoint tracker might use for the same column.
 // 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types.
-// 4. KEY     = the column that identifies a row (used to update instead of duplicate).
+// 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).
 const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Received_Date', 'Allocated_Date', 'Invoice_Date'];
 const ALIASES = {
   Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],
