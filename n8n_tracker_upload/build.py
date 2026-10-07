@@ -1,7 +1,7 @@
 """Builds both tracker workflows from the Code-node scripts in src/.
 
 - tracker_upload_workflow.json   : manual upload through an n8n form
-- tracker_onedrive_workflow.json : scheduled, reads the tracker straight from OneDrive
+- tracker_onedrive_workflow.json : one flow: OneDrive tracker → clean → Data Table → report email
 """
 import json
 import uuid
@@ -108,24 +108,30 @@ def onedrive_workflow():
             'resource': 'file', 'operation': 'download', 'fileId': '={{ $json.id }}',
             'binaryPropertyName': 'data'}),
         *processing_nodes(p, 880, 'data', summary_js),
-        node(p, 'Remember Version', 'code', 2, [1760, 300], {'jsCode': js('remember.js')}),
-        refresh_report(p, 1980),
-        sticky(p, '## Tracker from OneDrive – setup\n'
+        node(p, 'Build Report', 'code', 2, [1760, 300], {'jsCode': js('report.js')}),
+        node(p, 'Send Report', 'microsoftOutlook', 2, [1980, 300], {
+            'resource': 'message', 'operation': 'send',
+            'toRecipients': '',
+            'subject': '={{ $json.subject }}',
+            'bodyContent': '={{ $json.html }}',
+            'additionalFields': {'bodyContentType': 'html'}}),
+        node(p, 'Remember Version', 'code', 2, [2200, 300], {'jsCode': js('remember.js')}),
+        sticky(p, '## Production Tracker – one flow\n'
                   '1. **Find Tracker** & **Download Tracker** → credential *Microsoft Drive OAuth2 API* '
-                  '(sign in with your GE account)\n'
+                  '(sign in with your company account)\n'
                   '2. **Pick Tracker File** → `TRACKER_NAME` must match the file name exactly\n'
-                  '3. **Upsert into Data Table** → pick your Data Table\n'
-                  '4. **Refresh Report** → pick *Report copy*\n'
-                  '5. Click **Test Run** once, then **Publish** – it then runs weekdays at 07:00 '
-                  '(timezone: Workflow settings) and skips days when the file has not changed', [-40, -120]),
+                  '3. **Upsert into Data Table** → pick your Data Table (or remove this step if not needed)\n'
+                  '4. **Send Report** → credential *Microsoft Outlook OAuth2 API*; type the recipients in **To**\n'
+                  '5. Click **Test Run**, then **Publish**: runs weekdays at 07:00 (timezone: Workflow settings) '
+                  'and sends nothing when the file has not changed', [-40, -140], height=320),
     ]
     connections = {
         'Weekdays 7am': {'main': [[{'node': 'Find Tracker', 'type': 'main', 'index': 0}]]},
         'Test Run': {'main': [[{'node': 'Find Tracker', 'type': 'main', 'index': 0}]]},
         **chain('Find Tracker', 'Pick Tracker File', 'Download Tracker', 'Read Tracker Sheet', 'Clean Rows',
-                'Upsert into Data Table', 'Summarise Upload', 'Remember Version', 'Refresh Report'),
+                'Upsert into Data Table', 'Summarise Upload', 'Build Report', 'Send Report', 'Remember Version'),
     }
-    return 'Production Tracker – Scheduled from OneDrive', nodes, connections
+    return 'Production Tracker – OneDrive to Report', nodes, connections
 
 
 if __name__ == '__main__':

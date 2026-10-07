@@ -70,3 +70,29 @@ const wf = JSON.parse(fs2.readFileSync(path.join(__dirname, '..', 'tracker_onedr
 const odSummary = wf.nodes.find((n) => n.name === 'Summarise Upload').parameters.jsCode;
 const s2 = run(odSummary, [], { ...nodes, 'Pick Tracker File': picked })[0].json;
 assert(s2.file === NAME && s2.rowsSaved === s.rowsSaved, 'onedrive: same checks, file name from OneDrive');
+
+// --- One-flow report
+const odWf = JSON.parse(fs2.readFileSync(path.join(__dirname, '..', 'tracker_onedrive_workflow.json'), 'utf8'));
+const reportJs = odWf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode;
+const custs = ['RIO TINTO ALCAN INC', 'SALT RIVER PROJECT', 'EXELON ACCOUNTS PAYABLE', 'OGLETHORPE POWER CORPORATION', 'POWER LINE SUPPLY'];
+const sample = Array.from({ length: 240 }, (_, i) => ({
+  Invoice: 7001211000 + i,
+  Value: String(((i * 7919) % 50000) + 250),
+  Customer: custs[i % custs.length],
+  Company_Code: ['CC10', 'CC20', 'CC30'][i % 3],
+  Received_Date: new Date(Date.UTC(2026, 0, 1) + (i % 270) * 86400000).toISOString().slice(0, 10),
+  Allocated_Date: null, Invoice_Date: null,
+}));
+const rnodes = {
+  'Clean Rows': sample.map((json) => ({ json })),
+  'Summarise Upload': [{ json: { blankRows: 3, duplicateInvoices: ['7001211005'], issues: { 'missing value': { count: 2, examples: ['7001211007', '7001211009'] } } } }],
+  'Pick Tracker File': [{ json: { name: NAME, lastModified: '2026-10-07T10:15:00Z' } }],
+};
+const r1 = run(reportJs, [], rnodes)[0].json;
+const r2 = run(reportJs, [], rnodes)[0].json;
+assert(r1.html === r2.html && r1.subject === r2.subject, 'report is deterministic');
+assert(r1.invoices === 240 && /Monthly summary/.test(r1.html) && /Top 10 customers/.test(r1.html), 'report sections present');
+assert(/as of 2026-08-28/.test(r1.subject), 'as-of date comes from the data, not the clock');
+assert(!/<script/i.test(r1.html), 'no scripts in email');
+fs2.writeFileSync(path.join(__dirname, 'sample_report.html'), r1.html);
+console.log('Subject:', r1.subject);
