@@ -45,9 +45,7 @@ nodes = [
     node('Done Page', 'form', 1, [1320, 300], {
         'operation': 'completion', 'respondWith': 'text',
         'completionTitle': 'Tracker uploaded ✔',
-        'completionMessage': "={{ $('Summarise Upload').first().json.rowsSaved }} rows saved from "
-                             "{{ $('Summarise Upload').first().json.file }} "
-                             "({{ $('Summarise Upload').first().json.rowsSkipped }} blank or duplicate rows skipped). "
+        'completionMessage': "={{ $('Summarise Upload').first().json.message }}. "
                              "The report is being generated and will arrive by email shortly.",
         'options': {}}),
     {

@@ -48,6 +48,13 @@ Form: upload tracker.xlsx ─► Read sheet ─► Clean rows ─► Data Table:
 - Rows **deleted** from the tracker are *not* removed from the Data Table. If you need that, use a full refresh
   instead: put a *Data Table → Table → Clear* step before the upsert (note this briefly empties the table).
 
+## Checks on every upload (deterministic: the same file always gives the same result)
+- **Wrong file / wrong tab:** stops with a clear message if no Invoice column is found.
+- **Text cleanup:** extra spaces removed; Customer and Company_Code upper-cased so variants group together.
+- **Data quality** (shown on the Done page, rows are still saved): missing or zero/negative value, missing
+  customer or company code, no readable date, dates before 2020-01-01, allocated before received, and the
+  invoice numbers that appear more than once.
+
 ## Notes
 - Only people with the form link can upload. For extra control, set *Authentication* on the **Upload Tracker**
   node (Basic Auth, or n8n user login on newer versions).

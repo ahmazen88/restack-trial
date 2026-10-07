@@ -17,6 +17,7 @@ const ALIASES = {
 };
 const TYPES = { Invoice: 'number', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
 const KEY = 'Invoice';
+const UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const lookup = new Map();
@@ -35,11 +36,21 @@ const convert = (col, v) => {
     const d = serial !== null ? new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000) : new Date(v);
     return isNaN(d) ? null : d.toISOString().slice(0, 10);
   }
-  return String(v).trim();
+  const text = String(v).replace(/\s+/g, ' ').trim();
+  return UPPER.includes(col) ? text.toUpperCase() : text;
 };
 
+// Stop early on the wrong file / wrong tab instead of saving nothing
+const input = $input.all();
+if (!input.length) throw new Error('The uploaded sheet has no rows. Check the file and the Sheet Name option on "Read Tracker Sheet".');
+const headings = Object.keys(input[0].json);
+if (!headings.some((h) => lookup.get(norm(h)) === KEY)) {
+  throw new Error(`No "${KEY}" column found. Headings in the sheet: ${headings.join(', ')}. ` +
+    'Check the file, the Sheet Name option on "Read Tracker Sheet", or add the heading to ALIASES.');
+}
+
 const rows = new Map();
-for (const { json: raw } of $input.all()) {
+for (const { json: raw } of input) {
   const row = {};
   for (const [header, value] of Object.entries(raw)) {
     const col = lookup.get(norm(header));
