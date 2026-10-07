@@ -1,0 +1,333 @@
+{
+  "name": "Production Tracker – Scheduled from OneDrive",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "e9360ed0-3f4c-5089-bb7d-a3c25dfdd60f",
+      "name": "Weekdays 7am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c43fd212-1e3b-5cfb-9448-3985a6841eab",
+      "name": "Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "search",
+        "query": "NAM Distribution"
+      },
+      "id": "a7534a0d-f8ef-55f3-a481-fb3bfa37c1d3",
+      "name": "Find Tracker",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick Tracker File — choose the exact file from the OneDrive search results.\n// Stops with a clear message if the file is missing or the name matches more than one file.\n// ONLY_WHEN_CHANGED: skip the run (no upsert, no report) when the file's version (eTag) is the same as\n// the last successful scheduled run. Manual test runs always process the file.\nconst TRACKER_NAME = 'Trackers - NAM Distribution.xlsx';\nconst ONLY_WHEN_CHANGED = true;\n\nconst matches = $input.all().map((i) => i.json).filter((f) => f.name === TRACKER_NAME);\nif (matches.length === 0) {\n  throw new Error(`\"${TRACKER_NAME}\" was not found in your OneDrive. Check the file name in TRACKER_NAME ` +\n    'and the search text on \"Find Tracker\".');\n}\nif (matches.length > 1) {\n  const where = matches.map((f) => f.parentReference?.path ?? f.webUrl ?? f.id).join(' | ');\n  throw new Error(`${matches.length} files are named \"${TRACKER_NAME}\": ${where}. Rename or move the extra copies.`);\n}\nconst file = matches[0];\n\nconst memory = $getWorkflowStaticData('global');\nif (ONLY_WHEN_CHANGED && memory.lastETag && memory.lastETag === file.eTag) {\n  return []; // unchanged since the last run – nothing to do\n}\nreturn [{\n  json: { id: file.id, name: file.name, eTag: file.eTag, lastModified: file.lastModifiedDateTime },\n}];\n"
+      },
+      "id": "926a76a0-f060-5889-b584-b3482de144cc",
+      "name": "Pick Tracker File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "id": "f923963a-baee-525a-81b3-acd2fe7611ac",
+      "name": "Download Tracker",
+      "type": "n8n-nodes-base.microsoftOneDrive",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "21728c78-38df-5602-9b86-b7b5baabff2c",
+      "name": "Read Tracker Sheet",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean Rows\n// 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).\n// 2. ALIASES = other headings the SharePoint tracker might use for the same column.\n// 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types\n//             (the Column dropdown in the Data Table node shows each type, e.g. \"Invoice (number)\").\n//             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.\n// 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).\nconst COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst ALIASES = {\n  Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],\n  Value: ['value', 'amount', 'invoice value', 'total'],\n  Customer: ['customer', 'customer name', 'client'],\n  Company_Code: ['company code', 'coco', 'co code', 'company_code'],\n  Received_Date: ['received date', 'date received', 'received'],\n  Allocated_Date: ['allocated date', 'date allocated', 'allocated'],\n  Invoice_Date: ['invoice date', 'inv date'],\n};\nconst TYPES = { Invoice: 'number', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };\nconst KEY = 'Invoice';\nconst UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lookup = new Map();\nfor (const col of COLUMNS) {\n  lookup.set(norm(col), col);\n  for (const a of ALIASES[col] || []) lookup.set(norm(a), col);\n}\nconst convert = (col, v) => {\n  if (v === '' || v == null) return null;\n  if (TYPES[col] === 'number') {\n    const n = parseFloat(String(v).replace(/[^0-9.\\-]/g, ''));\n    return Number.isFinite(n) ? n : null;\n  }\n  if (TYPES[col] === 'date') {\n    const serial = typeof v === 'number' ? v : /^\\d{4,6}(\\.\\d+)?$/.test(String(v).trim()) ? Number(v) : null;\n    const d = serial !== null ? new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000) : new Date(v);\n    return isNaN(d) ? null : d.toISOString().slice(0, 10);\n  }\n  const text = String(v).replace(/\\s+/g, ' ').trim();\n  return UPPER.includes(col) ? text.toUpperCase() : text;\n};\n\n// Stop early on the wrong file / wrong tab instead of saving nothing\nconst input = $input.all();\nif (!input.length) throw new Error('The uploaded sheet has no rows. Check the file and the Sheet Name option on \"Read Tracker Sheet\".');\nconst headings = Object.keys(input[0].json);\nif (!headings.some((h) => lookup.get(norm(h)) === KEY)) {\n  throw new Error(`No \"${KEY}\" column found. Headings in the sheet: ${headings.join(', ')}. ` +\n    'Check the file, the Sheet Name option on \"Read Tracker Sheet\", or add the heading to ALIASES.');\n}\n\nconst rows = new Map();\nfor (const { json: raw } of input) {\n  const row = {};\n  for (const [header, value] of Object.entries(raw)) {\n    const col = lookup.get(norm(header));\n    if (col && row[col] == null) row[col] = convert(col, value);\n  }\n  if (row[KEY] == null || row[KEY] === '') continue; // blank / totals rows\n  for (const col of COLUMNS) if (!(col in row)) row[col] = null;\n  rows.set(String(row[KEY]), row); // a repeated key keeps the last row\n}\nreturn [...rows.values()].map((json) => ({ json }));\n"
+      },
+      "id": "eebe2520-3257-5bb1-b7d0-791452ce974e",
+      "name": "Clean Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "Invoice",
+              "condition": "eq",
+              "keyValue": "={{ $json.Invoice }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "dd7ff011-270f-524d-a736-56db538eb3ba",
+      "name": "Upsert into Data Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Pick Tracker File').first().json.name;\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!id) { blank++; continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\nconst parts = [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`];\nif (blank) parts.push(`${fmt(blank)} blank rows skipped`);\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\nif (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
+      },
+      "id": "181cf542-9072-5c05-ad00-74f1469a4e4d",
+      "name": "Summarise Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Remember Version — store the processed file's version so an unchanged file is skipped next time.\n// n8n keeps this only for scheduled (published) runs, not manual test runs.\nconst memory = $getWorkflowStaticData('global');\nmemory.lastETag = $('Pick Tracker File').first().json.eTag;\nreturn $input.all();\n"
+      },
+      "id": "aa08f0ee-f9ce-5a06-8f8a-92b951bb8678",
+      "name": "Remember Version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "21f2ae8a-5d97-5dfa-ab6d-c932305d9872",
+      "name": "Refresh Report",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "width": 560,
+        "height": 300,
+        "content": "## Tracker from OneDrive – setup\n1. **Find Tracker** & **Download Tracker** → credential *Microsoft Drive OAuth2 API* (sign in with your GE account)\n2. **Pick Tracker File** → `TRACKER_NAME` must match the file name exactly\n3. **Upsert into Data Table** → pick your Data Table\n4. **Refresh Report** → pick *Report copy*\n5. Click **Test Run** once, then **Publish** – it then runs weekdays at 07:00 (timezone: Workflow settings) and skips days when the file has not changed"
+      },
+      "id": "64e8b4f9-04b8-54c6-b16e-a669f7d1f407",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "Weekdays 7am": {
+      "main": [
+        [
+          {
+            "node": "Find Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Run": {
+      "main": [
+        [
+          {
+            "node": "Find Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Tracker": {
+      "main": [
+        [
+          {
+            "node": "Pick Tracker File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Tracker File": {
+      "main": [
+        [
+          {
+            "node": "Download Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Tracker": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker Sheet": {
+      "main": [
+        [
+          {
+            "node": "Clean Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Rows": {
+      "main": [
+        [
+          {
+            "node": "Upsert into Data Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert into Data Table": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Upload": {
+      "main": [
+        [
+          {
+            "node": "Remember Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remember Version": {
+      "main": [
+        [
+          {
+            "node": "Refresh Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}

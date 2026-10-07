@@ -5,6 +5,7 @@ const KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'in
 const EARLIEST_DATE = '2020-01-01';
 const DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];
 const LIST_LIMIT = 10;
+const FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));
@@ -56,7 +57,7 @@ if (!duplicates.length && !Object.keys(issues).length) parts.push('no data quali
 
 return [{
   json: {
-    file: $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker',
+    file: FILE_NAME,
     rowsRead: raw.length,
     rowsSaved: rows.length,
     blankRows: blank,

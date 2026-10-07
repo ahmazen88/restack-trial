@@ -61,5 +61,31 @@ Form: upload tracker.xlsx ─► Read sheet ─► Clean rows ─► Data Table:
 - If something fails (wrong column names, wrong tab), the form shows an error and the run appears under
   **Executions** with the exact step that failed. The Data Table is left as it was for any rows not reached.
 
+## Scheduled version: reads the tracker straight from OneDrive (`tracker_onedrive_workflow.json`)
+The tracker lives in your own OneDrive (`spo-mydrive.ge.com/personal/<your SSO>`), so n8n can read it with
+your own Microsoft login. No uploads needed.
+
+```
+Weekdays 07:00 (or Test Run) ─► Find Tracker ─► Pick Tracker File ─► Download Tracker ─► Read Tracker Sheet
+   ─► Clean Rows ─► Upsert into Data Table ─► Summarise Upload ─► Remember Version ─► Refresh Report
+```
+
+Setup:
+1. Import `tracker_onedrive_workflow.json`.
+2. **Find Tracker** and **Download Tracker**: create/select a **Microsoft Drive OAuth2 API** credential and
+   sign in with your company account.
+3. **Pick Tracker File**: `TRACKER_NAME` must match the file name exactly (`Trackers - NAM Distribution.xlsx`).
+4. **Upsert into Data Table** → your Data Table. **Refresh Report** → *Report copy*.
+5. Click **Test Run**, check the result, then **Publish**. Set the timezone under *Workflow settings*.
+
+Behaviour:
+- Runs weekdays at 07:00. If the file hasn't changed since the last scheduled run (same version/eTag), the
+  run stops early: no upsert, no repeat report. Manual test runs always process the file.
+- Stops with a clear error if the file is missing or two files share the name.
+- Same cleaning, checks and upsert as the upload form. The data quality summary appears in the
+  *Summarise Upload* output (Executions).
+- Note: the file is in a personal OneDrive. If it moves to a team SharePoint site, swap the two OneDrive nodes
+  for SharePoint nodes; everything else stays the same.
+
 ## Editing
-Edit `src/*.js`, run `python3 build.py` to regenerate the JSON, and `node test/run.js` to re-test.
+Edit `src/*.js`, run `python3 build.py` to regenerate both workflow JSON files, and `node test/run.js` to re-test.

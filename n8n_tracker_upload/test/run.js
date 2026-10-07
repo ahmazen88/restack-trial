@@ -2,8 +2,9 @@
 const fs = require('fs');
 const path = require('path');
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
-const run = (code, input, nodes = {}) =>
-  new Function('$', '$input', code)((n) => ({ all: () => nodes[n], first: () => nodes[n][0] }), { all: () => input });
+const run = (code, input, nodes = {}, memory = {}) =>
+  new Function('$', '$input', '$getWorkflowStaticData', code)(
+    (n) => ({ all: () => nodes[n], first: () => nodes[n][0] }), { all: () => input }, () => memory);
 const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exit(1); } console.log('ok -', m); };
 const throws = (fn) => { try { fn(); return null; } catch (e) { return e.message; } };
 
@@ -36,6 +37,7 @@ const nodes = {
   'Upload Tracker': [{ json: {}, binary: { Tracker_File: { fileName: 'Tracker.xlsx' } } }],
 };
 const s = run(src('summary.js'), [], nodes)[0].json;
+assert(s.file === 'Tracker.xlsx', 'upload: file name from the form');
 assert(s.rowsRead === 5 && s.rowsSaved === 3 && s.blankRows === 1, 'counts');
 assert(s.duplicateInvoices.length === 1 && s.duplicateInvoices[0] === '7001211479', 'lists repeated invoice');
 assert(s.issues['zero or negative value'].count === 1 && s.issues['missing customer'].count === 1, 'value / customer checks');
@@ -45,3 +47,26 @@ assert(s.issues['allocated before received'].examples[0] === '7001211480', 'allo
 assert(!s.issues['missing value'] && !s.issues['no readable date'], 'no false flags');
 assert(JSON.stringify(run(src('summary.js'), [], nodes)) === JSON.stringify(run(src('summary.js'), [], nodes)), 'deterministic: same input, same output');
 console.log('\nDone page would show:\n' + s.message);
+
+// --- OneDrive: Pick Tracker File / Remember Version
+const NAME = 'Trackers - NAM Distribution.xlsx';
+const found = [
+  { id: 'A1', name: NAME, eTag: '"v7"', lastModifiedDateTime: '2026-10-07T10:00:00Z' },
+  { id: 'B2', name: 'Trackers - NAM Distribution (old).xlsx', eTag: '"v1"' },
+].map((json) => ({ json }));
+const memory = {};
+const picked = run(src('pick.js'), found, {}, memory);
+assert(picked.length === 1 && picked[0].json.id === 'A1', 'picks the exact file name only');
+assert(/was not found/.test(throws(() => run(src('pick.js'), [found[1]], {}, {}))), 'missing-file guard');
+assert(/2 files are named/.test(throws(() => run(src('pick.js'), [found[0], found[0]], {}, {}))), 'duplicate-name guard');
+run(src('remember.js'), [{ json: { ok: 1 } }], { 'Pick Tracker File': picked }, memory);
+assert(memory.lastETag === '"v7"', 'remembers the processed version');
+assert(run(src('pick.js'), found, {}, memory).length === 0, 'skips an unchanged file');
+const changed = [{ json: { ...found[0].json, eTag: '"v8"' } }];
+assert(run(src('pick.js'), changed, {}, memory).length === 1, 'processes a changed file');
+
+const fs2 = require('fs');
+const wf = JSON.parse(fs2.readFileSync(path.join(__dirname, '..', 'tracker_onedrive_workflow.json'), 'utf8'));
+const odSummary = wf.nodes.find((n) => n.name === 'Summarise Upload').parameters.jsCode;
+const s2 = run(odSummary, [], { ...nodes, 'Pick Tracker File': picked })[0].json;
+assert(s2.file === NAME && s2.rowsSaved === s.rowsSaved, 'onedrive: same checks, file name from OneDrive');
