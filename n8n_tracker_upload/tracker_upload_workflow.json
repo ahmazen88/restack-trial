@@ -1,0 +1,248 @@
+{
+  "name": "Production Tracker – Upload from SharePoint",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Upload Production Tracker",
+        "formDescription": "Download the latest tracker from SharePoint (File → Create a Copy → Download a Copy) and upload it here. The Production Intelligence Report refreshes automatically.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Tracker File",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".xlsx,.xlsm",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "path": "production-tracker-upload",
+          "buttonLabel": "Upload & refresh report"
+        }
+      },
+      "id": "20b1ccbc-4a1f-5f17-bece-fdc7ffa0a2a9",
+      "name": "Upload Tracker",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "Tracker_File",
+        "options": {}
+      },
+      "id": "776120a3-0f3a-5fab-b5d4-3d6292c5a1f5",
+      "name": "Read Tracker Sheet",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean Rows\n// 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).\n// 2. ALIASES = other headings the SharePoint tracker might use for the same column.\n// 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types.\n// 4. KEY     = the column that identifies a row (used to update instead of duplicate).\nconst COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst ALIASES = {\n  Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],\n  Value: ['value', 'amount', 'invoice value', 'total'],\n  Customer: ['customer', 'customer name', 'client'],\n  Company_Code: ['company code', 'coco', 'co code', 'company_code'],\n  Received_Date: ['received date', 'date received', 'received'],\n  Allocated_Date: ['allocated date', 'date allocated', 'allocated'],\n  Invoice_Date: ['invoice date', 'inv date'],\n};\nconst TYPES = {};\nconst KEY = 'Invoice';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lookup = new Map();\nfor (const col of COLUMNS) {\n  lookup.set(norm(col), col);\n  for (const a of ALIASES[col] || []) lookup.set(norm(a), col);\n}\nconst convert = (col, v) => {\n  if (v === '' || v == null) return null;\n  if (TYPES[col] === 'number') {\n    const n = parseFloat(String(v).replace(/[^0-9.\\-]/g, ''));\n    return Number.isFinite(n) ? n : null;\n  }\n  if (TYPES[col] === 'date') {\n    const d = typeof v === 'number' ? new Date(Date.UTC(1899, 11, 30) + v * 86400000) : new Date(v);\n    return isNaN(d) ? null : d.toISOString();\n  }\n  return String(v).trim();\n};\n\nconst rows = new Map();\nfor (const { json: raw } of $input.all()) {\n  const row = {};\n  for (const [header, value] of Object.entries(raw)) {\n    const col = lookup.get(norm(header));\n    if (col && row[col] == null) row[col] = convert(col, value);\n  }\n  if (row[KEY] == null || row[KEY] === '') continue; // blank / totals rows\n  for (const col of COLUMNS) if (!(col in row)) row[col] = null;\n  rows.set(String(row[KEY]), row); // a repeated key keeps the last row\n}\nreturn [...rows.values()].map((json) => ({ json }));\n"
+      },
+      "id": "40d52375-fb33-5792-8cd8-372309a522e4",
+      "name": "Clean Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "Invoice",
+              "condition": "eq",
+              "keyValue": "={{ $json.Invoice }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "5a3d0d3d-50e2-51ba-840f-f17cc1012e64",
+      "name": "Upsert into Data Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — one item for the confirmation page\nconst read = $('Read Tracker Sheet').all().length;\nconst saved = $('Clean Rows').all().length;\nreturn [{\n  json: {\n    file: $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker',\n    rowsRead: read,\n    rowsSaved: saved,\n    rowsSkipped: read - saved,\n    uploadedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),\n  },\n}];\n"
+      },
+      "id": "44e16e4b-eef3-5e8e-953a-bfef8dbc2678",
+      "name": "Summarise Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "773c1c3e-6d03-5cce-bbb5-209d2f3eb97b",
+      "name": "Refresh Report",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "Tracker uploaded ✔",
+        "completionMessage": "={{ $('Summarise Upload').first().json.rowsSaved }} rows saved from {{ $('Summarise Upload').first().json.file }} ({{ $('Summarise Upload').first().json.rowsSkipped }} blank or duplicate rows skipped). The report is being generated and will arrive by email shortly.",
+        "options": {}
+      },
+      "id": "4aa83d7d-a1d2-587b-9f66-7278d6cd878d",
+      "name": "Done Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "width": 560,
+        "height": 300,
+        "content": "## Tracker upload – setup\n1. **Upsert into Data Table** → pick your Data Table\n2. **Clean Rows** → check `COLUMNS` matches the Data Table columns exactly; add tracker headings to `ALIASES`\n3. **Read Tracker Sheet** → *Options → Sheet Name* if the data is not on the first tab\n4. **Refresh Report** → pick *Report copy* (it needs a *When Executed by Another Workflow* trigger)\n5. Publish, then share the form URL from **Upload Tracker** (Production URL)"
+      },
+      "id": "49fe7062-7ab2-52c9-9bb7-f7df2436979b",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -40
+      ]
+    }
+  ],
+  "connections": {
+    "Upload Tracker": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker Sheet": {
+      "main": [
+        [
+          {
+            "node": "Clean Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Rows": {
+      "main": [
+        [
+          {
+            "node": "Upsert into Data Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert into Data Table": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Upload": {
+      "main": [
+        [
+          {
+            "node": "Refresh Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Report": {
+      "main": [
+        [
+          {
+            "node": "Done Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}
