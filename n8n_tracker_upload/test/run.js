@@ -51,9 +51,12 @@ console.log('\nDone page would show:\n' + s.message);
 // --- OneDrive: Pick Tracker File / Remember Version
 const NAME = 'Trackers - NAM Distribution.xlsx';
 const found = [
-  { id: 'A1', name: NAME, eTag: '"v7"', lastModifiedDateTime: '2026-10-07T10:00:00Z' },
-  { id: 'B2', name: 'Trackers - NAM Distribution (old).xlsx', eTag: '"v1"' },
+  { id: 'A1', name: NAME, eTag: '"v7"', lastModifiedDateTime: '2026-10-07T10:00:00Z', file: {} },
+  { id: 'B2', name: 'Trackers - NAM Distribution (old).xlsx', eTag: '"v1"', file: {} },
+  { id: 'F3', name: NAME, folder: {} }, // a folder with the same name is ignored
 ].map((json) => ({ json }));
+const graphShape = [{ json: { value: found.map((i) => i.json) } }];
+assert(run(src('pick.js'), graphShape, {}, {})[0].json.id === 'A1', 'reads Microsoft Graph search results ({ value: [...] })');
 const memory = {};
 const picked = run(src('pick.js'), found, {}, memory);
 assert(picked.length === 1 && picked[0].json.id === 'A1', 'picks the exact file name only');
@@ -73,7 +76,9 @@ assert(s2.file === NAME && s2.rowsSaved === s.rowsSaved, 'onedrive: same checks,
 
 // --- One-flow report
 const odWf = JSON.parse(fs2.readFileSync(path.join(__dirname, '..', 'tracker_onedrive_workflow.json'), 'utf8'));
-const reportJs = odWf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode;
+const reportJsRaw = odWf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode;
+assert(/Add at least one email address/.test(throws(() => run(reportJsRaw, [], {}))), 'stops when RECIPIENTS is empty');
+const reportJs = reportJsRaw.replace('const RECIPIENTS = [];', "const RECIPIENTS = ['a@example.com', 'b@example.com'];");
 const custs = ['RIO TINTO ALCAN INC', 'SALT RIVER PROJECT', 'EXELON ACCOUNTS PAYABLE', 'OGLETHORPE POWER CORPORATION', 'POWER LINE SUPPLY'];
 const sample = Array.from({ length: 240 }, (_, i) => ({
   Invoice: 7001211000 + i,
@@ -94,5 +99,12 @@ assert(r1.html === r2.html && r1.subject === r2.subject, 'report is deterministi
 assert(r1.invoices === 240 && /Monthly summary/.test(r1.html) && /Top 10 customers/.test(r1.html), 'report sections present');
 assert(/as of 2026-08-28/.test(r1.subject), 'as-of date comes from the data, not the clock');
 assert(!/<script/i.test(r1.html), 'no scripts in email');
+assert(r1.mail.message.toRecipients.length === 2 && r1.mail.message.body.contentType === 'HTML' &&
+  r1.mail.message.body.content === r1.html, 'Graph sendMail body built');
+const send = odWf.nodes.find((n) => n.name === 'Send Report').parameters;
+assert(send.url.endsWith('/me/sendMail') && send.nodeCredentialType === 'microsoftOutlookOAuth2Api', 'Send Report calls Graph sendMail');
+const dl = odWf.nodes.find((n) => n.name === 'Download Tracker').parameters;
+assert(dl.options.response.response.responseFormat === 'file' && dl.options.response.response.outputPropertyName === 'data', 'download saved as binary "data"');
+assert(odWf.nodes.every((n) => !/microsoftOneDrive|microsoftOutlook/.test(n.type)), 'no OneDrive/Outlook nodes needed');
 fs2.writeFileSync(path.join(__dirname, 'sample_report.html'), r1.html);
 console.log('Subject:', r1.subject);

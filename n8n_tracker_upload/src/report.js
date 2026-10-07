@@ -1,9 +1,12 @@
 // Build Report — a simple, rule-based Production Tracker report as an HTML email.
 // Fixed rules only: the same tracker file always produces the same report.
+const RECIPIENTS = []; // e.g. ['name.surname@company.com', 'team@company.com']
 const MONTHS_SHOWN = 12;
 const TOP_CUSTOMERS = 10;
 const DAYS_SHOWN = 14;
 const DATE_ORDER = ['Received_Date', 'Allocated_Date', 'Invoice_Date']; // first filled date is used
+
+if (!RECIPIENTS.length) throw new Error('Add at least one email address to RECIPIENTS at the top of "Build Report".');
 
 const rows = $('Clean Rows').all().map((i) => i.json);
 const quality = $('Summarise Upload').first().json;
@@ -79,11 +82,21 @@ ${table(`Daily activity (last ${DAYS_SHOWN} active days)`, ['Date', 'Invoices', 
 <p style="color:#9ca3af;font-size:11px;margin-top:24px">Generated automatically by n8n from the tracker file. Dates use ${DATE_ORDER.join(' → ')} (first filled).</p>
 </div>`;
 
+const subject = `Production Tracker Report – ${count(rows.length)} invoices · ${money(totalValue)} · as of ${latestDate}`;
 return [{
   json: {
-    subject: `Production Tracker Report – ${count(rows.length)} invoices · ${money(totalValue)} · as of ${latestDate}`,
+    subject,
     html,
     invoices: rows.length,
     totalValue,
+    // Body for Microsoft Graph "send mail" (used by the Send Report step)
+    mail: {
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: html },
+        toRecipients: RECIPIENTS.map((address) => ({ emailAddress: { address } })),
+      },
+      saveToSentItems: true,
+    },
   },
 }];

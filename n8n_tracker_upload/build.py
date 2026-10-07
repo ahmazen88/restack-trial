@@ -55,6 +55,20 @@ def refresh_report(prefix, x):
         'options': {'waitForSubWorkflow': False}})
 
 
+GRAPH = 'https://graph.microsoft.com/v1.0'
+
+
+def graph(prefix, name, pos, credential_type, method, url, body=None, options=None):
+    """HTTP Request node calling Microsoft Graph with one of the built-in Microsoft credentials.
+
+    Used instead of the OneDrive / Outlook nodes, which are not installed on every n8n instance."""
+    params = {'method': method, 'url': url, 'authentication': 'predefinedCredentialType',
+              'nodeCredentialType': credential_type, 'options': options or {}}
+    if body is not None:
+        params.update({'sendBody': True, 'contentType': 'json', 'specifyBody': 'json', 'jsonBody': body})
+    return node(prefix, name, 'httpRequest', 4.2, pos, params)
+
+
 def chain(*names):
     return {a: {'main': [[{'node': b, 'type': 'main', 'index': 0}]]} for a, b in zip(names, names[1:])}
 
@@ -101,27 +115,24 @@ def onedrive_workflow():
         node(p, 'Weekdays 7am', 'scheduleTrigger', 1.2, [0, 200], {
             'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 7 * * 1-5'}]}}),
         node(p, 'Test Run', 'manualTrigger', 1, [0, 400], {}),
-        node(p, 'Find Tracker', 'microsoftOneDrive', 1.1, [220, 300], {
-            'resource': 'file', 'operation': 'search', 'query': 'NAM Distribution'}),
+        graph(p, 'Find Tracker', [220, 300], 'microsoftOneDriveOAuth2Api', 'GET',
+              GRAPH + "/me/drive/root/search(q='NAM%20Distribution')"),
         node(p, 'Pick Tracker File', 'code', 2, [440, 300], {'jsCode': js('pick.js')}),
-        node(p, 'Download Tracker', 'microsoftOneDrive', 1.1, [660, 300], {
-            'resource': 'file', 'operation': 'download', 'fileId': '={{ $json.id }}',
-            'binaryPropertyName': 'data'}),
+        graph(p, 'Download Tracker', [660, 300], 'microsoftOneDriveOAuth2Api', 'GET',
+              '=' + GRAPH + '/me/drive/items/{{ $json.id }}/content',
+              options={'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'data'}}}),
         *processing_nodes(p, 880, 'data', summary_js),
         node(p, 'Build Report', 'code', 2, [1760, 300], {'jsCode': js('report.js')}),
-        node(p, 'Send Report', 'microsoftOutlook', 2, [1980, 300], {
-            'resource': 'message', 'operation': 'send',
-            'toRecipients': '',
-            'subject': '={{ $json.subject }}',
-            'bodyContent': '={{ $json.html }}',
-            'additionalFields': {'bodyContentType': 'html'}}),
+        graph(p, 'Send Report', [1980, 300], 'microsoftOutlookOAuth2Api', 'POST', GRAPH + '/me/sendMail',
+              body='={{ JSON.stringify($json.mail) }}'),
         node(p, 'Remember Version', 'code', 2, [2200, 300], {'jsCode': js('remember.js')}),
         sticky(p, '## Production Tracker – one flow\n'
-                  '1. **Find Tracker** & **Download Tracker** → credential *Microsoft Drive OAuth2 API* '
+                  '1. **Find Tracker** & **Download Tracker** (HTTP Request) → credential *Microsoft Drive OAuth2 API* '
                   '(sign in with your company account)\n'
                   '2. **Pick Tracker File** → `TRACKER_NAME` must match the file name exactly\n'
                   '3. **Upsert into Data Table** → pick your Data Table (or remove this step if not needed)\n'
-                  '4. **Send Report** → credential *Microsoft Outlook OAuth2 API*; type the recipients in **To**\n'
+                  '4. **Build Report** → put the email addresses in `RECIPIENTS`; **Send Report** (HTTP Request) → '
+                  'credential *Microsoft Outlook OAuth2 API*\n'
                   '5. Click **Test Run**, then **Publish**: runs weekdays at 07:00 (timezone: Workflow settings) '
                   'and sends nothing when the file has not changed', [-40, -140], height=320),
     ]

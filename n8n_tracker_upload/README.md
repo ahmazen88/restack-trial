@@ -73,13 +73,15 @@ Weekdays 07:00 (or Test Run) ─► Find Tracker ─► Pick Tracker File ─►
 
 Setup:
 1. Import `tracker_onedrive_workflow.json`.
-2. **Find Tracker** and **Download Tracker**: select a **Microsoft Drive OAuth2 API** credential (sign in with
-   your company account).
+2. **Find Tracker** and **Download Tracker** are *HTTP Request* nodes calling Microsoft Graph (they work even
+   where the OneDrive/Outlook nodes are not installed). Select a **Microsoft Drive OAuth2 API** credential
+   (sign in with your company account).
 3. **Pick Tracker File**: `TRACKER_NAME` must match the file name exactly (`Trackers - NAM Distribution.xlsx`).
 4. **Upsert into Data Table** → your Data Table. Optional: delete this step and connect Clean Rows straight to
    Summarise Upload if you don't need the Data Table.
-5. **Send Report**: select a **Microsoft Outlook OAuth2 API** credential and type the recipients in **To**
-   (comma-separated). If your company has its own mail node, swap it in and map `subject` / `html`.
+5. **Build Report**: put the email addresses in `RECIPIENTS` at the top (the run stops with a message if it's
+   empty). **Send Report** (HTTP Request → Graph `sendMail`): select a **Microsoft Outlook OAuth2 API**
+   credential. If your company has its own mail node, swap it in and map `subject` / `html`.
 6. Click **Test Run**, check the email, then **Publish**. Set the timezone under *Workflow settings*.
 
 The report (rule-based, no AI: the same file always gives the same email):

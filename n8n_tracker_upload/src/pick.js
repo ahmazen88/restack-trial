@@ -5,7 +5,9 @@
 const TRACKER_NAME = 'Trackers - NAM Distribution.xlsx';
 const ONLY_WHEN_CHANGED = true;
 
-const matches = $input.all().map((i) => i.json).filter((f) => f.name === TRACKER_NAME);
+// Microsoft Graph returns the search results as { value: [...] }; accept a plain list too
+const found = $input.all().flatMap((i) => (Array.isArray(i.json.value) ? i.json.value : [i.json]));
+const matches = found.filter((f) => f.file && f.name === TRACKER_NAME);
 if (matches.length === 0) {
   throw new Error(`"${TRACKER_NAME}" was not found in your OneDrive. Check the file name in TRACKER_NAME ` +
     'and the search text on "Find Tracker".');
