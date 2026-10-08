@@ -34,6 +34,14 @@ const UPPER = ['Customer', 'Company_Code']; // made upper case so spelling varia
 // The tracker sometimes holds the sales org instead of the company code. Left = sales org, right = real company code.
 const COMPANY_CODE_FIX = { G36C: 'G367', GS5C: 'G367' };
 
+// Status in one standard wording (first matching rule wins); anything else is kept as written
+const STATUS_RULES = [
+  [/hold/i, 'On hold'],
+  [/cancel|do not distribute/i, 'Cancelled'],
+  [/pend|open|progress|query|block|wip/i, 'Pending'],
+  [/complet|done|upload|submit|sent|distribut|closed|invoiced|posted/i, 'Completed'],
+];
+const standardStatus = (t) => (t ? (STATUS_RULES.find(([re]) => re.test(t)) || [null, t])[1] : null);
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const lookup = new Map();
 for (const col of COLUMNS) {
@@ -67,6 +75,8 @@ const convert = (col, v) => {
     return isNaN(d) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   const text = String(v).replace(/\s+/g, ' ').trim();
+  if (col === 'Status') return standardStatus(text);
+  if (col === 'Uploaded_By') return text.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()); // "TUSHAR" / "tushar" → "Tushar"
   const out = UPPER.includes(col) ? text.toUpperCase() : text;
   return col === 'Company_Code' && COMPANY_CODE_FIX[out] ? COMPANY_CODE_FIX[out] : out;
 };

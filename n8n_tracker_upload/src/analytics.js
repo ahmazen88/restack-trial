@@ -236,14 +236,24 @@ function analyse(all, opts, RULES) {
     ['PO / PO lines missing on portal', /\bpo\b|purchase order/i],
     ['Portal access / setup', /access|migrat|coupa|oracle|ariba|login|regist|portal/i],
   ];
-  const blockerOf = (r) => { const t = r.cat || r.why || ''; if (!t) return 'No category'; return (BLOCKERS.find(([, re]) => re.test(t)) || ['Other'])[0]; };
+  // the standard category (set when the data is saved) decides the group; older rows fall back to the rules above
+  const GROUP_OF = { 'PO not available on portal': 'PO issue on portal', 'PO lines not available on portal': 'PO issue on portal',
+    'PO cancelled or closed': 'PO issue on portal', 'PO line and invoice line mismatch': 'Invoice vs PO mismatch',
+    'Price and quantity mismatch': 'Invoice vs PO mismatch', 'Quantity mismatch': 'Invoice vs PO mismatch', 'Price mismatch': 'Invoice vs PO mismatch',
+    'Amount, tax or freight mismatch': 'Invoice vs PO mismatch', 'No portal access / portal migration': 'Portal access',
+    'Unable to submit invoice on portal': 'Submission issue', Other: 'Other' };
+  const blockerOf = (r) => {
+    if (r.sc && GROUP_OF[r.sc]) return GROUP_OF[r.sc];
+    const t = r.cat || r.why || ''; if (!t) return 'No reason given';
+    return (BLOCKERS.find(([, re]) => re.test(t)) || ['Other'])[0];
+  };
   const open = scoped.filter(isOpen).map((r) => {
     const start = r.rd || r.ad || r.d;
     const acts = actionDates(r.why);
     const last = acts[acts.length - 1] || null;
     const age = start ? Math.max(0, daysBetween(start, today)) : null;
     const sinceLast = last ? Math.max(0, daysBetween(last, today)) : null;
-    return { ...r, age, last, sinceLast, followUps: acts.length, blocker: blockerOf(r),
+    return { ...r, age, last, sinceLast, followUps: acts.length, blocker: blockerOf(r), category: r.sc || r.cat || '',
       pastDue: age !== null && age > RULES.pastDueDays,
       due: sinceLast !== null ? sinceLast >= RULES.followUpDays : (age !== null && age >= RULES.followUpDays) };
   });
@@ -263,7 +273,7 @@ function analyse(all, opts, RULES) {
     total: pendingStats(open),
     ageing: BUCKETS.map(([lo, hi, label]) => { const rows = open.filter((r) => r.age !== null && r.age >= lo && r.age <= hi); return { key: label, n: rows.length, v: sum(rows, (r) => num(r.v)) }; }),
     blockers: groupBy(open, (r) => r.blocker).map((g) => ({ key: g.key, ...pendingStats(g.rows),
-      categories: groupBy(g.rows, (r) => r.cat || '(none)').sort((a, b) => b.n - a.n).slice(0, 3).map((c) => c.key) })).sort((a, b) => b.v - a.v),
+      categories: groupBy(g.rows, (r) => r.sc || r.cat || '').sort((a, b) => b.n - a.n).map((c) => ({ key: c.key, n: c.n, v: c.v })) })).sort((a, b) => b.v - a.v),
     owners: groupBy(open, (r) => r.ub || 'Not recorded').map((g) => ({ key: g.key, ...pendingStats(g.rows) })).sort((a, b) => b.n - a.n),
     companies: groupBy(open, (r) => r.cc || 'UNKNOWN').map((g) => ({ key: g.key, ...pendingStats(g.rows) })).sort((a, b) => b.v - a.v),
     actNow: [...open].sort((a, b) => (b.pastDue - a.pastDue) || (b.due - a.due) || (num(b.v) - num(a.v)) || ((b.age || 0) - (a.age || 0))).slice(0, 15),
@@ -272,7 +282,17 @@ function analyse(all, opts, RULES) {
       owners: groupBy(closedTat, (r) => r.ub || 'Not recorded').map((g) => ({ key: g.key, n: g.n, avg: avgOf(g.rows, (r) => r.tat2) })).sort((a, b) => b.n - a.n) },
   };
 
+  // entries still to be filled in (or that contradict each other), all rows in the selection
+  const fillIn = [
+    ['No status', (r) => !r.st],
+    ['Pending without a reason', (r) => isOpen(r) && !r.why && !r.cat],
+    ['Pending without a category', (r) => isOpen(r) && !r.cat && !!r.why],
+    ['Pending without an owner (Uploaded by)', (r) => isOpen(r) && !r.ub],
+    ['Pending but has an upload date', (r) => isOpen(r) && !!r.ud],
+    ['Completed without upload date or TAT', (r) => r.st === 'Completed' && !r.ud && (r.tt === '' || r.tt === null || r.tt === undefined)],
+  ].map(([label, test]) => { const hit = scoped.filter(test); return { label, n: hit.length, examples: hit.slice(0, 8).map((r) => String(r.i)) }; }).filter((x) => x.n);
   const quality = {
+    fillIn,
     noValue: cur.filter((r) => !num(r.v)).length,
     repeated: groupBy(cur, (r) => String(r.i)).filter((g) => g.n > 1).map((g) => g.key),
     allocatedBeforeReceived: cur.filter((r) => r.rd && r.ad && r.ad < r.rd).length,
@@ -341,13 +361,14 @@ ${kpi('Open', int(T.n), money(T.v))}${kpi('Past due', int(T.pastDue), money(T.pa
 </tr></table>
 ${table(['Ageing', 'Invoices', 'Value', ''], P.ageing.map((b, i) => `<tr>${td(esc(b.key))}${td(int(b.n), 1)}${td(money(b.v), 1)}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:40%">${bar(b.n, maxA, i >= 4 ? C.bad : i >= 3 ? C.warn : C.bar)}</td></tr>`))}
 <div style="height:10px"></div>
-${table(['Blocker', ...heads], P.blockers.map((x) => statRow(x.key, x) + `<tr>${td(`<span style="color:${C.mute};font-size:11px">&nbsp;&nbsp;e.g. ${esc(x.categories.join(' · '))}</span>`)}${td('')}${td('')}${td('')}${td('')}${td('')}${td('')}</tr>`))}
+${table(['Blocker group › category', ...heads], P.blockers.map((x) => statRow(x.key, x) + (x.categories.length > 1 || (x.categories[0] && x.categories[0].key !== x.key)
+  ? x.categories.map((c) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;&nbsp;&nbsp;↳ ${esc(c.key)}</span>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td('')}${td('')}${td('')}${td('')}</tr>`).join('') : '')))}
 <div style="height:10px"></div>
 ${table(['Owner (uploaded by)', ...heads], P.owners.map((x) => statRow(x.key, x)))}
 <div style="height:10px"></div>
 ${table(['Company code', ...heads], P.companies.map((x) => statRow(x.key, x)))}
 ${h('Act now (top 15)', 'Past due first, then follow-up due, then highest value')}
-${table(['Invoice', 'Customer', 'Co. code', 'Value', 'Days', 'Blocker', 'Last action', 'Since', 'F-ups'], P.actNow.map((r) => `<tr>${td(esc(r.i))}${td(esc(r.c))}${td(esc(r.cc))}${td(money(nv(r.v)), 1)}${td(r.age === null ? '–' : int(r.age), 1, r.pastDue ? C.bad : '')}${td(esc(r.blocker))}${td(esc(r.last || 'none logged'))}${td(r.sinceLast === null ? '–' : int(r.sinceLast), 1, r.due ? C.warn : '')}${td(int(r.followUps), 1)}</tr>` +
+${table(['Invoice', 'Customer', 'Co. code', 'Value', 'Days', 'Category', 'Last action', 'Since', 'F-ups'], P.actNow.map((r) => `<tr>${td(esc(r.i))}${td(esc(r.c))}${td(esc(r.cc))}${td(money(nv(r.v)), 1)}${td(r.age === null ? '–' : int(r.age), 1, r.pastDue ? C.bad : '')}${td(esc(r.category || r.blocker))}${td(esc(r.last || 'none logged'))}${td(r.sinceLast === null ? '–' : int(r.sinceLast), 1, r.due ? C.warn : '')}${td(int(r.followUps), 1)}</tr>` +
   (r.why ? `<tr><td colspan="9" style="padding:0 10px 6px;border-bottom:1px solid ${C.line};font-size:11px;color:${C.mute}">${esc(String(r.why).slice(0, 220))}${String(r.why).length > 220 ? ' …' : ''}</td></tr>` : '')))}
 ${P.noDateInReason ? `<div style="font-size:11px;color:${C.mute};margin-top:4px">${int(P.noDateInReason)} open item(s) have no date in "Reason for Pending", so their follow-up timing is counted from the received date.</div>` : ''}
 ${P.completed.owners.length ? `<div style="height:10px"></div>${table(['Completed in period – owner', 'Invoices', 'Avg TAT (days)'], P.completed.owners.map((o) => `<tr>${td(esc(o.key))}${td(int(o.n), 1)}${td(d1(o.avg), 1)}</tr>`))}` : ''}`; })()}
@@ -376,6 +397,7 @@ ${table(['Channel', 'Invoices', 'Share'], a.channels.map((c) => `<tr>${td(esc(c.
 ${table(['Project manager', 'Invoices', 'Value'], a.managers.map((m) => `<tr>${td(esc(m.key))}${td(int(m.n), 1)}${td(money(m.v), 1)}</tr>`))}
 ${h('Data quality')}
 <ul style="font-size:12px;margin:0;padding-left:18px">
+${a.quality.fillIn.map((x) => `<li style="color:${C.warn}"><b>${int(x.n)} – ${esc(x.label)}</b> (e.g. ${esc(x.examples.join(', '))})</li>`).join('')}
 <li>${int(a.quality.noValue)} invoices without a value</li>
 <li>${int(a.quality.allocatedBeforeReceived)} allocated before received</li>
 <li>${a.quality.repeated.length ? `${a.quality.repeated.length} invoice numbers appear more than once: ${esc(a.quality.repeated.slice(0, 10).join(', '))}${a.quality.repeated.length > 10 ? ' …' : ''}` : 'No repeated invoice numbers'}</li></ul>
@@ -396,7 +418,7 @@ for (const { json: r } of $('Get All Rows').all()) {
     so: String(r.Sales_Org || '').trim().toUpperCase(),
     pl: String(r.Product_Line || '').trim().toUpperCase(),
     st: String(r.Status || '').trim(), ud: String(r.Upload_Date || '').slice(0, 10), tt: r.Tracker_TAT ?? '', ub: String(r.Uploaded_By || '').trim(),
-    cat: String(r.Pending_Category || '').trim(),
+    cat: String(r.Pending_Category || '').trim(), sc: String(r.Standard_Category || '').trim(),
     // the reason text is only kept for open items (keeps the dashboard small)
     why: /pend|hold|open|progress|query|block/i.test(String(r.Status || '')) ? String(r.Pending_Reason || '').trim() : '',
   });
@@ -477,13 +499,13 @@ const facts = a.empty ? { empty: true } : {
     open: a.pending.total.n, openValue: r2(a.pending.total.v), pastDue: a.pending.total.pastDue, pastDueValue: r2(a.pending.total.pastDueV),
     followUpDue: a.pending.total.due, avgDaysPending: a.pending.total.avgAge === null ? null : r2(a.pending.total.avgAge), oldestDays: a.pending.total.oldest,
     ageing: a.pending.ageing.map((b) => ({ bucket: b.key, invoices: b.n, value: r2(b.v) })),
-    blockers: a.pending.blockers.map((x) => ({ blocker: x.key, invoices: x.n, value: r2(x.v), pastDue: x.pastDue, followUpDue: x.due, avgDays: x.avgAge === null ? null : r2(x.avgAge), examples: x.categories })),
+    blockers: a.pending.blockers.map((x) => ({ blocker: x.key, invoices: x.n, value: r2(x.v), pastDue: x.pastDue, followUpDue: x.due, avgDays: x.avgAge === null ? null : r2(x.avgAge), categories: x.categories.map((c) => ({ category: c.key, invoices: c.n })) })),
     owners: a.pending.owners.map((x) => ({ owner: x.key, open: x.n, pastDue: x.pastDue, followUpDue: x.due })),
     actNow: a.pending.actNow.slice(0, 8).map((r) => ({ invoice: String(r.i), customer: r.c, companyCode: r.cc, value: r2(parseFloat(String(r.v ?? '').replace(/[^0-9.\-]/g, '')) || 0), daysPending: r.age, blocker: r.blocker,
-      lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, reason: String(r.why || '').slice(0, 160) })),
+      category: r.category, lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, reason: String(r.why || '').slice(0, 160) })),
     completedAvgTatDays: a.pending.completed.avg === null ? null : r2(a.pending.completed.avg),
   },
-  dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
+  dataQuality: { toFillIn: a.quality.fillIn.map((x) => ({ issue: x.label, count: x.n, examples: x.examples.slice(0, 3) })), withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
 };
 const uploadNote = quality
   ? `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#374151;background:#f3f4f6;padding:8px 12px;max-width:860px"><b>Upload result:</b> ${quality.replace(/[&<>]/g, '')}</p>`

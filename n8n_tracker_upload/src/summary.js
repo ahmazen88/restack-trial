@@ -30,6 +30,7 @@ const duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();
 
 // Cleaned rows: quality checks
 const rows = $('Clean Rows').all().map((i) => i.json);
+const isOpen = (r) => /pend|hold|open|progress|query|block/i.test(String(r.Status || ''));
 const checks = {
   'missing value': (r) => num(r.Value) === null,
   'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,
@@ -38,6 +39,15 @@ const checks = {
   'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),
   [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),
   'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,
+  // status / reason entries still to be filled in (only checked when the tracker has these columns)
+  ...(rows.some((r) => 'Status' in r) ? {
+    'no status': (r) => !r.Status,
+    'pending status but no reason': (r) => isOpen(r) && !r.Pending_Reason && !r.Pending_Category,
+    'pending status but no category': (r) => isOpen(r) && !r.Pending_Category && !!r.Pending_Reason,
+    'pending status but no owner (Uploaded by)': (r) => isOpen(r) && !r.Uploaded_By,
+    'pending status but an upload date': (r) => isOpen(r) && !!r.Upload_Date,
+    'completed status but no upload date or TAT': (r) => r.Status === 'Completed' && !r.Upload_Date && (r.Tracker_TAT === null || r.Tracker_TAT === undefined || r.Tracker_TAT === ''),
+  } : {}),
 };
 const issues = {};
 for (const [label, test] of Object.entries(checks)) {

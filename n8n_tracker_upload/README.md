@@ -205,3 +205,15 @@ New tracker columns read: Status, Invoice upload Date, TAT, Uploaded by, Categor
 - Completed TAT = Received → Invoice upload date (else the tracker's TAT), for items uploaded in the period.
 - Report: KPIs, ageing buckets, blocker / owner / company code tables, "Act now" top 15 with the reason text.
   The AI commentary and chart designer get these figures too.
+
+### Standard wording and fill-in flags
+- **Status** is standardized in Clean Rows: Pending (pending / open / in progress / query / blocked), On hold, Cancelled,
+  Completed (completed / done / uploaded / submitted / sent / distributed / closed / invoiced / posted). Owner names are
+  title-cased.
+- **Standard blocker category** (`Standard_Category`, 11 fixed names, each under one group: PO issue on portal,
+  Invoice vs PO mismatch, Portal access, Submission issue, Other). Order: fixed rules on Category, then on the reason
+  (a named cause beats the vague "unable to submit"); then the category saved for the same wording on an earlier upload;
+  only what is left goes to **AI Blocker Classifier**, which may only answer from the list (anything else → Other,
+  no answer → Other). Each new wording is asked once and then remembered.
+- **Fill-in flags** (Done page and report): no status; pending without a reason; pending without a category; pending
+  without an owner; pending but has an upload date; completed without upload date or TAT.

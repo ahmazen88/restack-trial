@@ -61,7 +61,7 @@ const makeSheet = (count) => {
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
   Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null,
-  Status: null, Upload_Date: null, Tracker_TAT: null, Uploaded_By: null, Pending_Category: null, Pending_Reason: null };
+  Status: null, Upload_Date: null, Tracker_TAT: null, Uploaded_By: null, Pending_Category: null, Pending_Reason: null, Standard_Category: null };
 const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];")
   .replace('const TODAY = new Date().toISOString().slice(0, 10);', "const TODAY = '2026-10-08';");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
@@ -74,7 +74,9 @@ const fullRun = (sheet, tableRow, aiOut, files = {}) => {
   out['Read ZSD 2025 Sheet'] = files.zsd2025 || NOFILE;
   out['Read Tableau Extract'] = files.tableau || NOFILE;
   out['Check Table'] = Array.isArray(tableRow) ? tableRow.map((json) => ({ json })) : [{ json: tableRow }];
-  run(out, 'Add Lookups', out['Check Table']);
+  run(out, 'Standard Blockers', out['Check Table']);
+  out['AI Blocker Classifier'] = files.blockerAi ? files.blockerAi(JSON.parse(out['Standard Blockers'][0].json.items)) : [{ json: { error: 'model unavailable' } }];
+  run(out, 'Add Lookups', out['AI Blocker Classifier']);
   run(out, 'Safety Check', out['Add Lookups']);
   out['Clear Table'] = [{ json: { success: true, deletedCount: 4000 } }];
   run(out, 'Rows to Save', out['Clear Table']);
@@ -289,15 +291,54 @@ assert(act['7001265146'].followUps === 3 && act['7001265146'].lastAction === '20
 assert(act['7001247206'].lastAction === null && act['7001247206'].followUps === 0, 'no date in the reason → no follow-up logged');
 assert(pf.pastDue === 3 && pf.followUpDue === 4, 'past due (> 30 days): 3; follow-up due (nothing for 7+ days): 4');
 const bl = Object.fromEntries(pf.blockers.map((b) => [b.blocker, b.invoices]));
-assert(bl['PO / PO lines missing on portal'] === 2 && bl['Price / quantity / amount mismatch'] === 1 && bl["Invoice can't be raised on portal"] === 1 && bl['Portal access / setup'] === 1,
-  'blocker groups: ' + JSON.stringify(bl));
-assert(pf.actNow[0].invoice === '7001265146' || pf.actNow[0].daysPending > 30, 'act-now list starts with past-due items, highest value first: ' + pf.actNow.map((x) => x.invoice).join(', '));
+assert(bl['PO issue on portal'] === 3 && bl['Invoice vs PO mismatch'] === 1 && bl['Portal access'] === 1, 'blocker groups: ' + JSON.stringify(bl));
+const sc = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json.Standard_Category]));
+assert(sc[7001238182] === 'PO lines not available on portal' && sc[7001264821] === 'Quantity mismatch' && sc[7001265146] === 'PO not available on portal'
+  && sc[7001156057] === 'No portal access / portal migration' && sc[7001100001] === null,
+  'standard categories by fixed rules; completed rows get none');
+assert(sc[7001247206] === 'PO lines not available on portal', '"Unable to create invoice" with reason "PO lines unavailable" → the cause (PO lines) wins');
+assert(pf.actNow[0].daysPending > 30, 'act-now list starts with past-due items, highest value first: ' + pf.actNow.map((x) => x.invoice).join(', '));
 assert(pf.completedAvgTatDays === 3.5, 'completed TAT: 4 days (received → uploaded) and 3 days (tracker TAT) → average 3.5');
 const ph = P['Build Report'][0].json.html;
 assert(/Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
   'report has the pending section: KPIs, ageing, blockers, owners, act-now list with reasons');
 assert(P['Rows to Save'].every((i) => i.json.Invoice !== 7001100001 || i.json.Status === 'Completed'), 'completed rows saved too');
 if (process.env.PEND_OUT) fs.writeFileSync(process.env.PEND_OUT, ph.replace('<!--charts-->', ''));
+
+// ---------- 5d. AI only for wordings the rules cannot place; answers limited to the fixed list; remembered ----------
+const odd = [
+  { json: { 'Invoice#': 7009000001, '$ Value': '100', 'Company Code': '3060', Status: 'pending', 'Uploaded by': 'TUSHAR', Category: 'Customer awaiting GRN', 'Reason for Pending': 'Goods receipt not done by site', Received_Date: '2026-09-01', Customer: 'A' } },
+  { json: { 'Invoice#': 7009000002, '$ Value': '100', 'Company Code': '3060', Status: 'In Progress', 'Uploaded by': 'tushar', Category: 'Weird thing', 'Reason for Pending': 'Something odd', Received_Date: '2026-09-01', Customer: 'A' } },
+  { json: { 'Invoice#': 7009000003, '$ Value': '100', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Abdul', Category: 'Customer awaiting GRN', 'Reason for Pending': 'Goods receipt not done by site', Received_Date: '2026-09-02', Customer: 'B' } },
+  { json: { 'Invoice#': 7009000004, '$ Value': '100', 'Company Code': '3060', Status: 'Pending', Received_Date: '2026-09-02', Customer: 'C' } },
+  { json: { 'Invoice#': 7009000005, '$ Value': '100', 'Company Code': '3060', Status: '', 'Reason for Pending': 'email sent 2 Oct', Received_Date: '2026-09-02', Customer: 'C' } },
+  { json: { 'Invoice#': 7009000006, '$ Value': '100', 'Company Code': '3060', Status: 'Done', Received_Date: '2026-09-02', Customer: 'C' } },
+  { json: { 'Invoice#': 7009000007, '$ Value': '100', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Abdul', 'Invoice upload Date': '2026-09-20', Category: 'Quantity Mismatch', Received_Date: '2026-09-02', Customer: 'C' } },
+];
+let seenByAi = null;
+const fakeAi = (items) => { seenByAi = items; return [{ json: { text: JSON.stringify(items.map((x) => ({ id: x.id, category: /grn|goods/i.test(x.text) ? 'PO not available on portal' : 'Totally new category' }))) } }]; };
+const O = fullRun(odd, TABLE_ROW, [{ json: {} }], { blockerAi: fakeAi });
+const os = Object.fromEntries(O['Rows to Save'].map((i) => [i.json.Invoice, i.json]));
+assert(seenByAi.length === 2, 'AI sees only the 2 distinct wordings the rules cannot place (same wording asked once): ' + seenByAi.map((x) => x.text).join(' | '));
+assert(os[7009000001].Standard_Category === 'PO not available on portal' && os[7009000003].Standard_Category === 'PO not available on portal', 'same wording → same AI category');
+assert(os[7009000002].Standard_Category === 'Other', 'an AI answer outside the fixed list becomes "Other"');
+assert(os[7009000001].Status === 'Pending' && os[7009000002].Status === 'Pending' && os[7009000006].Status === 'Completed' && os[7009000001].Uploaded_By === 'Tushar' && os[7009000002].Uploaded_By === 'Tushar',
+  'status and owner names standardized ("pending"/"In Progress" → Pending, "Done" → Completed, "TUSHAR"/"tushar" → Tushar)');
+// next upload: the remembered category is reused, the AI is not asked again
+const earlierTable = O['Rows to Save'].map((i) => ({ ...i.json, id: 1 }));
+let asked = null;
+const O2 = fullRun(odd, earlierTable, [{ json: {} }], { blockerAi: (items) => { asked = items; return [{ json: { text: '[]' } }]; } });
+assert(asked.length === 0 && O2['Rows to Save'].find((i) => i.json.Invoice === 7009000001).json.Standard_Category === 'PO not available on portal', 'next upload: remembered categories reused, AI not asked again');
+const O3 = fullRun(odd, TABLE_ROW, [{ json: {} }]); // AI unavailable
+assert(O3['Rows to Save'].find((i) => i.json.Invoice === 7009000001).json.Standard_Category === 'Other' && /set to "Other" \(AI gave no answer\)/.test(O3['Summarise Upload'][0].json.message),
+  'AI unavailable → "Other", and the Done page says so');
+const dm = O['Summarise Upload'][0].json.message;
+if (process.env.STD_OUT) fs.writeFileSync(process.env.STD_OUT, fullRun(pend.concat(odd), TABLE_ROW, [{ json: {} }], { blockerAi: fakeAi })['Build Report'][0].json.html.replace('<!--charts-->', ''));
+assert(/1 with no status \(e\.g\. 7009000005\)/.test(dm) && /1 with pending status but no reason \(e\.g\. 7009000004\)/.test(dm) && /1 with pending status but no owner/.test(dm)
+  && /1 with pending status but an upload date \(e\.g\. 7009000007\)/.test(dm) && /1 with completed status but no upload date or TAT \(e\.g\. 7009000006\)/.test(dm),
+  'Done page flags blanks and contradictions: ' + dm.match(/\d+ with no status.*TAT[^·]*/)[0]);
+const oq = JSON.parse(O['Build Report'][0].json.facts).dataQuality.toFillIn.map((x) => x.issue + ':' + x.count).join(', ');
+assert(/No status:1/.test(oq) && /Pending without a reason:1/.test(oq) && /Pending but has an upload date:1/.test(oq) && /To fill in|Pending without a reason/.test(O['Build Report'][0].json.html), 'report data quality lists what to fill in: ' + oq);
 
 // ---------- 5. Stops BEFORE emptying the table when something is wrong ----------
 const stop = (sheet, tableRow) => throws(() => fullRun(sheet, tableRow, [{ json: {} }]));

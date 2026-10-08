@@ -18,7 +18,7 @@ const key = (v) => {
   return t;
 };
 const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toUpperCase(); // profit centre as text, e.g. GPJ908
-const rows = $('Clean Rows').all().map((i) => ({ ...i.json, Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null }));
+const rows = $('Clean Rows').all().map((i) => ({ ...i.json, Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Standard_Category: null }));
 const wanted = new Set(rows.map((r) => key(r.Invoice)));
 
 // rows from one read step (a missing file or sheet gives an error item, which is skipped)
@@ -103,6 +103,31 @@ for (const r of rows) {
   if (String(r.Company_Code) === CLEARWATER.companyCode) {
     r.Product_Line = r.Product_Line ?? CLEARWATER.Product_Line;
     r.Sales_Org = found.salesOrg.get(k) ?? old.Sales_Org ?? null;
+  }
+}
+// standard blocker category: fixed rules / earlier uploads ("Standard Blockers"), the rest from the AI (only allowed names)
+{
+  const std = (() => { try { return $('Standard Blockers').first().json; } catch (e) { return null; } })();
+  if (std) {
+    let aiPicks = {};
+    try {
+      const raw = String($('AI Blocker Classifier').first().json.text ?? $('AI Blocker Classifier').first().json.output ?? '');
+      const m = raw.replace(/```[a-z]*\n?/gi, '').match(/\[[\s\S]*\]/);
+      for (const x of (m ? JSON.parse(m[0]) : [])) {
+        const name = std.categories.find((c) => c.toLowerCase() === String(x && x.category || '').trim().toLowerCase());
+        if (x && Number.isFinite(+x.id)) aiPicks[+x.id] = name || 'Other'; // a name outside the list becomes "Other"
+      }
+    } catch (e) { aiPicks = {}; }
+    let ai = 0; let aiMissing = 0;
+    for (const r of rows) {
+      const res = std.result[String(r.Invoice)];
+      if (!res) continue;
+      if (res.category) { r.Standard_Category = res.category; continue; }
+      const pick = aiPicks[std.keyToId[res.key]];
+      r.Standard_Category = pick || 'Other';
+      if (pick) ai++; else aiMissing++;
+    }
+    if (std.itemCount || aiMissing) notes.push(`blocker wording classified by AI: ${ai}${aiMissing ? `, ${aiMissing} set to "Other" (AI gave no answer)` : ''}`);
   }
 }
 // which columns were used is shown on the Done page; "_lookupNotes" is removed again before saving

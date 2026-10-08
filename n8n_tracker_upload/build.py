@@ -230,6 +230,32 @@ FACTS (JSON):
 
 Choose the charts now. Return only the JSON array."""
 
+BLOCKER_SYSTEM_PROMPT = """You classify why an invoice is still pending, for an accounts-receivable billing team at GE Vernova. Each item is the tracker's Category and Reason for Pending text.
+
+Choose exactly ONE category per item from this list, copied exactly:
+- PO not available on portal (PO missing, not created, not visible or not yet released on the customer portal)
+- PO lines not available on portal (the PO exists but the needed lines or line items are missing)
+- PO cancelled or closed
+- PO line and invoice line mismatch
+- Price and quantity mismatch
+- Quantity mismatch
+- Price mismatch
+- Amount, tax or freight mismatch (totals, tax, tariff, freight or other charges do not match or are missing on the PO)
+- No portal access / portal migration (no login, access request, customer moved to another portal)
+- Unable to submit invoice on portal (the portal rejects or will not let the invoice be submitted, cause not stated)
+- Other (none of the above clearly fits)
+
+RULES
+1. Decide from the words given only. Do not guess a cause that is not written.
+2. When the text names a cause and a symptom, choose the cause.
+3. Return ONLY a JSON array, no other text, no code fences: [{"id":1,"category":"Quantity mismatch"}]
+4. Include every id exactly once. If the list is empty, return []."""
+
+BLOCKER_USER_PROMPT = """=Items (JSON, each has an id and the text):
+{{ $json.items }}
+
+Return only the JSON array."""
+
 
 def reports_workflow():
     """Upload the tracker, request a report, or get weekly/monthly reports – with AI commentary."""
@@ -325,7 +351,7 @@ def simple_workflow():
     y = 300
     names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows',
              'Pick ZSD File', 'Read ZSD Log', 'Pick ZSD File Again', 'Read ZSD 2025 Sheet',
-             'Pick Tableau File', 'Read Tableau Extract', 'Check Table', 'Add Lookups', 'Safety Check', 'Clear Table',
+             'Pick Tableau File', 'Read Tableau Extract', 'Check Table', 'Standard Blockers', 'AI Blocker Classifier', 'Add Lookups', 'Safety Check', 'Clear Table',
              'Rows to Save', 'Save All Rows',
              'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary',
              'AI Chart Designer', 'Add AI Charts', send, 'Done Page']
@@ -369,6 +395,12 @@ def simple_workflow():
             'resource': 'row', 'operation': 'get', 'dataTableId': DATA_TABLE,
             'matchType': 'anyCondition', 'filters': {}, 'returnAll': True},
              executeOnce=True, alwaysOutputData=True),
+        node(p, 'Standard Blockers', 'code', 2, pos['Standard Blockers'], {'jsCode': js('blockers.js')}, executeOnce=True),
+        node(p, 'AI Blocker Classifier', '@n8n/n8n-nodes-langchain.chainLlm', 1.7, pos['AI Blocker Classifier'], {
+            'promptType': 'define', 'text': BLOCKER_USER_PROMPT, 'hasOutputParser': False,
+            'messages': {'messageValues': [{'type': 'SystemMessagePromptTemplate', 'message': BLOCKER_SYSTEM_PROMPT}]},
+            'batching': {}},
+            retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput'),
         node(p, 'Add Lookups', 'code', 2, pos['Add Lookups'], {'jsCode': js('lookups.js')}, executeOnce=True),
         node(p, 'Safety Check', 'code', 2, pos['Safety Check'], {'jsCode': js('safety.js')}),
         node(p, 'Clear Table', 'dataTable', 1, pos['Clear Table'], {
@@ -398,13 +430,14 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
-                  '0. In the Data Table `datatable` add these 10 columns, all type *string*: `Status`, `Upload_Date`, '
-                  '`Tracker_TAT`, `Uploaded_By`, `Pending_Category`, `Pending_Reason`, `Sales_Org`, `SAP_Customer_Code`, '
-                  '`Profit_Center`, `Product_Line`\n'
+                  '0. In the Data Table `datatable` add these 11 columns, all type *string*: `Status`, `Upload_Date`, '
+                  '`Tracker_TAT`, `Uploaded_By`, `Pending_Category`, `Pending_Reason`, `Standard_Category`, `Sales_Org`, '
+                  '`SAP_Customer_Code`, `Profit_Center`, `Product_Line`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
-                  '3. From *Report copy* copy **GEV LLM Model** → paste it here **twice** → connect one to the *Model* '
-                  'dot under **AI Commentary** and the other under **AI Chart Designer** (temperature 0.1–0.2)\n'
+                  '3. From *Report copy* copy **GEV LLM Model** → paste it here **three times** → connect one to the *Model* '
+                  'dot under each AI step: **AI Blocker Classifier**, **AI Commentary**, **AI Chart Designer** '
+                  '(temperature 0 for the classifier, 0.1–0.2 for the others)\n'
                   '4. From *Report copy* copy **Send an Email** → paste here → put it in place of the grey box '
                   '(connect Add AI Charts → Send an Email → Done Page, delete the grey box) and fill in: '
                   'To `{{ $json.to }}` · Subject `{{ $json.subject }}` · Email Format `HTML` · '
