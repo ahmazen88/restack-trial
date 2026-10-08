@@ -1,10 +1,10 @@
 {
-  "name": "Production Tracker – Upload, Reports & Dashboard",
+  "name": "Production Tracker – Upload, Reports & AI Commentary",
   "nodes": [
     {
       "parameters": {
         "formTitle": "Upload Production Tracker",
-        "formDescription": "Download the latest tracker from SharePoint (File → Create a Copy → Download a Copy) and upload it here. The Production Intelligence Report refreshes automatically.",
+        "formDescription": "Download the latest tracker (File → Create a Copy → Download a Copy) and upload it here. The data is saved and an overview report is emailed to you.",
         "formFields": {
           "values": [
             {
@@ -16,10 +16,16 @@
             }
           ]
         },
-        "responseMode": "lastNode",
+        "responseMode": "onReceived",
         "options": {
           "path": "production-tracker-upload",
-          "buttonLabel": "Upload & refresh report"
+          "buttonLabel": "Upload",
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Upload received ✔ The data is being saved now – the report with the upload results arrives by email in a few minutes. You can close this page."
+            }
+          }
         }
       },
       "id": "492e8955-2d96-5440-94b3-d916eb96bde1",
@@ -62,6 +68,112 @@
     {
       "parameters": {
         "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "anyCondition",
+        "filters": {},
+        "returnAll": true
+      },
+      "id": "e2a0558e-ac8b-5883-82d3-842c8117a977",
+      "name": "Get Table Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare with Table — keep only invoices that are new or changed, so saving takes seconds, not minutes.\n// If the table is empty, or more than BULK_LIMIT rows changed (e.g. the very first upload), ALL rows are passed on\n// for a fast \"clear table + bulk add\" instead. Keep BULK_LIMIT the same as in the \"Few changes?\" step.\nconst BULK_LIMIT = 300;\n\nconst cleaned = $('Clean Rows').all().map((i) => i.json);\nconst columns = Object.keys(cleaned[0] || {});\nconst existing = new Map();\nfor (const { json: r } of $input.all()) {\n  if (r.Invoice === undefined || r.Invoice === null || r.Invoice === '') continue; // empty table gives one empty item\n  existing.set(String(r.Invoice), r);\n}\nconst same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();\nconst changed = cleaned.filter((r) => {\n  const before = existing.get(String(r.Invoice));\n  return !before || columns.some((c) => !same(r[c], before[c]));\n});\nconst rows = !existing.size || changed.length > BULK_LIMIT ? cleaned : changed;\nreturn rows.map((json) => ({ json }));\n"
+      },
+      "id": "f38dcdcf-abac-5ced-9066-8223fccc39f4",
+      "name": "Compare with Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "70f5e491-e3fb-502c-a008-e9b487344aa7",
+              "leftValue": "={{ $json.Invoice !== undefined && $json.Invoice !== null && $json.Invoice !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ce03e473-424b-507e-9a0b-9ef58d67f876",
+      "name": "Anything to save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d0d17476-1b75-54af-9952-991ed186bf73",
+              "leftValue": "={{ $('Get Table Rows').all().some(i => i.json.Invoice !== undefined && i.json.Invoice !== null) && $('Compare with Table').all().length <= 300 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a89d8b5-2854-5705-a57c-233c8e258494",
+      "name": "Few changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
@@ -86,32 +198,94 @@
         },
         "options": {}
       },
-      "id": "2871032e-3904-5160-a2f6-1948478d96f9",
-      "name": "Upsert into Data Table",
+      "id": "f3a472c8-25a1-5519-9341-5e5e07f1446d",
+      "name": "Save Changed Rows",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
       "position": [
-        660,
+        1540,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "clear",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "a5424edd-1032-5bb1-a4e6-6763d39e2822",
+      "name": "Clear Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore Rows — after the table is cleared, pass all rows on to the bulk add\nreturn $('Compare with Table').all().map((i) => ({ json: i.json }));\n"
+      },
+      "id": "dcf9a4c9-a934-51a9-92f1-4a74d5cc0408",
+      "name": "Restore Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
         0
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!id) { blank++; continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\nconst parts = [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`];\nif (blank) parts.push(`${fmt(blank)} blank rows skipped`);\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\nif (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "optimizeBulk": true
+        }
+      },
+      "id": "5a4bde2c-f0da-519c-85ad-6103b2648495",
+      "name": "Bulk Add All Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!id) { blank++; continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\n// how many rows were actually written (only present when the \"Compare with Table\" step is used)\nconst written = (() => {\n  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }\n  catch (e) { return null; }\n})();\nconst parts = written === null\n  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]\n  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];\nif (blank) parts.push(`${fmt(blank)} blank rows skipped`);\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\nif (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
       },
       "id": "68c75f70-e1b0-5fe2-8e96-f185ed00d624",
       "name": "Summarise Upload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        0
-      ]
+        2200,
+        -100
+      ],
+      "executeOnce": true
     },
     {
       "parameters": {
         "formTitle": "Production Tracker – Request a Report",
-        "formDescription": "Choose the period and filters. The report is emailed to you, with an interactive dashboard attached. Leave fields empty for everything.",
+        "formDescription": "Choose the period and filters. The report is emailed to you with an interactive dashboard attached. Leave fields empty for everything.",
         "formFields": {
           "values": [
             {
@@ -158,10 +332,16 @@
             }
           ]
         },
-        "responseMode": "lastNode",
+        "responseMode": "onReceived",
         "options": {
           "path": "production-tracker-report",
-          "buttonLabel": "Generate report"
+          "buttonLabel": "Generate report",
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Request received ✔ Your report arrives by email in a few minutes. You can close this page."
+            }
+          }
         }
       },
       "id": "67c061c4-7795-56e2-bc6d-42577da95474",
@@ -170,7 +350,7 @@
       "typeVersion": 2.2,
       "position": [
         0,
-        260
+        420
       ]
     },
     {
@@ -190,7 +370,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        460
+        600
       ]
     },
     {
@@ -210,7 +390,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        640
+        780
       ]
     },
     {
@@ -231,8 +411,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
       "position": [
-        1160,
-        300
+        2420,
+        420
       ],
       "executeOnce": true,
       "alwaysOutputData": true
@@ -246,21 +426,62 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1380,
-        300
+        2640,
+        420
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Build Report — incoming volume, watchlist, company code & customer split, weekly/monthly trends,\n// workload heatmap and forecast. Fixed rules only: the same data and choices always give the same report.\n// The email shows the report; the attached dashboard.html lets you change period / company code / customer.\nconst RECIPIENTS = []; // default recipients, e.g. ['name.surname@company.com']; the request form can override\nconst RULES = {\n  spike: 1.5, // flag when a customer's invoices are 50%+ above their usual (average of previous 3 periods)\n  fall: 0.5, // flag when an active customer falls 50%+ below their usual\n  share: 0.2, // flag when one customer is over 20% of the period's value\n  slowDays: 3, // flag when average Received → Allocated takes more than 3 days\n  minInvoices: 3, // ignore customers with fewer invoices than this for spike / fall / turnaround / portal flags\n};\n\n// ---------- shared helpers (also embedded in the dashboard) ----------\nfunction analyse(all, opts, RULES) {\n  const DAY = 86400000;\n  const ms = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));\n  const iso = (t) => new Date(t).toISOString().slice(0, 10);\n  const addDays = (d, n) => iso(ms(d) + n * DAY);\n  const weekStart = (d) => addDays(d, -((new Date(ms(d)).getUTCDay() + 6) % 7)); // Monday\n  const monthStart = (d) => d.slice(0, 8) + '01';\n  const monthEnd = (d) => iso(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0));\n  const addMonths = (d, n) => iso(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1 + n, 1));\n  const num = (v) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, '')); return Number.isFinite(n) ? n : 0; };\n  const sum = (a, f) => a.reduce((s, r) => s + f(r), 0);\n\n  const dates = all.map((r) => r.d).filter(Boolean).sort();\n  if (!dates.length) return { empty: true };\n  const first = dates[0];\n  const latest = dates[dates.length - 1];\n\n  // ----- period -----\n  let from, to, label;\n  const type = opts.type || 'Overview';\n  if (type === 'Weekly') { from = weekStart(latest); to = addDays(from, 6); label = `Week of ${from}`; }\n  else if (type === 'Custom period') {\n    from = opts.from || first; to = opts.to || latest; label = `${from} to ${to}`;\n  } else { from = monthStart(latest); to = monthEnd(latest); label = type === 'Monthly' ? from.slice(0, 7) : `${from.slice(0, 7)} (month to date)`; }\n  if (to < from) [from, to] = [to, from];\n  const len = Math.round((ms(to) - ms(from)) / DAY) + 1;\n  const shift = (k) => type === 'Weekly' || type === 'Custom period'\n    ? [addDays(from, -len * k), addDays(from, -len * (k - 1) - 1)]\n    : [addMonths(from, -k), monthEnd(addMonths(from, -k))];\n\n  const cc = String(opts.companyCode || '').trim().toUpperCase();\n  const cust = String(opts.customer || '').trim().toUpperCase();\n  const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust)));\n  const inRange = (a, b) => scoped.filter((r) => r.d >= a && r.d <= b);\n  const cur = inRange(from, to);\n  const [pf, pt] = shift(1);\n  const prev = inRange(pf, pt);\n  // baseline = previous 3 periods, but only those fully covered by data (so the start of the data isn't a fake \"spike\")\n  const base = [1, 2, 3].map((k) => shift(k)).filter(([a]) => a >= first).map(([a, b]) => inRange(a, b));\n\n  const tat = (r) => (r.rd && r.ad ? Math.max(0, Math.round((ms(r.ad) - ms(r.rd)) / DAY)) : null);\n  const avgTat = (rows) => { const t = rows.map(tat).filter((x) => x !== null); return t.length ? sum(t, (x) => x) / t.length : null; };\n  const channel = (r) => (!r.p ? 'Not recorded' : r.p.includes('@') ? 'Email' : `Portal: ${r.p.split(/[,;]/)[0].trim()}`);\n  const groupBy = (rows, key) => {\n    const m = new Map();\n    for (const r of rows) { const k = key(r); if (!k) continue; const g = m.get(k) || { key: k, n: 0, v: 0, rows: [] }; g.n++; g.v += num(r.v); g.rows.push(r); m.set(k, g); }\n    return [...m.values()];\n  };\n  const byValue = (a, b) => b.v - a.v || String(a.key).localeCompare(String(b.key));\n  const change = (now, before) => (before ? (now - before) / before : null);\n\n  const total = { n: cur.length, v: sum(cur, (r) => num(r.v)) };\n  const prevTotal = { n: prev.length, v: sum(prev, (r) => num(r.v)) };\n\n  // ----- watchlist -----\n  const firstSeen = new Map();\n  for (const r of all) if (r.d && (!firstSeen.has(r.c) || r.d < firstSeen.get(r.c))) firstSeen.set(r.c, r.d);\n  const watch = [];\n  for (const g of groupBy(cur, (r) => r.c).sort(byValue)) {\n    const usual = base.length ? sum(base, (rows) => rows.filter((r) => r.c === g.key).length) / base.length : 0;\n    const reasons = [];\n    if (firstSeen.get(g.key) >= from) reasons.push(['New customer', `first invoice ${firstSeen.get(g.key)}`]);\n    else if (g.n >= RULES.minInvoices && usual > 0 && g.n >= usual * RULES.spike) reasons.push(['Volume spike', `${g.n} invoices vs usual ${usual.toFixed(1)}`]);\n    if (total.v && g.v / total.v > RULES.share) reasons.push(['High value share', `${(100 * g.v / total.v).toFixed(1)}% of value`]);\n    const t = avgTat(g.rows);\n    if (g.n >= RULES.minInvoices && t !== null && t > RULES.slowDays) reasons.push(['Slow turnaround', `${t.toFixed(1)} days received → allocated`]);\n    const portal = g.rows.filter((r) => channel(r).startsWith('Portal'));\n    if (portal.length >= RULES.minInvoices) reasons.push(['Portal submissions', `${portal.length} via ${channel(portal[0]).slice(8)}`]);\n    const missing = g.rows.filter((r) => !num(r.v)).length;\n    if (missing) reasons.push(['Data issue', `${missing} without a value`]);\n    if (reasons.length) watch.push({ customer: g.key, n: g.n, v: g.v, reasons });\n  }\n  const curCustomers = new Set(cur.map((r) => r.c));\n  const usualAll = new Map();\n  for (const rows of base) for (const r of rows) usualAll.set(r.c, (usualAll.get(r.c) || 0) + 1 / base.length);\n  for (const [c, usual] of [...usualAll].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {\n    const n = cur.filter((r) => r.c === c).length;\n    if (usual >= RULES.minInvoices && n <= usual * RULES.fall) {\n      const item = { customer: c, n, v: sum(cur.filter((r) => r.c === c), (r) => num(r.v)), reasons: [[n ? 'Sharp fall' : 'Gone quiet', `${n} invoices vs usual ${usual.toFixed(1)}`]] };\n      if (curCustomers.has(c)) { const w = watch.find((x) => x.customer === c); if (w) w.reasons.push(item.reasons[0]); else watch.push(item); } else watch.push(item);\n    }\n  }\n\n  // ----- trends -----\n  const monthsBack = [];\n  for (let k = 11; k >= 0; k--) monthsBack.push(addMonths(monthStart(to), -k));\n  const monthly = monthsBack.map((m) => { const rows = scoped.filter((r) => r.d >= m && r.d <= monthEnd(m)); return { key: m.slice(0, 7), n: rows.length, v: sum(rows, (r) => num(r.v)) }; })\n    .filter((m, i, a) => m.n || a.slice(0, i).some((x) => x.n));\n  const weeksBack = [];\n  for (let k = 7; k >= 0; k--) weeksBack.push(addDays(weekStart(to), -7 * k));\n  const weekly = weeksBack.map((w) => { const rows = scoped.filter((r) => r.d >= w && r.d <= addDays(w, 6)); return { key: w, n: rows.length, v: sum(rows, (r) => num(r.v)) }; });\n  const heat = monthsBack.slice(-6).map((m) => {\n    const cells = Array.from({ length: 31 }, (_, i) => scoped.filter((r) => r.d.slice(0, 7) === m.slice(0, 7) && +r.d.slice(8, 10) === i + 1).length);\n    return { key: m.slice(0, 7), cells };\n  });\n  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];\n  const last12w = scoped.filter((r) => r.d > addDays(to, -84) && r.d <= to);\n  const weekday = wd.map((name, i) => ({ key: name, n: last12w.filter((r) => (new Date(ms(r.d)).getUTCDay() + 6) % 7 === i).length / 12 }));\n\n  // ----- forecast (averages of recent complete periods; range = lowest–highest of those periods) -----\n  const doneWeeks = [];\n  for (let k = 8; k >= 1; k--) { const w = addDays(weekStart(latest), -7 * k); const rows = scoped.filter((r) => r.d >= w && r.d <= addDays(w, 6)); doneWeeks.push({ n: rows.length, v: sum(rows, (r) => num(r.v)) }); }\n  const doneMonths = [];\n  for (let k = 3; k >= 1; k--) { const m = addMonths(monthStart(latest), -k); const rows = scoped.filter((r) => r.d >= m && r.d <= monthEnd(m)); doneMonths.push({ n: rows.length, v: sum(rows, (r) => num(r.v)) }); }\n  const stat = (a, f) => ({ avg: a.length ? sum(a, f) / a.length : 0, lo: a.length ? Math.min(...a.map(f)) : 0, hi: a.length ? Math.max(...a.map(f)) : 0 });\n  const forecast = {\n    weekN: stat(doneWeeks, (x) => x.n), weekV: stat(doneWeeks, (x) => x.v),\n    monthN: stat(doneMonths, (x) => x.n), monthV: stat(doneMonths, (x) => x.v),\n    nextWeeks: [1, 2, 3, 4].map((k) => addDays(weekStart(latest), 7 * k)),\n    nextMonth: addMonths(monthStart(latest), 1).slice(0, 7),\n  };\n\n  // ----- splits -----\n  const companies = groupBy(cur, (r) => r.cc || 'UNKNOWN').sort(byValue).map((g) => ({\n    key: g.key, n: g.n, v: g.v, prevN: prev.filter((r) => (r.cc || 'UNKNOWN') === g.key).length,\n    top: groupBy(g.rows, (r) => r.c).sort(byValue).slice(0, 5),\n  }));\n  const customers = groupBy(cur, (r) => r.c).sort(byValue).slice(0, 15).map((g) => ({\n    key: g.key, n: g.n, v: g.v, tat: avgTat(g.rows), prevN: prev.filter((r) => r.c === g.key).length,\n    trend: monthsBack.slice(-6).map((m) => scoped.filter((r) => r.c === g.key && r.d.slice(0, 7) === m.slice(0, 7)).length),\n  }));\n  const channels = groupBy(cur, channel).sort((a, b) => b.n - a.n);\n  const managers = groupBy(cur, (r) => r.pm || 'Not recorded').sort((a, b) => b.n - a.n);\n  const quality = {\n    noValue: cur.filter((r) => !num(r.v)).length,\n    repeated: groupBy(cur, (r) => String(r.i)).filter((g) => g.n > 1).map((g) => g.key),\n    allocatedBeforeReceived: cur.filter((r) => r.rd && r.ad && r.ad < r.rd).length,\n  };\n\n  return {\n    label, type, from, to, first, latest, cc, cust, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,\n    nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),\n    watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,\n  };\n}\n\nfunction render(a) {\n  if (a.empty) return '<p>No data for this selection.</p>';\n  const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));\n  const money = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n  const int = (n) => Math.round(n).toLocaleString('en-US');\n  const pct = (x) => (x === null || x === undefined ? '–' : `${x >= 0 ? '▲' : '▼'} ${Math.abs(100 * x).toFixed(1)}%`);\n  const share = (p, w) => (w ? `${(100 * p / w).toFixed(1)}%` : '–');\n  const C = { ink: '#111827', mute: '#6b7280', line: '#e5e7eb', head: '#1f3a5f', bar: '#2b6cb0', warn: '#b45309', bad: '#b91c1c', good: '#047857' };\n  const th = (t, right) => `<th style=\"text-align:${right ? 'right' : 'left'};padding:6px 10px;background:${C.head};color:#fff;font-weight:600;font-size:12px\">${esc(t)}</th>`;\n  const td = (t, right, color) => `<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};font-size:12px;${right ? 'text-align:right;' : ''}${color ? `color:${color};` : ''}\">${t}</td>`;\n  const bar = (part, whole, color = C.bar) => `<table cellpadding=\"0\" cellspacing=\"0\" width=\"${Math.max(2, Math.round(100 * part / (whole || 1)))}%\"><tr><td bgcolor=\"${color}\" height=\"10\" style=\"font-size:0;line-height:0\">&nbsp;</td></tr></table>`;\n  const table = (heads, rows) => `<table cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:collapse;width:100%;max-width:860px\">` +\n    `<tr>${heads.map((h, i) => th(h, i > 0 && h !== '')).join('')}</tr>${rows.join('') || `<tr>${td('No data')}</tr>`}</table>`;\n  const h = (t, sub) => `<h3 style=\"margin:26px 0 4px;color:${C.head};font-size:16px\">${esc(t)}</h3>${sub ? `<div style=\"color:${C.mute};font-size:12px;margin-bottom:8px\">${esc(sub)}</div>` : ''}`;\n  const kpi = (label, value, note) => `<td style=\"padding:10px 16px;border:1px solid ${C.line};vertical-align:top\"><div style=\"font-size:11px;color:${C.mute}\">${esc(label)}</div>` +\n    `<div style=\"font-size:20px;font-weight:700;color:${C.ink}\">${esc(value)}</div><div style=\"font-size:11px;color:${C.mute}\">${esc(note || '')}</div></td>`;\n  const changeColor = (x) => (x === null ? C.mute : x >= 0 ? C.good : C.bad);\n  const flagColor = { 'Volume spike': C.warn, 'Sharp fall': C.bad, 'Gone quiet': C.bad, 'New customer': C.bar, 'High value share': C.warn, 'Slow turnaround': C.bad, 'Portal submissions': C.head, 'Data issue': C.bad };\n\n  const maxM = Math.max(1, ...a.monthly.map((m) => m.n));\n  const maxW = Math.max(1, ...a.weekly.map((w) => w.n));\n  const maxH = Math.max(1, ...a.heat.flatMap((r) => r.cells));\n  const hex2 = (x) => Math.round(x).toString(16).padStart(2, '0');\n  const shade = (n) => { if (!n) return '#f9fafb'; const t = n / maxH; const mix = (x, y) => x + (y - x) * t; return `#${hex2(mix(219, 30))}${hex2(mix(234, 64))}${hex2(mix(254, 175))}`; };\n  const maxWd = Math.max(1, ...a.weekday.map((w) => w.n));\n  const f = a.forecast;\n  const scope = [a.cc && `company code ${a.cc}`, a.cust && `customer contains \"${a.cust}\"`].filter(Boolean).join(', ') || 'all company codes and customers';\n\n  return `<div style=\"font-family:Segoe UI,Arial,sans-serif;color:${C.ink};max-width:900px\">\n<h2 style=\"margin:0;color:${C.head}\">Production Tracker – ${esc(a.type)} report</h2>\n<div style=\"color:${C.mute};font-size:12px\">${esc(a.label)} · ${esc(a.from)} to ${esc(a.to)} · ${esc(scope)} · data from ${esc(a.first)} to ${esc(a.latest)}</div>\n<table cellspacing=\"0\" style=\"border-collapse:collapse;margin:14px 0\"><tr>\n${kpi('Incoming invoices', int(a.total.n), `${pct(a.nChange)} vs previous period`)}${kpi('Value', money(a.total.v), `${pct(a.vChange)} vs previous period`)}\n${kpi('Avg received → allocated', a.avgTat === null ? '–' : `${a.avgTat.toFixed(1)} days`, '')}${kpi('Next week (forecast)', int(f.weekN.avg), `range ${int(f.weekN.lo)}–${int(f.weekN.hi)}`)}\n</tr></table>\n${h(`Customers to look out for (${a.watch.length})`, `Fixed rules: spike / fall vs the previous ${a.baseN} period(s) with full data, value share, turnaround, portal use, data issues`)}\n${table(['Customer', 'Invoices', 'Value', 'Why'], a.watch.slice(0, 20).map((w) => `<tr>${td(esc(w.customer))}${td(int(w.n), 1)}${td(money(w.v), 1)}${td(w.reasons.map(([k, d]) => `<b style=\"color:${flagColor[k] || C.ink}\">${esc(k)}</b> – ${esc(d)}`).join('<br>'))}</tr>`))}\n${h('Incoming volume by month', 'Invoices received per month, with change from the month before')}\n${table(['Month', 'Invoices', 'Value', 'Change', ''], a.monthly.map((m, i) => { const c = i ? (a.monthly[i - 1].n ? (m.n - a.monthly[i - 1].n) / a.monthly[i - 1].n : null) : null; return `<tr>${td(m.key)}${td(int(m.n), 1)}${td(money(m.v), 1)}${td(pct(c), 1, changeColor(c))}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:35%\">${bar(m.n, maxM)}</td></tr>`; }))}\n${h('Weekly details (last 8 weeks)', 'Weeks start on Monday')}\n${table(['Week starting', 'Invoices', 'Value', ''], a.weekly.map((w) => `<tr>${td(w.key)}${td(int(w.n), 1)}${td(money(w.v), 1)}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:40%\">${bar(w.n, maxW)}</td></tr>`))}\n${h('Workload heatmap – day of month', 'Darker = more invoices received that day (last 6 months)')}\n<table cellspacing=\"1\" cellpadding=\"0\" style=\"font-size:10px\"><tr><td style=\"padding:2px 6px\"></td>${Array.from({ length: 31 }, (_, i) => `<td style=\"text-align:center;color:${C.mute};width:20px\">${i + 1}</td>`).join('')}</tr>\n${a.heat.map((r) => `<tr><td style=\"padding:2px 6px;color:${C.mute};white-space:nowrap\">${r.key}</td>${r.cells.map((n) => `<td bgcolor=\"${shade(n)}\" style=\"text-align:center;height:20px;color:${n / maxH > 0.55 ? '#fff' : C.ink}\">${n || ''}</td>`).join('')}</tr>`).join('')}</table>\n${h('Busiest weekdays', 'Average invoices received per weekday (last 12 weeks)')}\n${table(['Weekday', 'Avg invoices', ''], a.weekday.map((w) => `<tr>${td(w.key)}${td(w.n.toFixed(1), 1)}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:50%\">${bar(w.n, maxWd)}</td></tr>`))}\n${h('Forecast', 'Average of recent complete periods; range = lowest–highest of those periods')}\n${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [\n    ...f.nextWeeks.map((w) => `<tr>${td(`Week of ${w}`)}${td(int(f.weekN.avg), 1)}${td(`${int(f.weekN.lo)}–${int(f.weekN.hi)}`, 1)}${td(money(f.weekV.avg), 1)}</tr>`),\n    `<tr>${td(`<b>${f.nextMonth}</b>`)}${td(`<b>${int(f.monthN.avg)}</b>`, 1)}${td(`${int(f.monthN.lo)}–${int(f.monthN.hi)}`, 1)}${td(`<b>${money(f.monthV.avg)}</b>`, 1)}</tr>`])}\n${h('Company code split', 'With the top customers of each company code')}\n${table(['Company code', 'Invoices', 'Value', 'Share', 'vs previous'], a.companies.map((c) => { const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null; return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}</tr>` +\n      c.top.map((t) => `<tr>${td(`<span style=\"color:${C.mute}\">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}</tr>`).join(''); }))}\n${h('Customer details (top 15 by value)', 'Trend = invoices per month, last 6 months')}\n${table(['Customer', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}\n${h('Channels & project managers')}\n${table(['Channel', 'Invoices', 'Share'], a.channels.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(share(c.n, a.total.n), 1)}</tr>`))}\n<div style=\"height:10px\"></div>\n${table(['Project manager', 'Invoices', 'Value'], a.managers.map((m) => `<tr>${td(esc(m.key))}${td(int(m.n), 1)}${td(money(m.v), 1)}</tr>`))}\n${h('Data quality')}\n<ul style=\"font-size:12px;margin:0;padding-left:18px\">\n<li>${int(a.quality.noValue)} invoices without a value</li>\n<li>${int(a.quality.allocatedBeforeReceived)} allocated before received</li>\n<li>${a.quality.repeated.length ? `${a.quality.repeated.length} invoice numbers appear more than once: ${esc(a.quality.repeated.slice(0, 10).join(', '))}${a.quality.repeated.length > 10 ? ' …' : ''}` : 'No repeated invoice numbers'}</li></ul>\n<p style=\"color:#9ca3af;font-size:11px;margin-top:22px\">Generated by n8n from the Production Tracker data table. Workload date = Received_Date (falls back to Allocated, then Invoice date).</p>\n</div>`;\n}\n\n// ---------- main ----------\nconst settings = $('Report Settings').first().json;\nconst seen = new Map(); // one row per invoice (last row wins)\nfor (const { json: r } of $('Get All Rows').all()) {\n  const d = r.Received_Date || r.Allocated_Date || r.Invoice_Date || '';\n  seen.set(String(r.Invoice ?? r.id), {\n    i: r.Invoice, d: String(d).slice(0, 10), rd: String(r.Received_Date || '').slice(0, 10), ad: String(r.Allocated_Date || '').slice(0, 10),\n    c: String(r.Customer || 'UNKNOWN CUSTOMER').trim().toUpperCase(), cc: String(r.Company_Code || '').trim().toUpperCase(),\n    pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,\n  });\n}\nconst rows = [...seen.values()];\nconst a = analyse(rows, settings, RULES);\nconst html = render(a);\n\nconst recipients = String(settings.sendTo || '').trim() || RECIPIENTS.join(', ');\nif (!recipients) throw new Error('Add at least one email address to RECIPIENTS at the top of \"Build Report\".');\n\nconst safeJson = (x) => JSON.stringify(x).replace(/</g, '\\\\u003c');\nconst companyCodes = [...new Set(rows.map((r) => r.cc).filter(Boolean))].sort();\nconst dashboard = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Production Tracker Dashboard</title></head><body style=\"margin:0;padding:18px;background:#fff\">\n<div style=\"font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#f3f4f6;padding:12px;border-radius:6px;margin-bottom:12px;max-width:900px\">\n<b>Choose:</b> Report <select id=\"t\"><option>Overview</option><option>Weekly</option><option>Monthly</option><option>Custom period</option></select>\nFrom <input id=\"f\" type=\"date\"> To <input id=\"o\" type=\"date\">\nCompany code <select id=\"cc\"><option value=\"\">All</option>${companyCodes.map((c) => `<option>${c}</option>`).join('')}</select>\nCustomer contains <input id=\"cu\" size=\"18\"> <button id=\"go\">Show</button></div>\n<div id=\"out\"></div>\n<script>\nconst ROWS = ${safeJson(rows)};\nconst RULES = ${safeJson(RULES)};\n${analyse.toString()}\n${render.toString()}\nconst $id = (x) => document.getElementById(x);\nfunction show() {\n  const opts = { type: $id('t').value, from: $id('f').value, to: $id('o').value, companyCode: $id('cc').value, customer: $id('cu').value };\n  if ((opts.from || opts.to) && opts.type !== 'Custom period') { opts.type = 'Custom period'; $id('t').value = opts.type; }\n  $id('out').innerHTML = render(analyse(ROWS, opts, RULES));\n}\nconst start = ${safeJson({ type: settings.type || 'Overview', from: settings.from || '', to: settings.to || '', companyCode: settings.companyCode || '', customer: settings.customer || '' })};\n$id('t').value = start.type; $id('f').value = start.from; $id('o').value = start.to; $id('cc').value = start.companyCode.toUpperCase(); $id('cu').value = start.customer;\n$id('go').onclick = show; show();\n</script></body></html>`;\n\nconst quality = (() => { try { return $('Summarise Upload').first().json.message; } catch (e) { return ''; } })();\nconst subject = `Production Tracker ${a.type || ''} report – ${a.label || ''} – ${Math.round(a.total?.n ?? 0)} invoices, ${a.watch?.length ?? 0} customers to watch`;\nreturn [{\n  json: {\n    to: recipients,\n    subject,\n    html: html + '<p style=\"font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280\">The attached dashboard.html lets you change the period, company code and customer. Open it in your browser.</p>',\n    doneMessage: (quality ? quality + '. ' : '') + `Report \"${a.label || ''}\" sent to ${recipients}.`,\n  },\n  binary: {\n    dashboard: { data: Buffer.from(dashboard, 'utf8').toString('base64'), mimeType: 'text/html', fileName: 'dashboard.html', fileExtension: 'html' },\n  },\n}];\n"
+        "jsCode": "// Build Report — incoming volume, watchlist, company code & customer split, weekly/monthly trends,\n// workload heatmap and forecast. Fixed rules only: the same data and choices always give the same report.\n// The email shows the report; the attached dashboard.html lets you change period / company code / customer.\nconst RECIPIENTS = []; // default recipients, e.g. ['name.surname@company.com']; the request form can override\nconst RULES = {\n  spike: 1.5, // flag when a customer's invoices are 50%+ above their usual (average of previous 3 periods)\n  fall: 0.5, // flag when an active customer falls 50%+ below their usual\n  share: 0.2, // flag when one customer is over 20% of the period's value\n  slowDays: 3, // flag when average Received → Allocated takes more than 3 days\n  minInvoices: 3, // ignore customers with fewer invoices than this for spike / fall / turnaround / portal flags\n};\n\n// ---------- shared helpers (also embedded in the dashboard) ----------\nfunction analyse(all, opts, RULES) {\n  const DAY = 86400000;\n  const ms = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));\n  const iso = (t) => new Date(t).toISOString().slice(0, 10);\n  const addDays = (d, n) => iso(ms(d) + n * DAY);\n  const weekStart = (d) => addDays(d, -((new Date(ms(d)).getUTCDay() + 6) % 7)); // Monday\n  const monthStart = (d) => d.slice(0, 8) + '01';\n  const monthEnd = (d) => iso(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0));\n  const addMonths = (d, n) => iso(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1 + n, 1));\n  const num = (v) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, '')); return Number.isFinite(n) ? n : 0; };\n  const sum = (a, f) => a.reduce((s, r) => s + f(r), 0);\n\n  const dates = all.map((r) => r.d).filter(Boolean).sort();\n  if (!dates.length) return { empty: true };\n  const first = dates[0];\n  const latest = dates[dates.length - 1];\n\n  // ----- period -----\n  let from, to, label;\n  const type = opts.type || 'Overview';\n  if (type === 'Weekly') { from = weekStart(latest); to = addDays(from, 6); label = `Week of ${from}`; }\n  else if (type === 'Custom period') {\n    from = opts.from || first; to = opts.to || latest; label = `${from} to ${to}`;\n  } else { from = monthStart(latest); to = monthEnd(latest); label = type === 'Monthly' ? from.slice(0, 7) : `${from.slice(0, 7)} (month to date)`; }\n  if (to < from) [from, to] = [to, from];\n  const len = Math.round((ms(to) - ms(from)) / DAY) + 1;\n  const shift = (k) => type === 'Weekly' || type === 'Custom period'\n    ? [addDays(from, -len * k), addDays(from, -len * (k - 1) - 1)]\n    : [addMonths(from, -k), monthEnd(addMonths(from, -k))];\n\n  const cc = String(opts.companyCode || '').trim().toUpperCase();\n  const cust = String(opts.customer || '').trim().toUpperCase();\n  const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust)));\n  const inRange = (a, b) => scoped.filter((r) => r.d >= a && r.d <= b);\n  const cur = inRange(from, to);\n  const [pf, pt] = shift(1);\n  const prev = inRange(pf, pt);\n  // baseline = previous 3 periods, but only those fully covered by data (so the start of the data isn't a fake \"spike\")\n  const base = [1, 2, 3].map((k) => shift(k)).filter(([a]) => a >= first).map(([a, b]) => inRange(a, b));\n\n  const tat = (r) => (r.rd && r.ad ? Math.max(0, Math.round((ms(r.ad) - ms(r.rd)) / DAY)) : null);\n  const avgTat = (rows) => { const t = rows.map(tat).filter((x) => x !== null); return t.length ? sum(t, (x) => x) / t.length : null; };\n  const channel = (r) => (!r.p ? 'Not recorded' : r.p.includes('@') ? 'Email' : `Portal: ${r.p.split(/[,;]/)[0].trim()}`);\n  const groupBy = (rows, key) => {\n    const m = new Map();\n    for (const r of rows) { const k = key(r); if (!k) continue; const g = m.get(k) || { key: k, n: 0, v: 0, rows: [] }; g.n++; g.v += num(r.v); g.rows.push(r); m.set(k, g); }\n    return [...m.values()];\n  };\n  const byValue = (a, b) => b.v - a.v || String(a.key).localeCompare(String(b.key));\n  const change = (now, before) => (before ? (now - before) / before : null);\n\n  const total = { n: cur.length, v: sum(cur, (r) => num(r.v)) };\n  const prevTotal = { n: prev.length, v: sum(prev, (r) => num(r.v)) };\n\n  // ----- watchlist -----\n  const firstSeen = new Map();\n  for (const r of all) if (r.d && (!firstSeen.has(r.c) || r.d < firstSeen.get(r.c))) firstSeen.set(r.c, r.d);\n  const watch = [];\n  for (const g of groupBy(cur, (r) => r.c).sort(byValue)) {\n    const usual = base.length ? sum(base, (rows) => rows.filter((r) => r.c === g.key).length) / base.length : 0;\n    const reasons = [];\n    if (firstSeen.get(g.key) >= from) reasons.push(['New customer', `first invoice ${firstSeen.get(g.key)}`]);\n    else if (g.n >= RULES.minInvoices && usual > 0 && g.n >= usual * RULES.spike) reasons.push(['Volume spike', `${g.n} invoices vs usual ${usual.toFixed(1)}`]);\n    if (total.v && g.v / total.v > RULES.share) reasons.push(['High value share', `${(100 * g.v / total.v).toFixed(1)}% of value`]);\n    const t = avgTat(g.rows);\n    if (g.n >= RULES.minInvoices && t !== null && t > RULES.slowDays) reasons.push(['Slow turnaround', `${t.toFixed(1)} days received → allocated`]);\n    const portal = g.rows.filter((r) => channel(r).startsWith('Portal'));\n    if (portal.length >= RULES.minInvoices) reasons.push(['Portal submissions', `${portal.length} via ${channel(portal[0]).slice(8)}`]);\n    const missing = g.rows.filter((r) => !num(r.v)).length;\n    if (missing) reasons.push(['Data issue', `${missing} without a value`]);\n    if (reasons.length) watch.push({ customer: g.key, n: g.n, v: g.v, reasons });\n  }\n  const curCustomers = new Set(cur.map((r) => r.c));\n  const usualAll = new Map();\n  for (const rows of base) for (const r of rows) usualAll.set(r.c, (usualAll.get(r.c) || 0) + 1 / base.length);\n  for (const [c, usual] of [...usualAll].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {\n    const n = cur.filter((r) => r.c === c).length;\n    if (usual >= RULES.minInvoices && n <= usual * RULES.fall) {\n      const item = { customer: c, n, v: sum(cur.filter((r) => r.c === c), (r) => num(r.v)), reasons: [[n ? 'Sharp fall' : 'Gone quiet', `${n} invoices vs usual ${usual.toFixed(1)}`]] };\n      if (curCustomers.has(c)) { const w = watch.find((x) => x.customer === c); if (w) w.reasons.push(item.reasons[0]); else watch.push(item); } else watch.push(item);\n    }\n  }\n\n  // ----- trends -----\n  const monthsBack = [];\n  for (let k = 11; k >= 0; k--) monthsBack.push(addMonths(monthStart(to), -k));\n  const monthly = monthsBack.map((m) => { const rows = scoped.filter((r) => r.d >= m && r.d <= monthEnd(m)); return { key: m.slice(0, 7), n: rows.length, v: sum(rows, (r) => num(r.v)) }; })\n    .filter((m, i, a) => m.n || a.slice(0, i).some((x) => x.n));\n  const weeksBack = [];\n  for (let k = 7; k >= 0; k--) weeksBack.push(addDays(weekStart(to), -7 * k));\n  const weekly = weeksBack.map((w) => { const rows = scoped.filter((r) => r.d >= w && r.d <= addDays(w, 6)); return { key: w, n: rows.length, v: sum(rows, (r) => num(r.v)) }; });\n  const heat = monthsBack.slice(-6).map((m) => {\n    const cells = Array.from({ length: 31 }, (_, i) => scoped.filter((r) => r.d.slice(0, 7) === m.slice(0, 7) && +r.d.slice(8, 10) === i + 1).length);\n    return { key: m.slice(0, 7), cells };\n  });\n  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];\n  const last12w = scoped.filter((r) => r.d > addDays(to, -84) && r.d <= to);\n  const weekday = wd.map((name, i) => ({ key: name, n: last12w.filter((r) => (new Date(ms(r.d)).getUTCDay() + 6) % 7 === i).length / 12 }));\n\n  // ----- forecast (averages of recent complete periods; range = lowest–highest of those periods) -----\n  const doneWeeks = [];\n  for (let k = 8; k >= 1; k--) { const w = addDays(weekStart(latest), -7 * k); const rows = scoped.filter((r) => r.d >= w && r.d <= addDays(w, 6)); doneWeeks.push({ n: rows.length, v: sum(rows, (r) => num(r.v)) }); }\n  const doneMonths = [];\n  for (let k = 3; k >= 1; k--) { const m = addMonths(monthStart(latest), -k); const rows = scoped.filter((r) => r.d >= m && r.d <= monthEnd(m)); doneMonths.push({ n: rows.length, v: sum(rows, (r) => num(r.v)) }); }\n  const stat = (a, f) => ({ avg: a.length ? sum(a, f) / a.length : 0, lo: a.length ? Math.min(...a.map(f)) : 0, hi: a.length ? Math.max(...a.map(f)) : 0 });\n  const forecast = {\n    weekN: stat(doneWeeks, (x) => x.n), weekV: stat(doneWeeks, (x) => x.v),\n    monthN: stat(doneMonths, (x) => x.n), monthV: stat(doneMonths, (x) => x.v),\n    nextWeeks: [1, 2, 3, 4].map((k) => addDays(weekStart(latest), 7 * k)),\n    nextMonth: addMonths(monthStart(latest), 1).slice(0, 7),\n  };\n\n  // ----- splits -----\n  const companies = groupBy(cur, (r) => r.cc || 'UNKNOWN').sort(byValue).map((g) => ({\n    key: g.key, n: g.n, v: g.v, prevN: prev.filter((r) => (r.cc || 'UNKNOWN') === g.key).length,\n    top: groupBy(g.rows, (r) => r.c).sort(byValue).slice(0, 5),\n  }));\n  const customers = groupBy(cur, (r) => r.c).sort(byValue).slice(0, 15).map((g) => ({\n    key: g.key, n: g.n, v: g.v, tat: avgTat(g.rows), prevN: prev.filter((r) => r.c === g.key).length,\n    trend: monthsBack.slice(-6).map((m) => scoped.filter((r) => r.c === g.key && r.d.slice(0, 7) === m.slice(0, 7)).length),\n  }));\n  const channels = groupBy(cur, channel).sort((a, b) => b.n - a.n);\n  const managers = groupBy(cur, (r) => r.pm || 'Not recorded').sort((a, b) => b.n - a.n);\n  const quality = {\n    noValue: cur.filter((r) => !num(r.v)).length,\n    repeated: groupBy(cur, (r) => String(r.i)).filter((g) => g.n > 1).map((g) => g.key),\n    allocatedBeforeReceived: cur.filter((r) => r.rd && r.ad && r.ad < r.rd).length,\n  };\n\n  return {\n    label, type, from, to, first, latest, cc, cust, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,\n    nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),\n    watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,\n  };\n}\n\nfunction render(a) {\n  if (a.empty) return '<p>No data for this selection.</p>';\n  const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));\n  const money = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\n  const int = (n) => Math.round(n).toLocaleString('en-US');\n  const pct = (x) => (x === null || x === undefined ? '–' : `${x >= 0 ? '▲' : '▼'} ${Math.abs(100 * x).toFixed(1)}%`);\n  const share = (p, w) => (w ? `${(100 * p / w).toFixed(1)}%` : '–');\n  const C = { ink: '#111827', mute: '#6b7280', line: '#e5e7eb', head: '#1f3a5f', bar: '#2b6cb0', warn: '#b45309', bad: '#b91c1c', good: '#047857' };\n  const th = (t, right) => `<th style=\"text-align:${right ? 'right' : 'left'};padding:6px 10px;background:${C.head};color:#fff;font-weight:600;font-size:12px\">${esc(t)}</th>`;\n  const td = (t, right, color) => `<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};font-size:12px;${right ? 'text-align:right;' : ''}${color ? `color:${color};` : ''}\">${t}</td>`;\n  const bar = (part, whole, color = C.bar) => `<table cellpadding=\"0\" cellspacing=\"0\" width=\"${Math.max(2, Math.round(100 * part / (whole || 1)))}%\"><tr><td bgcolor=\"${color}\" height=\"10\" style=\"font-size:0;line-height:0\">&nbsp;</td></tr></table>`;\n  const table = (heads, rows) => `<table cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:collapse;width:100%;max-width:860px\">` +\n    `<tr>${heads.map((h, i) => th(h, i > 0 && h !== '')).join('')}</tr>${rows.join('') || `<tr>${td('No data')}</tr>`}</table>`;\n  const h = (t, sub) => `<h3 style=\"margin:26px 0 4px;color:${C.head};font-size:16px\">${esc(t)}</h3>${sub ? `<div style=\"color:${C.mute};font-size:12px;margin-bottom:8px\">${esc(sub)}</div>` : ''}`;\n  const kpi = (label, value, note) => `<td style=\"padding:10px 16px;border:1px solid ${C.line};vertical-align:top\"><div style=\"font-size:11px;color:${C.mute}\">${esc(label)}</div>` +\n    `<div style=\"font-size:20px;font-weight:700;color:${C.ink}\">${esc(value)}</div><div style=\"font-size:11px;color:${C.mute}\">${esc(note || '')}</div></td>`;\n  const changeColor = (x) => (x === null ? C.mute : x >= 0 ? C.good : C.bad);\n  const flagColor = { 'Volume spike': C.warn, 'Sharp fall': C.bad, 'Gone quiet': C.bad, 'New customer': C.bar, 'High value share': C.warn, 'Slow turnaround': C.bad, 'Portal submissions': C.head, 'Data issue': C.bad };\n\n  const maxM = Math.max(1, ...a.monthly.map((m) => m.n));\n  const maxW = Math.max(1, ...a.weekly.map((w) => w.n));\n  const maxH = Math.max(1, ...a.heat.flatMap((r) => r.cells));\n  const hex2 = (x) => Math.round(x).toString(16).padStart(2, '0');\n  const shade = (n) => { if (!n) return '#f9fafb'; const t = n / maxH; const mix = (x, y) => x + (y - x) * t; return `#${hex2(mix(219, 30))}${hex2(mix(234, 64))}${hex2(mix(254, 175))}`; };\n  const maxWd = Math.max(1, ...a.weekday.map((w) => w.n));\n  const f = a.forecast;\n  const scope = [a.cc && `company code ${a.cc}`, a.cust && `customer contains \"${a.cust}\"`].filter(Boolean).join(', ') || 'all company codes and customers';\n\n  return `<div style=\"font-family:Segoe UI,Arial,sans-serif;color:${C.ink};max-width:900px\">\n<h2 style=\"margin:0;color:${C.head}\">Production Tracker – ${esc(a.type)} report</h2>\n<div style=\"color:${C.mute};font-size:12px\">${esc(a.label)} · ${esc(a.from)} to ${esc(a.to)} · ${esc(scope)} · data from ${esc(a.first)} to ${esc(a.latest)}</div>\n<table cellspacing=\"0\" style=\"border-collapse:collapse;margin:14px 0\"><tr>\n${kpi('Incoming invoices', int(a.total.n), `${pct(a.nChange)} vs previous period`)}${kpi('Value', money(a.total.v), `${pct(a.vChange)} vs previous period`)}\n${kpi('Avg received → allocated', a.avgTat === null ? '–' : `${a.avgTat.toFixed(1)} days`, '')}${kpi('Next week (forecast)', int(f.weekN.avg), `range ${int(f.weekN.lo)}–${int(f.weekN.hi)}`)}\n</tr></table>\n${h(`Customers to look out for (${a.watch.length})`, `Fixed rules: spike / fall vs the previous ${a.baseN} period(s) with full data, value share, turnaround, portal use, data issues`)}\n${table(['Customer', 'Invoices', 'Value', 'Why'], a.watch.slice(0, 20).map((w) => `<tr>${td(esc(w.customer))}${td(int(w.n), 1)}${td(money(w.v), 1)}${td(w.reasons.map(([k, d]) => `<b style=\"color:${flagColor[k] || C.ink}\">${esc(k)}</b> – ${esc(d)}`).join('<br>'))}</tr>`))}\n${h('Incoming volume by month', 'Invoices received per month, with change from the month before')}\n${table(['Month', 'Invoices', 'Value', 'Change', ''], a.monthly.map((m, i) => { const c = i ? (a.monthly[i - 1].n ? (m.n - a.monthly[i - 1].n) / a.monthly[i - 1].n : null) : null; return `<tr>${td(m.key)}${td(int(m.n), 1)}${td(money(m.v), 1)}${td(pct(c), 1, changeColor(c))}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:35%\">${bar(m.n, maxM)}</td></tr>`; }))}\n${h('Weekly details (last 8 weeks)', 'Weeks start on Monday')}\n${table(['Week starting', 'Invoices', 'Value', ''], a.weekly.map((w) => `<tr>${td(w.key)}${td(int(w.n), 1)}${td(money(w.v), 1)}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:40%\">${bar(w.n, maxW)}</td></tr>`))}\n${h('Workload heatmap – day of month', 'Darker = more invoices received that day (last 6 months)')}\n<table cellspacing=\"1\" cellpadding=\"0\" style=\"font-size:10px\"><tr><td style=\"padding:2px 6px\"></td>${Array.from({ length: 31 }, (_, i) => `<td style=\"text-align:center;color:${C.mute};width:20px\">${i + 1}</td>`).join('')}</tr>\n${a.heat.map((r) => `<tr><td style=\"padding:2px 6px;color:${C.mute};white-space:nowrap\">${r.key}</td>${r.cells.map((n) => `<td bgcolor=\"${shade(n)}\" style=\"text-align:center;height:20px;color:${n / maxH > 0.55 ? '#fff' : C.ink}\">${n || ''}</td>`).join('')}</tr>`).join('')}</table>\n${h('Busiest weekdays', 'Average invoices received per weekday (last 12 weeks)')}\n${table(['Weekday', 'Avg invoices', ''], a.weekday.map((w) => `<tr>${td(w.key)}${td(w.n.toFixed(1), 1)}<td style=\"padding:5px 10px;border-bottom:1px solid ${C.line};width:50%\">${bar(w.n, maxWd)}</td></tr>`))}\n${h('Forecast', 'Average of recent complete periods; range = lowest–highest of those periods')}\n${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [\n    ...f.nextWeeks.map((w) => `<tr>${td(`Week of ${w}`)}${td(int(f.weekN.avg), 1)}${td(`${int(f.weekN.lo)}–${int(f.weekN.hi)}`, 1)}${td(money(f.weekV.avg), 1)}</tr>`),\n    `<tr>${td(`<b>${f.nextMonth}</b>`)}${td(`<b>${int(f.monthN.avg)}</b>`, 1)}${td(`${int(f.monthN.lo)}–${int(f.monthN.hi)}`, 1)}${td(`<b>${money(f.monthV.avg)}</b>`, 1)}</tr>`])}\n${h('Company code split', 'With the top customers of each company code')}\n${table(['Company code', 'Invoices', 'Value', 'Share', 'vs previous'], a.companies.map((c) => { const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null; return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}</tr>` +\n      c.top.map((t) => `<tr>${td(`<span style=\"color:${C.mute}\">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}</tr>`).join(''); }))}\n${h('Customer details (top 15 by value)', 'Trend = invoices per month, last 6 months')}\n${table(['Customer', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}\n${h('Channels & project managers')}\n${table(['Channel', 'Invoices', 'Share'], a.channels.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(share(c.n, a.total.n), 1)}</tr>`))}\n<div style=\"height:10px\"></div>\n${table(['Project manager', 'Invoices', 'Value'], a.managers.map((m) => `<tr>${td(esc(m.key))}${td(int(m.n), 1)}${td(money(m.v), 1)}</tr>`))}\n${h('Data quality')}\n<ul style=\"font-size:12px;margin:0;padding-left:18px\">\n<li>${int(a.quality.noValue)} invoices without a value</li>\n<li>${int(a.quality.allocatedBeforeReceived)} allocated before received</li>\n<li>${a.quality.repeated.length ? `${a.quality.repeated.length} invoice numbers appear more than once: ${esc(a.quality.repeated.slice(0, 10).join(', '))}${a.quality.repeated.length > 10 ? ' …' : ''}` : 'No repeated invoice numbers'}</li></ul>\n<p style=\"color:#9ca3af;font-size:11px;margin-top:22px\">Generated by n8n from the Production Tracker data table. Workload date = Received_Date (falls back to Allocated, then Invoice date).</p>\n</div>`;\n}\n\n// ---------- main ----------\nconst settings = $('Report Settings').first().json;\nconst seen = new Map(); // one row per invoice (last row wins)\nfor (const { json: r } of $('Get All Rows').all()) {\n  const d = r.Received_Date || r.Allocated_Date || r.Invoice_Date || '';\n  seen.set(String(r.Invoice ?? r.id), {\n    i: r.Invoice, d: String(d).slice(0, 10), rd: String(r.Received_Date || '').slice(0, 10), ad: String(r.Allocated_Date || '').slice(0, 10),\n    c: String(r.Customer || 'UNKNOWN CUSTOMER').trim().toUpperCase(), cc: String(r.Company_Code || '').trim().toUpperCase(),\n    pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,\n  });\n}\nconst rows = [...seen.values()];\nconst a = analyse(rows, settings, RULES);\nconst html = render(a);\n\nconst recipients = String(settings.sendTo || '').trim() || RECIPIENTS.join(', ');\nif (!recipients) throw new Error('Add at least one email address to RECIPIENTS at the top of \"Build Report\".');\n\nconst safeJson = (x) => JSON.stringify(x).replace(/</g, '\\\\u003c');\nconst companyCodes = [...new Set(rows.map((r) => r.cc).filter(Boolean))].sort();\nconst dashboard = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Production Tracker Dashboard</title></head><body style=\"margin:0;padding:18px;background:#fff\">\n<div style=\"font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#f3f4f6;padding:12px;border-radius:6px;margin-bottom:12px;max-width:900px\">\n<b>Choose:</b> Report <select id=\"t\"><option>Overview</option><option>Weekly</option><option>Monthly</option><option>Custom period</option></select>\nFrom <input id=\"f\" type=\"date\"> To <input id=\"o\" type=\"date\">\nCompany code <select id=\"cc\"><option value=\"\">All</option>${companyCodes.map((c) => `<option>${c}</option>`).join('')}</select>\nCustomer contains <input id=\"cu\" size=\"18\"> <button id=\"go\">Show</button></div>\n<div id=\"out\"></div>\n<script>\nconst ROWS = ${safeJson(rows)};\nconst RULES = ${safeJson(RULES)};\n${analyse.toString()}\n${render.toString()}\nconst $id = (x) => document.getElementById(x);\nfunction show() {\n  const opts = { type: $id('t').value, from: $id('f').value, to: $id('o').value, companyCode: $id('cc').value, customer: $id('cu').value };\n  if ((opts.from || opts.to) && opts.type !== 'Custom period') { opts.type = 'Custom period'; $id('t').value = opts.type; }\n  $id('out').innerHTML = render(analyse(ROWS, opts, RULES));\n}\nconst start = ${safeJson({ type: settings.type || 'Overview', from: settings.from || '', to: settings.to || '', companyCode: settings.companyCode || '', customer: settings.customer || '' })};\n$id('t').value = start.type; $id('f').value = start.from; $id('o').value = start.to; $id('cc').value = start.companyCode.toUpperCase(); $id('cu').value = start.customer;\n$id('go').onclick = show; show();\n</script></body></html>`;\n\nconst quality = (() => { try { return $('Summarise Upload').first().json.message; } catch (e) { return ''; } })();\n\n// Compact facts for the AI commentary step (the AI may only use these figures)\nconst r2 = (x) => Math.round(x * 100) / 100;\nconst p1 = (x) => (x === null || x === undefined ? null : Math.round(x * 1000) / 10);\nconst facts = a.empty ? { empty: true } : {\n  report: a.type, period: `${a.from} to ${a.to}`, scope: { companyCode: a.cc || 'all', customer: a.cust || 'all' },\n  invoices: a.total.n, value: r2(a.total.v),\n  previousPeriod: { invoices: a.prevTotal.n, value: r2(a.prevTotal.v) },\n  changePercent: { invoices: p1(a.nChange), value: p1(a.vChange) },\n  avgDaysReceivedToAllocated: a.avgTat === null ? null : r2(a.avgTat),\n  watchlist: a.watch.slice(0, 10).map((w) => ({ customer: w.customer, invoices: w.n, value: r2(w.v), flags: w.reasons.map(([k, d]) => `${k}: ${d}`) })),\n  monthly: a.monthly.slice(-6).map((m) => ({ month: m.key, invoices: m.n, value: r2(m.v) })),\n  weekly: a.weekly.map((w) => ({ weekStarting: w.key, invoices: w.n, value: r2(w.v) })),\n  busiestDaysOfMonth: Array.from({ length: 31 }, (_, d) => ({ day: d + 1, avgInvoices: r2(a.heat.reduce((s, m) => s + m.cells[d], 0) / Math.max(1, a.heat.length)) }))\n    .sort((x, y) => y.avgInvoices - x.avgInvoices || x.day - y.day).slice(0, 5),\n  busiestWeekdays: [...a.weekday].sort((x, y) => y.n - x.n).slice(0, 3).map((w) => ({ weekday: w.key, avgInvoices: r2(w.n) })),\n  forecast: {\n    nextWeekInvoices: { expected: Math.round(a.forecast.weekN.avg), low: a.forecast.weekN.lo, high: a.forecast.weekN.hi },\n    nextMonth: { month: a.forecast.nextMonth, expectedInvoices: Math.round(a.forecast.monthN.avg), low: a.forecast.monthN.lo, high: a.forecast.monthN.hi, expectedValue: r2(a.forecast.monthV.avg) },\n  },\n  companyCodes: a.companies.map((c) => ({ code: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, topCustomers: c.top.slice(0, 3).map((t) => t.key) })),\n  topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),\n  channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),\n  dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },\n};\nconst uploadNote = quality\n  ? `<p style=\"font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#374151;background:#f3f4f6;padding:8px 12px;max-width:860px\"><b>Upload result:</b> ${quality.replace(/[&<>]/g, '')}</p>`\n  : '';\nconst subject = `Production Tracker ${a.type || ''} report – ${a.label || ''} – ${Math.round(a.total?.n ?? 0)} invoices, ${a.watch?.length ?? 0} customers to watch`;\nreturn [{\n  json: {\n    to: recipients,\n    subject,\n    facts: JSON.stringify(facts),\n    html: uploadNote + html + '<p style=\"font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280\">The attached dashboard.html lets you change the period, company code and customer. Open it in your browser.</p>',\n    doneMessage: (quality ? quality + '. ' : '') + `Report \"${a.label || ''}\" sent to ${recipients}.`,\n  },\n  binary: {\n    dashboard: { data: Buffer.from(dashboard, 'utf8').toString('base64'), mimeType: 'text/html', fileName: 'dashboard.html', fileExtension: 'html' },\n  },\n}];\n"
       },
       "id": "4e1e3727-2b38-5455-8b7f-7d6c5d94333f",
       "name": "Build Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1600,
-        300
+        2860,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Report: {{ $json.subject }}\n\nFACTS (JSON – the only source you may use):\n{{ $json.facts }}\n\nWrite the commentary now, following the output format exactly.",
+        "hasOutputParser": false,
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "You are a senior accounts-receivable operations analyst at GE Vernova. You write the commentary section of an automated Production Tracker report read by the billing team and their manager.\n\nRULES\n1. Use ONLY the figures in the FACTS JSON. Never invent, estimate, round differently or recalculate numbers – quote them exactly as given.\n2. If something is not in the facts, do not mention it. Do not speculate about causes you cannot see in the data.\n3. Write the commentary itself. No preamble, no \"Here is…\", no questions, no offers of further help.\n4. Plain business English, short sentences, no hype, no emojis.\n5. Name customers and company codes exactly as they appear in the facts.\n\nOUTPUT FORMAT\nReturn an HTML fragment only – no <html>, <body>, <style>, scripts, images, links or markdown. Use only <h3>, <p>, <ul>, <li> and <b>. Exactly these four sections, in this order:\n<h3>Summary</h3> 2–3 sentences: incoming invoices and value versus the previous period, and the overall picture.\n<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the watchlist and data quality. Each bullet names the customer or company code, the reason and its figure.\n<h3>Workload outlook</h3> 2–3 sentences using the forecast, the busiest days of the month and the busiest weekdays: when should the team expect heavy days?\n<h3>Suggested actions</h3> up to 4 concrete bullets (e.g. follow up with a customer, check portal submissions, fix tracker data). Each must follow directly from a fact above.\nKeep the whole commentary under 250 words. If the facts say \"empty\": true, write one <p> saying there is no data for this selection."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "a8c983c2-0354-5e1c-8899-29843f7bbb49",
+      "name": "AI Commentary",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        3080,
+        420
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add AI Commentary — put the AI's commentary above the fixed report. The figures in the report itself never come\n// from the AI. If the AI step failed or returned nothing usable, the report is sent without commentary.\nconst base = $('Build Report').first();\nconst raw = String($input.first().json.text ?? $input.first().json.output ?? '');\nconst ALLOWED = ['h3', 'h4', 'p', 'ul', 'ol', 'li', 'b', 'strong', 'i', 'em', 'br'];\n\nlet ai = raw.replace(/```[a-z]*\\n?/gi, '').replace(/<(script|style)[\\s\\S]*?<\\/\\1>/gi, '');\nai = ai.replace(/<\\/?([a-z0-9]+)\\b[^>]*>/gi, (tag, name) =>\n  ALLOWED.includes(name.toLowerCase()) ? tag.replace(/\\s[^>]*?(\\/?)>$/, '$1>') : '');\nif (!/<(p|li|h3)>/i.test(ai)) {\n  ai = ai.split(/\\n\\s*\\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${p.replace(/[&<>]/g, '')}</p>`).join('');\n}\n\nif (ai.replace(/<[^>]+>/g, '').trim().length < 40) {\n  return [{ json: { ...base.json, aiUsed: false }, binary: base.binary }];\n}\nconst box = '<div style=\"border-left:4px solid #2b6cb0;background:#f0f6ff;padding:10px 16px;margin:0 0 18px;' +\n  'font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#111827;max-width:860px\">' +\n  '<div style=\"font-size:11px;color:#6b7280;margin-bottom:4px\">AI commentary – written from the figures in this ' +\n  'report. Check before acting.</div>' + ai + '</div>';\nreturn [{ json: { ...base.json, html: box + base.json.html, aiUsed: true }, binary: base.binary }];\n"
+      },
+      "id": "5bae57cf-5e28-5473-9221-b85f6df18726",
+      "name": "Add AI Commentary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        420
       ]
     },
     {
@@ -270,73 +491,38 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1820,
-        300
+        3520,
+        420
       ]
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "db8fd233-6f42-58ed-908b-f970e3ada02c",
-              "leftValue": "={{ $('Report Settings').first().json.source }}",
-              "rightValue": "form",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "width": 700,
+        "height": 440,
+        "content": "## Production Tracker – upload, reports, dashboard & AI commentary\n1. **Data Table:** pick `datatable` in **Get Table Rows**, **Save Changed Rows**, **Clear Table** and **Bulk Add All Rows**. Only new or changed invoices are saved (seconds). If the table is empty or more than 300 rows changed, the table is cleared and all rows are added in one bulk call. Also pick it in **Get All Rows**.\n2. **Build Report** → default recipients in `RECIPIENTS`\n3. **AI Commentary** → connect a chat model to its *Model* input: copy a **GEV LLM Model** node from *Report copy*. Set its temperature to 0.1–0.2 for steady, factual wording.\n4. Replace **Send Report – paste GEV Send Email here**: copy *Send an Email* from *Report copy*, connect Add AI Commentary → it, set To `{{ $json.to }}`, Subject `{{ $json.subject }}`, Email Format HTML, HTML `{{ $json.html }}`, Attachments `dashboard`\n5. Publish. Share the two form links. Forms answer immediately; results arrive by email.\n\n**Runs**: upload (overview) · request (your period & filters) · Mondays 07:00 (weekly) · 1st of month 07:00 (monthly)"
       },
-      "id": "f9c054da-89aa-5806-8de6-c05ab5ea44b0",
-      "name": "Started from a form?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2040,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "completion",
-        "respondWith": "text",
-        "completionTitle": "Done ✔",
-        "completionMessage": "={{ $('Build Report').first().json.doneMessage }}",
-        "options": {}
-      },
-      "id": "afc30632-db80-546b-b42f-7a4ee3f0be58",
-      "name": "Done Page",
-      "type": "n8n-nodes-base.form",
-      "typeVersion": 1,
-      "position": [
-        2260,
-        220
-      ]
-    },
-    {
-      "parameters": {
-        "width": 560,
-        "height": 380,
-        "content": "## Production Tracker – upload, reports & dashboard\n**Before the first run**\n1. **Upsert into Data Table** and **Get All Rows** → pick `datatable`\n2. **Build Report** → put default recipients in `RECIPIENTS`\n3. Replace **Send Report – paste GEV Send Email here**: copy *Send an Email* from *Report copy*, paste, connect Build Report → it → Started from a form?, then set To `{{ $json.to }}`, Subject `{{ $json.subject }}`, Email Format HTML, HTML `{{ $json.html }}`, Attachments `dashboard`\n4. Publish. Share the two form links (Upload Tracker, Request a Report)\n\n**Runs**: on upload (overview) · on request (your period & filters) · Mondays 07:00 (weekly) · 1st of month 07:00 (monthly)"
-      },
-      "id": "c69e2f4e-ac43-5161-9b9f-d563fcec0544",
+      "id": "d1173575-01c4-5c4f-9eef-150d35159514",
       "name": "Setup Notes",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -40,
-        -420
+        -520
+      ]
+    },
+    {
+      "parameters": {
+        "width": 420,
+        "height": 200,
+        "content": "### AI prompt settings\nThe AI writes **commentary only** (summary, what needs attention, workload outlook, suggested actions) from the fixed figures in `facts`. All numbers in the report itself are calculated by rules, not by the AI. If the AI fails, the report is still sent."
+      },
+      "id": "8bf99b4f-f551-59e7-8e95-abfc9ac0ac05",
+      "name": "AI Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3020,
+        620
       ]
     }
   ],
@@ -367,14 +553,105 @@
       "main": [
         [
           {
-            "node": "Upsert into Data Table",
+            "node": "Get Table Rows",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upsert into Data Table": {
+    "Get Table Rows": {
+      "main": [
+        [
+          {
+            "node": "Compare with Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare with Table": {
+      "main": [
+        [
+          {
+            "node": "Anything to save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to save?": {
+      "main": [
+        [
+          {
+            "node": "Few changes?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Few changes?": {
+      "main": [
+        [
+          {
+            "node": "Save Changed Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Table": {
+      "main": [
+        [
+          {
+            "node": "Restore Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Rows": {
+      "main": [
+        [
+          {
+            "node": "Bulk Add All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Add All Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Changed Rows": {
       "main": [
         [
           {
@@ -455,34 +732,33 @@
       "main": [
         [
           {
+            "node": "AI Commentary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Commentary": {
+      "main": [
+        [
+          {
+            "node": "Add AI Commentary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add AI Commentary": {
+      "main": [
+        [
+          {
             "node": "Send Report – paste GEV Send Email here",
             "type": "main",
             "index": 0
           }
         ]
-      ]
-    },
-    "Send Report – paste GEV Send Email here": {
-      "main": [
-        [
-          {
-            "node": "Started from a form?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Started from a form?": {
-      "main": [
-        [
-          {
-            "node": "Done Page",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
       ]
     }
   },

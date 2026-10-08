@@ -1,10 +1,10 @@
 {
-  "name": "Production Tracker – Upload from SharePoint",
+  "name": "Production Tracker – Upload to Data Table",
   "nodes": [
     {
       "parameters": {
         "formTitle": "Upload Production Tracker",
-        "formDescription": "Download the latest tracker from SharePoint (File → Create a Copy → Download a Copy) and upload it here. The Production Intelligence Report refreshes automatically.",
+        "formDescription": "Download the latest tracker (File → Create a Copy → Download a Copy) and upload it here. Only new or changed invoices are saved to the Data Table.",
         "formFields": {
           "values": [
             {
@@ -19,7 +19,7 @@
         "responseMode": "lastNode",
         "options": {
           "path": "production-tracker-upload",
-          "buttonLabel": "Upload & refresh report"
+          "buttonLabel": "Upload"
         }
       },
       "id": "20b1ccbc-4a1f-5f17-bece-fdc7ffa0a2a9",
@@ -62,6 +62,112 @@
     {
       "parameters": {
         "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "anyCondition",
+        "filters": {},
+        "returnAll": true
+      },
+      "id": "47739bc3-8efc-5c38-b731-a16222547f99",
+      "name": "Get Table Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare with Table — keep only invoices that are new or changed, so saving takes seconds, not minutes.\n// If the table is empty, or more than BULK_LIMIT rows changed (e.g. the very first upload), ALL rows are passed on\n// for a fast \"clear table + bulk add\" instead. Keep BULK_LIMIT the same as in the \"Few changes?\" step.\nconst BULK_LIMIT = 300;\n\nconst cleaned = $('Clean Rows').all().map((i) => i.json);\nconst columns = Object.keys(cleaned[0] || {});\nconst existing = new Map();\nfor (const { json: r } of $input.all()) {\n  if (r.Invoice === undefined || r.Invoice === null || r.Invoice === '') continue; // empty table gives one empty item\n  existing.set(String(r.Invoice), r);\n}\nconst same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();\nconst changed = cleaned.filter((r) => {\n  const before = existing.get(String(r.Invoice));\n  return !before || columns.some((c) => !same(r[c], before[c]));\n});\nconst rows = !existing.size || changed.length > BULK_LIMIT ? cleaned : changed;\nreturn rows.map((json) => ({ json }));\n"
+      },
+      "id": "37b65fdf-f69e-5a13-a5d3-d6b7f30e59fa",
+      "name": "Compare with Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "53ff6eec-df0a-5d28-b8e8-bd087cd47f97",
+              "leftValue": "={{ $json.Invoice !== undefined && $json.Invoice !== null && $json.Invoice !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d5874fee-af68-5469-8be9-6cf619da239c",
+      "name": "Anything to save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4e5d3ac9-c86d-5479-b614-0e31708841b7",
+              "leftValue": "={{ $('Get Table Rows').all().some(i => i.json.Invoice !== undefined && i.json.Invoice !== null) && $('Compare with Table').all().length <= 300 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bbceb4aa-df7e-5a14-aa5f-440ca4b86ed5",
+      "name": "Few changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
@@ -86,64 +192,96 @@
         },
         "options": {}
       },
-      "id": "5a3d0d3d-50e2-51ba-840f-f17cc1012e64",
-      "name": "Upsert into Data Table",
+      "id": "4f93242b-e532-5bab-a68d-c416f7d60be6",
+      "name": "Save Changed Rows",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
       "position": [
-        660,
+        1540,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "clear",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "83dec111-c88c-50fb-afa0-f4ad5c26d2b3",
+      "name": "Clear Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore Rows — after the table is cleared, pass all rows on to the bulk add\nreturn $('Compare with Table').all().map((i) => ({ json: i.json }));\n"
+      },
+      "id": "1e7653fe-b24f-5de8-83a8-ec4c55bc431e",
+      "name": "Restore Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
         300
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!id) { blank++; continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\nconst parts = [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`];\nif (blank) parts.push(`${fmt(blank)} blank rows skipped`);\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\nif (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "optimizeBulk": true
+        }
+      },
+      "id": "c13eb8ab-5a73-556b-8534-354a71302ae3",
+      "name": "Bulk Add All Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!id) { blank++; continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\n// how many rows were actually written (only present when the \"Compare with Table\" step is used)\nconst written = (() => {\n  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }\n  catch (e) { return null; }\n})();\nconst parts = written === null\n  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]\n  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];\nif (blank) parts.push(`${fmt(blank)} blank rows skipped`);\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\nif (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
       },
       "id": "44e16e4b-eef3-5e8e-953a-bfef8dbc2678",
       "name": "Summarise Upload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "source": "database",
-        "workflowId": {
-          "__rl": true,
-          "mode": "list",
-          "value": ""
-        },
-        "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
-        },
-        "mode": "once",
-        "options": {
-          "waitForSubWorkflow": false
-        }
-      },
-      "id": "773c1c3e-6d03-5cce-bbb5-209d2f3eb97b",
-      "name": "Refresh Report",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        1100,
-        300
-      ]
+        2200,
+        200
+      ],
+      "executeOnce": true
     },
     {
       "parameters": {
         "operation": "completion",
         "respondWith": "text",
-        "completionTitle": "Tracker uploaded ✔",
-        "completionMessage": "={{ $('Summarise Upload').first().json.message }}. The report is being generated and will arrive by email shortly.",
+        "completionTitle": "Tracker saved ✔",
+        "completionMessage": "={{ $('Summarise Upload').first().json.message }}",
         "options": {}
       },
       "id": "4aa83d7d-a1d2-587b-9f66-7278d6cd878d",
@@ -151,23 +289,23 @@
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
       "position": [
-        1320,
-        300
+        2420,
+        200
       ]
     },
     {
       "parameters": {
-        "width": 560,
-        "height": 300,
-        "content": "## Tracker upload – setup\n1. **Upsert into Data Table** → pick your Data Table\n2. **Clean Rows** → check `COLUMNS` matches the Data Table columns exactly; add tracker headings to `ALIASES`\n3. **Read Tracker Sheet** → *Options → Sheet Name* if the data is not on the first tab\n4. **Refresh Report** → pick *Report copy* (it needs a *When Executed by Another Workflow* trigger)\n5. Publish, then share the form URL from **Upload Tracker** (Production URL)"
+        "width": 640,
+        "height": 320,
+        "content": "## Tracker upload → Data Table\n1. **Data Table:** pick `datatable` in **Get Table Rows**, **Save Changed Rows**, **Clear Table** and **Bulk Add All Rows**. Only new or changed invoices are saved (seconds). If the table is empty or more than 300 rows changed, the table is cleared and all rows are added in one bulk call.\n2. **Clean Rows** → `COLUMNS` must match the Data Table columns; add tracker headings to `ALIASES`\n3. **Read Tracker Sheet** → *Options → Sheet Name* if the data is not on the first tab\n4. Publish, then share the form URL from **Upload Tracker** (Production URL)"
       },
-      "id": "49fe7062-7ab2-52c9-9bb7-f7df2436979b",
+      "id": "c90d101c-eada-5953-8f9d-6e29ee2fba0e",
       "name": "Setup Notes",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -40,
-        -40
+        -140
       ]
     }
   ],
@@ -198,14 +336,105 @@
       "main": [
         [
           {
-            "node": "Upsert into Data Table",
+            "node": "Get Table Rows",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Upsert into Data Table": {
+    "Get Table Rows": {
+      "main": [
+        [
+          {
+            "node": "Compare with Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare with Table": {
+      "main": [
+        [
+          {
+            "node": "Anything to save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to save?": {
+      "main": [
+        [
+          {
+            "node": "Few changes?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Few changes?": {
+      "main": [
+        [
+          {
+            "node": "Save Changed Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Table": {
+      "main": [
+        [
+          {
+            "node": "Restore Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Rows": {
+      "main": [
+        [
+          {
+            "node": "Bulk Add All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Add All Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Changed Rows": {
       "main": [
         [
           {
@@ -217,17 +446,6 @@
       ]
     },
     "Summarise Upload": {
-      "main": [
-        [
-          {
-            "node": "Refresh Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Refresh Report": {
       "main": [
         [
           {

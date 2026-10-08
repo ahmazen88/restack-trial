@@ -44,7 +44,14 @@ for (const [label, test] of Object.entries(checks)) {
 }
 
 const fmt = (n) => n.toLocaleString('en-US');
-const parts = [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`];
+// how many rows were actually written (only present when the "Compare with Table" step is used)
+const written = (() => {
+  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }
+  catch (e) { return null; }
+})();
+const parts = written === null
+  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]
+  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];
 if (blank) parts.push(`${fmt(blank)} blank rows skipped`);
 if (duplicates.length) {
   parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +

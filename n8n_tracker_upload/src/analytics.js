@@ -260,12 +260,41 @@ $id('go').onclick = show; show();
 </script></body></html>`;
 
 const quality = (() => { try { return $('Summarise Upload').first().json.message; } catch (e) { return ''; } })();
+
+// Compact facts for the AI commentary step (the AI may only use these figures)
+const r2 = (x) => Math.round(x * 100) / 100;
+const p1 = (x) => (x === null || x === undefined ? null : Math.round(x * 1000) / 10);
+const facts = a.empty ? { empty: true } : {
+  report: a.type, period: `${a.from} to ${a.to}`, scope: { companyCode: a.cc || 'all', customer: a.cust || 'all' },
+  invoices: a.total.n, value: r2(a.total.v),
+  previousPeriod: { invoices: a.prevTotal.n, value: r2(a.prevTotal.v) },
+  changePercent: { invoices: p1(a.nChange), value: p1(a.vChange) },
+  avgDaysReceivedToAllocated: a.avgTat === null ? null : r2(a.avgTat),
+  watchlist: a.watch.slice(0, 10).map((w) => ({ customer: w.customer, invoices: w.n, value: r2(w.v), flags: w.reasons.map(([k, d]) => `${k}: ${d}`) })),
+  monthly: a.monthly.slice(-6).map((m) => ({ month: m.key, invoices: m.n, value: r2(m.v) })),
+  weekly: a.weekly.map((w) => ({ weekStarting: w.key, invoices: w.n, value: r2(w.v) })),
+  busiestDaysOfMonth: Array.from({ length: 31 }, (_, d) => ({ day: d + 1, avgInvoices: r2(a.heat.reduce((s, m) => s + m.cells[d], 0) / Math.max(1, a.heat.length)) }))
+    .sort((x, y) => y.avgInvoices - x.avgInvoices || x.day - y.day).slice(0, 5),
+  busiestWeekdays: [...a.weekday].sort((x, y) => y.n - x.n).slice(0, 3).map((w) => ({ weekday: w.key, avgInvoices: r2(w.n) })),
+  forecast: {
+    nextWeekInvoices: { expected: Math.round(a.forecast.weekN.avg), low: a.forecast.weekN.lo, high: a.forecast.weekN.hi },
+    nextMonth: { month: a.forecast.nextMonth, expectedInvoices: Math.round(a.forecast.monthN.avg), low: a.forecast.monthN.lo, high: a.forecast.monthN.hi, expectedValue: r2(a.forecast.monthV.avg) },
+  },
+  companyCodes: a.companies.map((c) => ({ code: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
+  topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
+  channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),
+  dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
+};
+const uploadNote = quality
+  ? `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#374151;background:#f3f4f6;padding:8px 12px;max-width:860px"><b>Upload result:</b> ${quality.replace(/[&<>]/g, '')}</p>`
+  : '';
 const subject = `Production Tracker ${a.type || ''} report – ${a.label || ''} – ${Math.round(a.total?.n ?? 0)} invoices, ${a.watch?.length ?? 0} customers to watch`;
 return [{
   json: {
     to: recipients,
     subject,
-    html: html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code and customer. Open it in your browser.</p>',
+    facts: JSON.stringify(facts),
+    html: uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code and customer. Open it in your browser.</p>',
     doneMessage: (quality ? quality + '. ' : '') + `Report "${a.label || ''}" sent to ${recipients}.`,
   },
   binary: {

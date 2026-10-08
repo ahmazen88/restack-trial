@@ -44,6 +44,12 @@ plus the rule-based report sent through the company GEV SMTP mail node. No Micro
 When resuming, build: Upload form → Read Tracker Sheet → Clean Rows → (Upsert) → Summarise → Build Report →
 company "Send an Email" node (To `{{ $json.to }}`, Subject `{{ $json.subject }}`, HTML `{{ $json.html }}`).
 
+## Update (2026-10-08 later)
+- "Spinning" upload fixed: compare first, save only changed rows; clear + bulk add for big changes; forms answer
+  immediately in the reports workflow.
+- Reports workflow now has **AI Commentary** (Basic LLM Chain + GEV LLM Model) on top of the rule-based report.
+- Invoice drafts workflow in `../n8n_invoice_drafts/`.
+
 ## Status
 | Piece | State |
 |---|---|

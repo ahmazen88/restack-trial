@@ -124,5 +124,25 @@ Setup: Data Table in **Upsert** and **Get All Rows**; `RECIPIENTS` in **Build Re
 **Send Report** for the GEV *Send an Email* node (To `{{ $json.to }}`, Subject `{{ $json.subject }}`, HTML
 `{{ $json.html }}`, Attachments `dashboard`); publish and share the two form links.
 
+## Fast saving (fix for the "spinning" upload)
+The first versions saved every row one by one (about 8,000 calls for 4,100 rows) while the form waited. Now:
+```
+Clean Rows → Get Table Rows → Compare with Table → Anything to save? ─no──────────────────────────────► Summarise
+                                                        │yes
+                                                        └► Few changes? ─yes► Save Changed Rows ─────────► Summarise
+                                                                         └no─► Clear Table → Restore Rows → Bulk Add All Rows ─► Summarise
+```
+- Normal upload: only new or changed invoices are written, usually a handful.
+- Empty table, or more than 300 changes (e.g. the first upload): the table is cleared and all rows are added in one
+  bulk call. Rows that are no longer in the tracker disappear then; the tracker is the source of truth.
+- In the reports workflow, both forms answer immediately ("received – the report arrives by email").
+
+## AI commentary (reports workflow)
+**AI Commentary** (Basic LLM Chain) gets the compact `facts` from **Build Report** and writes four sections:
+Summary, What needs attention, Workload outlook and Suggested actions. The system prompt forbids inventing or
+recalculating numbers and fixes the HTML format. **Add AI Commentary** cleans the HTML (allowed tags only) and puts
+it above the rule-based report. If the AI fails, the report goes out without it (retry once, then continue).
+Connect a **GEV LLM Model** to its *Model* input and set the temperature to 0.1–0.2.
+
 ## Editing
 Edit `src/*.js`, run `python3 build.py` to regenerate both workflow JSON files, and `node test/run.js` to re-test.
