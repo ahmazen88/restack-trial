@@ -17,7 +17,6 @@ const DATASETS = {
   companyCodes: { label: 'code', invoices: 'invoices', value: 'value' },
   profitCentres: { label: 'profitCentre', invoices: 'invoices', value: 'value' },
   productLines: { label: 'productLine', invoices: 'invoices', value: 'value' },
-  businessTypes: { label: 'businessType', invoices: 'invoices', value: 'value' },
   topCustomers: { label: 'customer', invoices: 'invoices', value: 'value' },
   channels: { label: 'channel', invoices: 'invoices' },
   watchlist: { label: 'customer', invoices: 'invoices', value: 'value' },

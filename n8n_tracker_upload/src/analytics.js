@@ -45,7 +45,7 @@ function analyse(all, opts, RULES) {
   const cust = String(opts.customer || '').trim().toUpperCase();
   const pcSel = String(opts.profitCentre || '').trim().toUpperCase();
   const plSel = String(opts.productLine || '').trim().toUpperCase();
-  const pcKey = (r) => r.pc || (r.cc === 'G367' ? 'N/A (G367)' : 'NOT FOUND');
+  const pcKey = (r) => r.pc || 'NOT FOUND';
   const plKey = (r) => r.pl || 'NOT FOUND';
   const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust))
     && (!pcSel || pcKey(r) === pcSel) && (!plSel || plKey(r) === plSel));
@@ -139,15 +139,13 @@ function analyse(all, opts, RULES) {
   }));
   const profitCentres = split(pcKey);
   const productLines = split(plKey);
-  const businessTypes = split((r) => r.bt || 'NOT FOUND');
-  // ----- breakdown tree: entity → company code → sales org → (profit centre, business type, product line) -----
+  // ----- breakdown tree: entity → company code → sales org → (profit centre, product line) -----
   const ENTITY = { '3060': 'LA PRAIRIE (CANADA)', '3487': 'LA PRAIRIE (CANADA)', '3485': 'CHARLEROI', G367: 'CLEARWATER' };
   const LEVEL = {
     entity: { name: 'Entity', of: (r) => ENTITY[r.cc] || (r.cc ? 'OTHER' : '') },
     cc: { name: 'Company code', of: (r) => r.cc || '' },
     so: { name: 'Sales org', of: (r) => r.so || '' },
     pc: { name: 'Profit centre', of: (r) => r.pc || '' },
-    bt: { name: 'Business type', of: (r) => r.bt || '' },
     pl: { name: 'Product line', of: (r) => r.pl || '' },
   };
   // values of `child` that appear under more than one value of `parent` (checked on all data, not just this period)
@@ -161,20 +159,20 @@ function analyse(all, opts, RULES) {
     }
     return [...m].filter(([, set]) => set.size > 1).map(([c]) => c).sort();
   };
-  // order of the lower three levels: the one with the fewest clashes; ties keep the expected order (first in the list)
-  const ORDERS = [['pc', 'bt', 'pl'], ['pc', 'pl', 'bt'], ['bt', 'pc', 'pl'], ['bt', 'pl', 'pc'], ['pl', 'pc', 'bt'], ['pl', 'bt', 'pc']];
-  const scored = ORDERS.map((o, i) => ({ o, i, n: clashes('cc', o[0]).length + clashes(o[0], o[1]).length + clashes(o[1], o[2]).length }));
+  // order of the two lower levels: the one with the fewest clashes; a tie keeps the expected order (first in the list)
+  const ORDERS = [['pc', 'pl'], ['pl', 'pc']];
+  const scored = ORDERS.map((o, i) => ({ o, i, n: clashes('cc', o[0]).length + clashes(o[0], o[1]).length }));
   const lower = scored.sort((x, y) => x.n - y.n || x.i - y.i)[0].o;
   const levels = ['entity', 'cc', 'so', ...lower];
   const structure = {
     order: levels.map((k) => LEVEL[k].name),
     // sales org only exists for G367, so the lower levels are checked against the company code
-    exceptions: [['entity', 'cc'], ['cc', 'so'], ['cc', lower[0]], [lower[0], lower[1]], [lower[1], lower[2]]]
+    exceptions: [['entity', 'cc'], ['cc', 'so'], ['cc', lower[0]], [lower[0], lower[1]]]
       .map(([pk, ck]) => ({ parent: LEVEL[pk].name, child: LEVEL[ck].name, values: clashes(pk, ck) }))
       .filter((e) => e.values.length),
   };
   // only overlaps at the top (e.g. one profit centre under two company codes) are data problems;
-  // lower down, e.g. "Manufacturing" under several profit centres, is normal and simply repeats under each parent
+  // lower down, e.g. one product line under several profit centres, is normal and simply repeats under each parent
   structure.problems = structure.exceptions.filter((e) => ['Entity', 'Company code', 'Sales org'].includes(e.parent));
   const MAX_CHILDREN = 8;
   const buildTree = (curRows, prevRows, depth) => {
@@ -215,7 +213,7 @@ function analyse(all, opts, RULES) {
   };
 
   return {
-    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, businessTypes, tree, structure, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
+    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, tree, structure, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
     nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),
     watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,
   };
@@ -279,7 +277,7 @@ ${h('Forecast', 'Average of recent complete periods; range = lowest–highest of
 ${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [
     ...f.nextWeeks.map((w) => `<tr>${td(`Week of ${w}`)}${td(int(f.weekN.avg), 1)}${td(`${int(f.weekN.lo)}–${int(f.weekN.hi)}`, 1)}${td(money(f.weekV.avg), 1)}</tr>`),
     `<tr>${td(`<b>${f.nextMonth}</b>`)}${td(`<b>${int(f.monthN.avg)}</b>`, 1)}${td(`${int(f.monthN.lo)}–${int(f.monthN.hi)}`, 1)}${td(`<b>${money(f.monthV.avg)}</b>`, 1)}</tr>`])}
-${h('Breakdown: ' + a.structure.order.join(' → '), 'One line per group; a level is skipped where it does not apply (e.g. no profit centre for G367), and repeated single groups are shown on one line')}
+${h('Breakdown: ' + a.structure.order.join(' → '), 'One line per group; a level is skipped where it does not apply (e.g. sales org outside G367), and repeated single groups are shown on one line')}
 ${table(['Group', 'Level', 'Invoices', 'Value', 'Share', 'vs previous', 'Avg days'], treeRows(a.tree, 0))}
 ${a.structure.problems.length ? `<div style="font-size:11px;color:${C.warn};margin-top:4px">Check the data: ${a.structure.problems.map((e) =>
     `${e.values.length} ${esc(e.child.toLowerCase())}(s) appear under more than one ${esc(e.parent.toLowerCase())} (${esc(e.values.slice(0, 5).join(', '))}${e.values.length > 5 ? ' …' : ''})`).join('; ')}</div>` : ''}
@@ -309,7 +307,7 @@ for (const { json: r } of $('Get All Rows').all()) {
     pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,
     sap: String(r.SAP_Customer_Code || '').trim(), pc: String(r.Profit_Center || '').trim().toUpperCase(),
     so: String(r.Sales_Org || '').trim().toUpperCase(),
-    pl: String(r.Product_Line || '').trim().toUpperCase(), bt: String(r.Business_Type || '').trim().toUpperCase(),
+    pl: String(r.Product_Line || '').trim().toUpperCase(),
   });
 }
 const rows = [...seen.values()];
@@ -323,7 +321,7 @@ const safeJson = (x) => JSON.stringify(x).replace(/</g, '\\u003c');
 const companyCodes = [...new Set(rows.map((r) => r.cc).filter(Boolean))].sort();
 const listOf = (f) => [...new Set(rows.map(f))].sort();
 const options = (list) => list.map((c) => `<option>${String(c).replace(/[&<>"]/g, '')}</option>`).join('');
-const profitCentreList = listOf((r) => r.pc || (r.cc === 'G367' ? 'N/A (G367)' : 'NOT FOUND'));
+const profitCentreList = listOf((r) => r.pc || 'NOT FOUND');
 const productLineList = listOf((r) => r.pl || 'NOT FOUND');
 const dashboard = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Production Tracker Dashboard</title></head><body style="margin:0;padding:18px;background:#fff">
@@ -381,7 +379,6 @@ const facts = a.empty ? { empty: true } : {
     ...(depth < 2 ? flat(nd.children, depth + 1, [...path, nd.label]) : [])]); })(a.tree, 0, []).slice(0, 40),
   profitCentres: a.profitCentres.slice(0, 12).map((c) => ({ profitCentre: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, avgDays: c.tat === null ? null : r2(c.tat), topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
   productLines: a.productLines.map((c) => ({ productLine: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
-  businessTypes: a.businessTypes.map((c) => ({ businessType: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
   topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, sapCode: c.sap || null, profitCentre: c.pc || null, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
   channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),
   dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },

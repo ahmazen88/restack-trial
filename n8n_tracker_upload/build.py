@@ -191,7 +191,7 @@ RULES
 OUTPUT FORMAT
 Return an HTML fragment only – no <html>, <body>, <style>, scripts, images, links or markdown. Use only <h3>, <p>, <ul>, <li> and <b>. Exactly these four sections, in this order:
 <h3>Summary</h3> 2–3 sentences: incoming invoices and value versus the previous period, the largest profit centres and product lines, and the overall picture.
-<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the watchlist and data quality. Each bullet names the customer, company code or profit centre, the reason and its figure. Ignore the buckets "NOT FOUND" and "N/A (G367)" except as a data coverage point.
+<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the watchlist and data quality. Each bullet names the customer, company code or profit centre, the reason and its figure. Ignore the bucket "NOT FOUND" except as a data coverage point.
 <h3>Workload outlook</h3> 2–3 sentences using the forecast, the busiest days of the month and the busiest weekdays: when should the team expect heavy days?
 <h3>Suggested actions</h3> up to 4 concrete bullets (e.g. follow up with a customer, check portal submissions, fix tracker data). Each must follow directly from a fact above.
 Keep the whole commentary under 250 words. If the facts say "empty": true, write one <p> saying there is no data for this selection."""
@@ -208,7 +208,7 @@ CHART_SYSTEM_PROMPT = """You are a data-visualisation designer for an accounts-r
 You do NOT draw charts and you do NOT write numbers. A program draws each chart you choose from the real data.
 
 AVAILABLE DATASETS (only these; each must exist in the FACTS with at least 2 entries)
-monthly, weekly (time series) · busiestDaysOfMonth, busiestWeekdays (workload, metric "invoices" only) · companyCodes, profitCentres, productLines, businessTypes, topCustomers, watchlist (splits) · channels (metric "invoices" only)
+monthly, weekly (time series) · busiestDaysOfMonth, busiestWeekdays (workload, metric "invoices" only) · companyCodes, profitCentres, productLines, topCustomers, watchlist (splits) · channels (metric "invoices" only)
 METRICS: "invoices" or "value"
 CHART TYPES: "line" (time series only – trends), "column" (time series, weekdays, days of month), "bar" (rankings and splits)
 
@@ -398,8 +398,8 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
-                  '0. In the Data Table `datatable` add five columns (type *string*): `Sales_Org`, `SAP_Customer_Code`, '
-                  '`Profit_Center`, `Product_Line`, `Business_Type`\n'
+                  '0. In the Data Table `datatable` add four columns (type *string*): `Sales_Org`, `SAP_Customer_Code`, '
+                  '`Profit_Center`, `Product_Line`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
                   '3. From *Report copy* copy **GEV LLM Model** → paste it here **twice** → connect one to the *Model* '

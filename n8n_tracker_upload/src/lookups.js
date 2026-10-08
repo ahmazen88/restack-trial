@@ -1,9 +1,9 @@
-// Add Lookups — fill SAP customer code and profit centre from the ZSD log and the Tableau extract.
+// Add Lookups — fill SAP customer code, profit centre and product line from the ZSD log and the Tableau extract.
 // Matching is on invoice number only. Nothing is guessed: no match = the value stays empty.
 // Values found on an earlier upload are kept, so an invoice that is no longer in a later Tableau extract keeps its codes.
-const PROFIT_CENTRE_COMPANY_CODES = ['3060', '3487', '3485']; // profit centre only applies to these
-// Clearwater (G367) invoices are not in Tableau: they all get these fixed values
-const CLEARWATER = { companyCode: 'G367', Product_Line: 'PQP', Business_Type: 'MANUFACTURING' };
+const TABLEAU_COMPANY_CODES = ['3060', '3485', '3487', 'G367']; // other company codes in the Tableau extract are ignored
+// Clearwater (G367): product line PQP when Tableau does not give one
+const CLEARWATER = { companyCode: 'G367', Product_Line: 'PQP' };
 const SOURCES = [ // the read steps, in order of preference for the SAP customer code
   { step: 'Read ZSD Log', label: 'ZSD' },
   { step: 'Read ZSD 2025 Sheet', label: 'ZSD' },
@@ -18,7 +18,7 @@ const key = (v) => {
   return t;
 };
 const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toUpperCase(); // profit centre as text, e.g. GPJ908
-const rows = $('Clean Rows').all().map((i) => ({ ...i.json, Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null }));
+const rows = $('Clean Rows').all().map((i) => ({ ...i.json, Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null }));
 const wanted = new Set(rows.map((r) => key(r.Invoice)));
 
 // rows from one read step (a missing file or sheet gives an error item, which is skipped)
@@ -42,9 +42,8 @@ const isCustomerCode = (h, v) => /customer|sold to|payer/.test(h) && !/name|key|
   && /^[A-Za-z]?\d{3,}$/.test(key(v)); // e.g. 89598 or 160026
 const isProfitCentre = (h) => /profit/.test(h);
 const isProductLine = (h) => /product/.test(h) && !/desc|name/.test(h); // e.g. PTI, AIS, PTR, GIS
-const isBusinessType = (h) => /nature|business type|type of business/.test(h); // e.g. Manufacturing / Services / Trading
 
-const found = { customer: new Map(), profit: new Map(), product: new Map(), business: new Map(), salesOrg: new Map() };
+const found = { customer: new Map(), profit: new Map(), product: new Map(), salesOrg: new Map() };
 const SALES_ORGS = ['G36C', 'GS5C']; // sales orgs of G367 (same list as COMPANY_CODE_FIX in "Clean Rows")
 const isSalesOrg = (h) => /sales org|sorg/.test(h);
 
@@ -63,7 +62,11 @@ const isSalesOrg = (h) => /sales org|sorg/.test(h);
 }
 const notes = [];
 for (const { step, label } of SOURCES) {
-  const data = readRows(step);
+  let data = readRows(step);
+  if (label === 'Tableau') { // keep only the company codes we report on
+    const ccCol = columnBy(data, (h) => h === 'company code');
+    if (ccCol) data = data.filter((r) => TABLEAU_COMPANY_CODES.includes(tidy(r[ccCol])));
+  }
   if (!data.length) continue;
   const inv = invoiceColumn(data);
   if (!inv) { notes.push(`${step}: no invoice numbers matched the tracker`); continue; }
@@ -71,7 +74,6 @@ for (const { step, label } of SOURCES) {
   const prof = label === 'Tableau' ? columnBy(data, isProfitCentre) : null;
   // a heading with "line" in it wins for product line ("Product Line" over "Product")
   const prod = label === 'Tableau' ? (columnBy(data, (h) => isProductLine(h) && /line/.test(h)) || columnBy(data, isProductLine)) : null;
-  const biz = label === 'Tableau' ? columnBy(data, isBusinessType) : null;
   const sorg = label === 'ZSD' ? columnBy(data, (h, v) => isSalesOrg(h) && SALES_ORGS.includes(tidy(v))) : null;
   let matched = 0;
   for (const r of data) {
@@ -81,13 +83,11 @@ for (const { step, label } of SOURCES) {
     if (cust && key(r[cust]) && !found.customer.has(k)) found.customer.set(k, key(r[cust]));
     if (prof && key(r[prof]) && !found.profit.has(k)) found.profit.set(k, tidy(r[prof]));
     if (prod && key(r[prod]) && !found.product.has(k)) found.product.set(k, tidy(r[prod]));
-    if (biz && key(r[biz]) && !found.business.has(k)) found.business.set(k, tidy(r[biz]));
     if (sorg && SALES_ORGS.includes(tidy(r[sorg])) && !found.salesOrg.has(k)) found.salesOrg.set(k, tidy(r[sorg]));
   }
   notes.push(`${step}: ${matched} matching rows (invoice column "${inv}"` +
     (cust ? `, customer code "${cust}"` : ', no customer code column found') +
-    (label === 'Tableau' ? `, profit centre ${prof ? `"${prof}"` : 'not found'}, product line ${prod ? `"${prod}"` : 'not found'}` +
-      `, business type ${biz ? `"${biz}"` : 'not found'})` : ')'));
+    (label === 'Tableau' ? `, profit centre ${prof ? `"${prof}"` : 'not found'}, product line ${prod ? `"${prod}"` : 'not found'})` : ')'));
 }
 
 // values saved on earlier uploads (read by "Check Table" before anything is changed)
@@ -98,15 +98,11 @@ for (const r of rows) {
   const k = key(r.Invoice);
   const old = before.get(k) || {};
   r.SAP_Customer_Code = found.customer.get(k) ?? old.SAP_Customer_Code ?? null;
-  r.Profit_Center = PROFIT_CENTRE_COMPANY_CODES.includes(String(r.Company_Code))
-    ? (found.profit.get(k) ?? old.Profit_Center ?? null) : null;
+  r.Profit_Center = found.profit.get(k) ?? old.Profit_Center ?? null;
+  r.Product_Line = found.product.get(k) ?? old.Product_Line ?? null;
   if (String(r.Company_Code) === CLEARWATER.companyCode) {
-    r.Product_Line = CLEARWATER.Product_Line;
-    r.Business_Type = CLEARWATER.Business_Type;
+    r.Product_Line = r.Product_Line ?? CLEARWATER.Product_Line;
     r.Sales_Org = found.salesOrg.get(k) ?? old.Sales_Org ?? null;
-  } else {
-    r.Product_Line = found.product.get(k) ?? old.Product_Line ?? null;
-    r.Business_Type = found.business.get(k) ?? old.Business_Type ?? null;
   }
 }
 // which columns were used is shown on the Done page; "_lookupNotes" is removed again before saving

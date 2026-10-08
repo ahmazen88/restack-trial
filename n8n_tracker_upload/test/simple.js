@@ -60,7 +60,7 @@ const makeSheet = (count) => {
 };
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
-  Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null };
+  Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null };
 const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
 const fullRun = (sheet, tableRow, aiOut, files = {}) => {
@@ -192,36 +192,37 @@ const zsd = [ // ZSD log: invoice in an unnamed-looking column, customer code in
 ];
 const zsd2025 = [{ json: { 'Billing Doc.': '7001300002', 'Company Code': 'G367', Customer: '170940', Name: 'EKU Power Drives Inc.' } }];
 const tableau = [ // Tableau: several "customer" columns, profit centre, invoice in "Billing Document" (Excel number)
-  { json: { Code: 'GWJ1', 'Company Code': '3060', 'Profit Center': 'GPJ908', Product: 'X', 'Product Line': 'PTI', 'Nature of Business': 'Manufacturing', 'Customer Number': 106685, 'Key Customer': 'SIEMENS', 'Customer Name': 'SIEMENS AG', 'Billing Document': 9001400001, 'Accounting Document': 2000000001 } },
-  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': ' gpj777 ', 'Product Line': 'AIS', 'Nature of Business': 'Services', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': ' 9,001,400,002 ' } },
+  { json: { Code: 'GWJ1', 'Company Code': '3060', 'Profit Center': 'GPJ908', Product: 'X', 'Product Line': 'PTI', 'Nature of Activities PL': 'Manufacturing', 'Customer Number': 106685, 'Key Customer': 'SIEMENS', 'Customer Name': 'SIEMENS AG', 'Billing Document': 9001400001, 'Accounting Document': 2000000001 } },
+  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': ' gpj777 ', 'Product Line': 'AIS', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': ' 9,001,400,002 ' } },
   { json: { Code: 'GWJ1', 'Company Code': '3487', 'Profit Center': '', 'Customer Number': 22806, 'Customer Name': 'ABB', 'Billing Document': '9001400003.0' } },
-  { json: { 'Profit Center': 'GPJ999', 'Customer Number': 99999, 'Billing Document': 7001300001 } }, // G367 invoice: no profit centre
+  { json: { 'Company Code': 'G367', 'Profit Center': 'GPIM0D', 'Product Line': 'PQP', 'Customer Number': 99999, 'Billing Document': 7001300001 } }, // G367 is in Tableau too
+  { json: { 'Company Code': 'GWJ1', 'Profit Center': 'GPXXXX', 'Product Line': 'XXX', 'Customer Number': 12345, 'Billing Document': 7001300002 } }, // other company code: ignored
 ];
 const earlier = [ // the Data Table before this upload: 9001400004 was matched last time, is not in today's Tableau file
-  { ...TABLE_ROW, id: 7, Invoice: 9001400004, Company_Code: '3060', SAP_Customer_Code: '45454', Profit_Center: 'GPJ123', Product_Line: 'GIS', Business_Type: 'TRADING' },
+  { ...TABLE_ROW, id: 7, Invoice: 9001400004, Company_Code: '3060', SAP_Customer_Code: '45454', Profit_Center: 'GPJ123', Product_Line: 'GIS' },
 ];
 const L = fullRun(lookSheet, earlier, [{ json: {} }], { zsd: zsd.concat(NOFILE.slice(0, 0)), zsd2025, tableau });
 const by = Object.fromEntries(L['Rows to Save'].map((i) => [i.json.Invoice, i.json]));
 assert(by[7001300001].Company_Code === 'G367' && by[7001300002].Company_Code === 'G367', 'tracker sales org G36C / GS5C → company code G367');
 assert(by[7001300001].SAP_Customer_Code === '89598' && by[7001300002].SAP_Customer_Code === '170940', 'G367: SAP customer code from the ZSD log (2026 and 2025 sheets)');
-assert(by[7001300001].Profit_Center === null && by[7001300002].Profit_Center === null, 'G367: no profit centre (even if Tableau has one)');
+assert(by[7001300001].Profit_Center === 'GPIM0D' && by[7001300001].SAP_Customer_Code === '89598', 'G367 looked up in Tableau too: profit centre from Tableau, SAP code from ZSD first');
+assert(by[7001300002].Profit_Center === null && by[7001300002].Product_Line === 'PQP', 'Tableau rows of other company codes (GWJ1, GS52) are ignored; G367 without Tableau product line = PQP');
 assert(by[9001400001].SAP_Customer_Code === '106685' && by[9001400001].Profit_Center === 'GPJ908', '3060: SAP customer code and profit centre from Tableau ("Customer Number", not "Key Customer"/"Customer Name")');
 assert(by[9001400002].Profit_Center === 'GPJ777' && by[9001400003].SAP_Customer_Code === '22806' && by[9001400003].Profit_Center === null,
   'cleaned before matching: leading zeros, spaces, commas, "9001400003.0"; profit centre tidied to GPJ777; empty stays empty');
 assert(by[9001400004].SAP_Customer_Code === '45454' && by[9001400004].Profit_Center === 'GPJ123' && by[9001400004].Product_Line === 'GIS', 'invoice no longer in the Tableau file keeps the codes found on an earlier upload');
-assert(/SAP customer code found for 6 of 6 invoices · profit centre found for 3 of 4/.test(L['Summarise Upload'][0].json.message), 'Done page: ' + L['Summarise Upload'][0].json.message.match(/SAP customer code.*?\)/)[0]);
-assert(by[9001400001].Product_Line === 'PTI' && by[9001400001].Business_Type === 'MANUFACTURING' && by[9001400002].Product_Line === 'AIS' && by[9001400002].Business_Type === 'SERVICES',
-  'product line ("Product Line" chosen over "Product") and business type from Tableau');
-assert(by[7001300001].Product_Line === 'PQP' && by[7001300002].Business_Type === 'MANUFACTURING', 'Clearwater (G367): product line PQP, business type Manufacturing');
+assert(/SAP customer code found for 6 of 6 invoices · profit centre found for 4 of 6/.test(L['Summarise Upload'][0].json.message), 'Done page: ' + L['Summarise Upload'][0].json.message.match(/SAP customer code.*?\)/)[0]);
+assert(by[9001400001].Product_Line === 'PTI' && by[9001400002].Product_Line === 'AIS' && !('Business_Type' in by[9001400001]),
+  'product line ("Product Line" chosen over "Product") from Tableau; no business type');
 assert(L['Rows to Save'].every((i) => !('_lookupNotes' in i.json)), 'helper notes are not saved to the Data Table');
 const doneMsg = L['Summarise Upload'][0].json.message;
 assert(/Columns used – Read ZSD Log: 1 matching rows \(invoice column "Billing Doc\.", customer code "Customer"\)/.test(doneMsg) && /product line "Product Line"/.test(doneMsg),
   'Done page lists the columns used from each file');
 const lh = L['Build Report'][0].json.html;
 assert(by[7001300001].Sales_Org === 'G36C' && by[7001300002].Sales_Org === 'GS5C' && by[9001400001].Sales_Org === null, 'sales org kept for G367 (G36C / GS5C), empty for the others');
-assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Business type → Product line/.test(lh) && /CLEARWATER/.test(lh) && /G36C › MANUFACTURING › PQP/.test(lh) && /LA PRAIRIE \(CANADA\)/.test(lh),
-  'one breakdown tree: entity → company code → sales org → profit centre → business type → product line, single groups merged on one line');
-assert(!/Profit centre split|Product line split|Business type split|Company code split/.test(lh), 'no separate, repeated split tables any more');
+assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Product line/.test(lh) && /CLEARWATER/.test(lh) && /G36C › GPIM0D › PQP/.test(lh) && /LA PRAIRIE \(CANADA\)/.test(lh),
+  'one breakdown tree: entity → company code → sales org → profit centre → product line, single groups merged on one line');
+assert(!/Profit centre split|Product line split|Business type|Company code split/.test(lh), 'no separate, repeated split tables any more');
 const lf = JSON.parse(L['Build Report'][0].json.facts);
 assert(lf.profitCentres.some((p) => p.profitCentre === 'GPJ908') && lf.productLines.some((p) => p.productLine === 'PQP'), 'AI facts include profit centres and product lines');
 const dash = Buffer.from(L['Build Report'][0].binary.dashboard.data, 'base64').toString();
@@ -242,18 +243,18 @@ const mk = (i, cc, pc, bt, pl) => ({ Invoice: 8000000000 + i, Value: '100', Cust
 const clean = [];
 for (let i = 0; i < 40; i++) clean.push(mk(i, ['3060', '3485'][i % 2], i % 2 ? 'PC-B' : (i % 4 < 2 ? 'PC-A1' : 'PC-A2'), i % 3 ? 'MANUFACTURING' : 'SERVICES', i % 3 ? 'PTI' : 'AIS'));
 const t1 = treeOf(clean);
-assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Business type → Product line/.test(t1.json.html) && !/Check the data/.test(t1.json.html),
-  'expected order kept; "Manufacturing" under several profit centres is normal, no warning');
+assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Product line/.test(t1.json.html) && !/Check the data/.test(t1.json.html),
+  'expected order kept; one product line under several profit centres is normal, no warning');
 // here each profit centre sits under ONE product line, but product lines span profit centres → product line goes above profit centre
 const swapped = [];
 for (let i = 0; i < 40; i++) { const pl = ['GIS', 'AIS'][i % 2]; swapped.push(mk(i, '3060', pl + '-PC' + (i % 4 < 2 ? 1 : 2), 'MANUFACTURING', pl)); }
 if (process.env.TREE_OUT) {
-  const cw = []; for (let i = 0; i < 12; i++) cw.push({ ...mk(100 + i, 'G367', null, 'MANUFACTURING', 'PQP'), Sales_Org: i % 3 ? 'G36C' : 'GS5C' });
+  const cw = []; for (let i = 0; i < 12; i++) cw.push({ ...mk(100 + i, 'G367', 'GPIM0D', '', 'PQP'), Sales_Org: i % 3 ? 'G36C' : 'GS5C' });
   const pr = []; for (let i = 0; i < 6; i++) pr.push(mk(200 + i, '3487', 'PC-C', i % 2 ? 'TRADING' : 'MANUFACTURING', i % 2 ? 'GIS' : 'PTR'));
   fs.writeFileSync(process.env.TREE_OUT, treeOf(clean.concat(cw, pr)).json.html.replace('<!--charts-->', ''));
 }
 const t2 = JSON.parse(treeOf(swapped).json.facts).structure.order.join(' → ');
-assert(/Business type → Product line → Profit centre|Product line → Profit centre/.test(t2) && !/Profit centre → .*Product line/.test(t2), 'data decides when it contradicts the guess: ' + t2);
+assert(/Sales org → Product line → Profit centre$/.test(t2), 'data decides when it contradicts the guess: ' + t2);
 const messyTree = clean.map((r, i) => (i === 0 ? { ...r, Company_Code: '3485', Profit_Center: 'PC-A1' } : r));
 assert(/Check the data: 1 profit centre\(s\) appear under more than one company code \(PC-A1\)/.test(treeOf(messyTree).json.html), 'a profit centre under two company codes is pointed out');
 

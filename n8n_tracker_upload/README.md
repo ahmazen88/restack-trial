@@ -181,7 +181,12 @@ charts (work in Outlook). dashboard.html: SVG charts. An unfinished month is mar
 
 ### Breakdown tree
 One table instead of separate splits: Entity (La Prairie Canada = 3060 + 3487, Charleroi = 3485, Clearwater = G367)
-→ Company code → Sales org (G36C / GS5C, G367 only) → profit centre / business type / product line. The order of the
-last three is checked against the data (fewest values under more than one parent; ties keep profit centre → business
-type → product line). Empty levels are skipped and single groups are merged onto one line. A profit centre (or other
+→ Company code → Sales org (G36C / GS5C, G367 only) → profit centre / product line. The order of the last two is
+checked against the data (fewest values under more than one parent; a tie keeps profit centre → product line). Empty levels are skipped and single groups are merged onto one line. A profit centre (or other
 value) under more than one company code is pointed out. Needs the `Sales_Org` column in the Data Table.
+
+### Lookup rules (latest)
+- Tableau rows are used only for company codes 3060, 3485, 3487 and G367 (GS52, GWJ1 and others are ignored).
+- G367 is looked up in Tableau too: SAP customer code from the ZSD log first, then Tableau; profit centre and product line
+  from Tableau; product line PQP when Tableau has none.
+- Business type (Nature of Activities PL / PC) and Customer Type are not used for now.
