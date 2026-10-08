@@ -23,6 +23,8 @@ const ALIASES = {
 const TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
 const KEY = 'Invoice';
 const UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together
+// The tracker sometimes holds the sales org instead of the company code. Left = sales org, right = real company code.
+const COMPANY_CODE_FIX = { G36C: 'G367', GS5C: 'G367' };
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const lookup = new Map();
@@ -57,7 +59,8 @@ const convert = (col, v) => {
     return isNaN(d) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   const text = String(v).replace(/\s+/g, ' ').trim();
-  return UPPER.includes(col) ? text.toUpperCase() : text;
+  const out = UPPER.includes(col) ? text.toUpperCase() : text;
+  return col === 'Company_Code' && COMPANY_CODE_FIX[out] ? COMPANY_CODE_FIX[out] : out;
 };
 
 // Stop early on the wrong file / wrong tab instead of saving nothing

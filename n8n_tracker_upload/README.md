@@ -160,3 +160,15 @@ Safety: **Safety Check** runs before **Clear Table**. An empty sheet, the wrong 
 numbers, or a Data Table missing one of the columns all stop the run with a clear message, and the table is left
 as it was. Invoice numbers that are not a plain number (e.g. `7001 / 7002`) are skipped and listed on the Done page,
 never guessed. Amounts like `$1,157.44` and `(1,157.44)` are read correctly; Excel dates with a time part keep their day.
+
+### SAP customer code and profit centre (lookups)
+The upload form has two optional boxes: **ZSD Log** and **Tableau Extract**.
+- G367 (tracker sales org G36C / GS5C is changed to G367): SAP customer code from the ZSD log (first sheet and
+  `2025 Inv Processed`). No profit centre.
+- 3060 / 3487 / 3485: SAP customer code and profit centre from the Tableau extract.
+- Matching is on invoice number only. The invoice column is the one whose values match the tracker's invoice numbers,
+  so the heading spelling does not matter. No match = empty (never guessed).
+- Codes found on an earlier upload are kept (read from the Data Table before it is cleared), so invoices that are no
+  longer in a later Tableau extract keep their codes.
+- The Data Table needs two extra string columns: `SAP_Customer_Code`, `Profit_Center`. The Safety Check stops with a
+  clear message until they exist.

@@ -293,9 +293,11 @@ def simple_workflow():
     report_js = (js('analytics.js')
                  .replace("const settings = $('Report Settings').first().json;",
                           "const settings = { type: 'Overview', source: 'form' };")
-                 .replace("$('Get All Rows').all()", "$('Clean Rows').all()"))
+                 .replace("$('Get All Rows').all()", "$('Add Lookups').all()"))
     y = 300
-    names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows', 'Check Table', 'Safety Check', 'Clear Table',
+    names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows',
+             'Pick ZSD File', 'Read ZSD Log', 'Pick ZSD File Again', 'Read ZSD 2025 Sheet',
+             'Pick Tableau File', 'Read Tableau Extract', 'Check Table', 'Add Lookups', 'Safety Check', 'Clear Table',
              'Rows to Save', 'Save All Rows',
              'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary', send, 'Done Page']
     pos = {n: [220 * i, y] for i, n in enumerate(names)}
@@ -303,23 +305,46 @@ def simple_workflow():
         node(p, 'Upload Tracker', 'formTrigger', 2.2, pos['Upload Tracker'], {
             'formTitle': 'Upload Production Tracker',
             'formDescription': 'Upload the latest tracker (.xlsx). It is saved to the Data Table and the report '
-                               'is emailed to you. Please wait on this page until it says Done.',
-            'formFields': {'values': [{'fieldLabel': 'Tracker File', 'fieldType': 'file', 'multipleFiles': False,
-                                       'acceptFileTypes': '.xlsx,.xlsm', 'requiredField': True}]},
+                               'is emailed to you. The ZSD log and the Tableau extract are optional: add them '
+                               'to fill in SAP customer code and profit centre. Please wait on this page until it '
+                               'says Done.',
+            'formFields': {'values': [
+                {'fieldLabel': 'Tracker File', 'fieldType': 'file', 'multipleFiles': False,
+                 'acceptFileTypes': '.xlsx,.xlsm', 'requiredField': True},
+                {'fieldLabel': 'ZSD Log', 'fieldType': 'file', 'multipleFiles': False,
+                 'acceptFileTypes': '.xlsx,.xlsm', 'requiredField': False},
+                {'fieldLabel': 'Tableau Extract', 'fieldType': 'file', 'multipleFiles': False,
+                 'acceptFileTypes': '.xlsx,.xlsm', 'requiredField': False}]},
             'responseMode': 'lastNode',
             'options': {'path': 'production-tracker', 'buttonLabel': 'Upload'}}),
         node(p, 'Read Tracker Sheet', 'extractFromFile', 1, pos['Read Tracker Sheet'], {
             'operation': 'xlsx', 'binaryPropertyName': 'Tracker_File', 'options': {}},
              alwaysOutputData=True),  # an empty sheet still reaches Clean Rows, which explains the problem
         node(p, 'Clean Rows', 'code', 2, pos['Clean Rows'], {'jsCode': js('clean.js')}),
+        # optional files: each read step gets the uploaded files again; a missing file or sheet is skipped
+        node(p, 'Pick ZSD File', 'code', 2, pos['Pick ZSD File'], {'jsCode': js('pick_file.js')}, executeOnce=True),
+        node(p, 'Read ZSD Log', 'extractFromFile', 1, pos['Read ZSD Log'], {
+            'operation': 'xlsx', 'binaryPropertyName': 'ZSD_Log', 'options': {}},
+             alwaysOutputData=True, onError='continueRegularOutput'),
+        node(p, 'Pick ZSD File Again', 'code', 2, pos['Pick ZSD File Again'], {'jsCode': js('pick_file.js')},
+             executeOnce=True),
+        node(p, 'Read ZSD 2025 Sheet', 'extractFromFile', 1, pos['Read ZSD 2025 Sheet'], {
+            'operation': 'xlsx', 'binaryPropertyName': 'ZSD_Log', 'options': {'sheetName': '2025 Inv Processed'}},
+             alwaysOutputData=True, onError='continueRegularOutput'),
+        node(p, 'Pick Tableau File', 'code', 2, pos['Pick Tableau File'], {'jsCode': js('pick_file.js')},
+             executeOnce=True),
+        node(p, 'Read Tableau Extract', 'extractFromFile', 1, pos['Read Tableau Extract'], {
+            'operation': 'xlsx', 'binaryPropertyName': 'Tableau_Extract', 'options': {}},
+             alwaysOutputData=True, onError='continueRegularOutput'),
         node(p, 'Check Table', 'dataTable', 1, pos['Check Table'], {
             'resource': 'row', 'operation': 'get', 'dataTableId': DATA_TABLE,
-            'matchType': 'anyCondition', 'filters': {}, 'returnAll': False, 'limit': 1},
+            'matchType': 'anyCondition', 'filters': {}, 'returnAll': True},
              executeOnce=True, alwaysOutputData=True),
+        node(p, 'Add Lookups', 'code', 2, pos['Add Lookups'], {'jsCode': js('lookups.js')}, executeOnce=True),
         node(p, 'Safety Check', 'code', 2, pos['Safety Check'], {'jsCode': js('safety.js')}),
         node(p, 'Clear Table', 'dataTable', 1, pos['Clear Table'], {
             'resource': 'table', 'operation': 'clear', 'dataTableId': DATA_TABLE}, executeOnce=True),
-        node(p, 'Rows to Save', 'code', 2, pos['Rows to Save'], {'jsCode': js('restore_all.js')}),
+        node(p, 'Rows to Save', 'code', 2, pos['Rows to Save'], {'jsCode': js('restore_lookups.js')}),
         node(p, 'Save All Rows', 'dataTable', 1, pos['Save All Rows'], {
             'resource': 'row', 'operation': 'insert', 'dataTableId': DATA_TABLE,
             'columns': {'mappingMode': 'autoMapInputData', 'value': {}, 'matchingColumns': [], 'schema': []},
@@ -338,6 +363,7 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
+                  '0. In the Data Table `datatable` add two columns (type *string*): `SAP_Customer_Code` and `Profit_Center`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
                   '3. From *Report copy* copy **GEV LLM Model** → paste here → drag it to the *Model* dot under '
@@ -347,7 +373,7 @@ def simple_workflow():
                   'To `{{ $json.to }}` · Subject `{{ $json.subject }}` · Email Format `HTML` · '
                   'HTML `{{ $json.html }}` · Attachments `dashboard`\n'
                   '5. **Publish** → open **Upload Tracker** → copy the *Production URL* → open it and upload the tracker',
-               [0, -120], height=360, width=900),
+               [0, -140], height=380, width=900),
     ]
     return 'Production Tracker', nodes, chain(*names)
 

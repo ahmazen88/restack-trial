@@ -66,6 +66,13 @@ if (duplicates.length) {
 for (const [label, { count, examples }] of Object.entries(issues)) {
   parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);
 }
+// SAP customer code / profit centre coverage (only when the "Add Lookups" step is used)
+try {
+  const looked = $('Add Lookups').all().map((i) => i.json);
+  const pcRows = looked.filter((r) => ['3060', '3487', '3485'].includes(String(r.Company_Code)));
+  parts.push(`SAP customer code found for ${fmt(looked.filter((r) => r.SAP_Customer_Code).length)} of ${fmt(looked.length)} invoices` +
+    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)} (3060 / 3487 / 3485)`);
+} catch (e) { /* step not in this workflow */ }
 if (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');
 
 return [{
