@@ -4,7 +4,7 @@ const rows = $('Add Lookups').all();
 if (!rows.length) {
   throw new Error('No rows with an invoice number were found in the file. Nothing was changed.');
 }
-const columns = Object.keys(rows[0].json); // the columns that will be saved
+const columns = Object.keys(rows[0].json).filter((k) => !k.startsWith('_')); // the columns that will be saved
 const sample = $('Check Table').first().json || {}; // an existing row of the Data Table (empty if the table is empty)
 const tableColumns = Object.keys(sample);
 if (tableColumns.length) {

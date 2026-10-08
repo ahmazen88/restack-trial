@@ -43,7 +43,12 @@ function analyse(all, opts, RULES) {
 
   const cc = String(opts.companyCode || '').trim().toUpperCase();
   const cust = String(opts.customer || '').trim().toUpperCase();
-  const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust)));
+  const pcSel = String(opts.profitCentre || '').trim().toUpperCase();
+  const plSel = String(opts.productLine || '').trim().toUpperCase();
+  const pcKey = (r) => r.pc || (r.cc === 'G367' ? 'N/A (G367)' : 'NOT FOUND');
+  const plKey = (r) => r.pl || 'NOT FOUND';
+  const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust))
+    && (!pcSel || pcKey(r) === pcSel) && (!plSel || plKey(r) === plSel));
   const inRange = (a, b) => scoped.filter((r) => r.d >= a && r.d <= b);
   const cur = inRange(from, to);
   const [pf, pt] = shift(1);
@@ -128,8 +133,17 @@ function analyse(all, opts, RULES) {
     key: g.key, n: g.n, v: g.v, prevN: prev.filter((r) => (r.cc || 'UNKNOWN') === g.key).length,
     top: groupBy(g.rows, (r) => r.c).sort(byValue).slice(0, 5),
   }));
+  const split = (keyOf) => groupBy(cur, keyOf).sort(byValue).map((g) => ({
+    key: g.key, n: g.n, v: g.v, prevN: prev.filter((r) => keyOf(r) === g.key).length, tat: avgTat(g.rows),
+    top: groupBy(g.rows, (r) => r.c).sort(byValue).slice(0, 5),
+  }));
+  const profitCentres = split(pcKey);
+  const productLines = split(plKey);
+  const businessTypes = split((r) => r.bt || 'NOT FOUND');
+  const mostCommon = (rows, f) => groupBy(rows, f).sort((a, b) => b.n - a.n || String(a.key).localeCompare(String(b.key)))[0]?.key || '';
   const customers = groupBy(cur, (r) => r.c).sort(byValue).slice(0, 15).map((g) => ({
     key: g.key, n: g.n, v: g.v, tat: avgTat(g.rows), prevN: prev.filter((r) => r.c === g.key).length,
+    pc: mostCommon(g.rows, (r) => r.pc), pl: mostCommon(g.rows, (r) => r.pl), sap: mostCommon(g.rows, (r) => r.sap),
     trend: monthsBack.slice(-6).map((m) => scoped.filter((r) => r.c === g.key && r.d.slice(0, 7) === m.slice(0, 7)).length),
   }));
   const channels = groupBy(cur, channel).sort((a, b) => b.n - a.n);
@@ -141,7 +155,7 @@ function analyse(all, opts, RULES) {
   };
 
   return {
-    label, type, from, to, first, latest, cc, cust, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
+    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, businessTypes, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
     nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),
     watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,
   };
@@ -173,7 +187,13 @@ function render(a) {
   const shade = (n) => { if (!n) return '#f9fafb'; const t = n / maxH; const mix = (x, y) => x + (y - x) * t; return `#${hex2(mix(219, 30))}${hex2(mix(234, 64))}${hex2(mix(254, 175))}`; };
   const maxWd = Math.max(1, ...a.weekday.map((w) => w.n));
   const f = a.forecast;
-  const scope = [a.cc && `company code ${a.cc}`, a.cust && `customer contains "${a.cust}"`].filter(Boolean).join(', ') || 'all company codes and customers';
+  const scope = [a.cc && `company code ${a.cc}`, a.pcSel && `profit centre ${a.pcSel}`, a.plSel && `product line ${a.plSel}`,
+    a.cust && `customer contains "${a.cust}"`].filter(Boolean).join(', ') || 'all company codes, profit centres, product lines and customers';
+  const splitTable = (title, sub, head, list) => h(title, sub) + table([head, 'Invoices', 'Value', 'Share', 'vs previous', 'Avg days'], list.map((c) => {
+    const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null;
+    return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}</tr>` +
+      c.top.slice(0, 3).map((t) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}${td('')}</tr>`).join('');
+  }));
 
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:${C.ink};max-width:900px">
 <h2 style="margin:0;color:${C.head}">Production Tracker – ${esc(a.type)} report</h2>
@@ -200,8 +220,11 @@ ${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [
 ${h('Company code split', 'With the top customers of each company code')}
 ${table(['Company code', 'Invoices', 'Value', 'Share', 'vs previous'], a.companies.map((c) => { const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null; return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}</tr>` +
       c.top.map((t) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}</tr>`).join(''); }))}
+${splitTable('Profit centre split', 'Profit centre applies to 3060 / 3487 / 3485 (from the Tableau extract); with the top customers of each', 'Profit centre', a.profitCentres)}
+${splitTable('Product line split', 'From the Tableau extract; Clearwater (G367) = PQP', 'Product line', a.productLines)}
+${splitTable('Business type split', 'Manufacturing / services / trading, from the Tableau extract; Clearwater (G367) = Manufacturing', 'Business type', a.businessTypes)}
 ${h('Customer details (top 15 by value)', 'Trend = invoices per month, last 6 months')}
-${table(['Customer', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}
+${table(['Customer', 'SAP code', 'Profit centre', 'Product line', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(esc(c.sap || '–'))}${td(esc(c.pc || '–'))}${td(esc(c.pl || '–'))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}
 ${h('Channels & project managers')}
 ${table(['Channel', 'Invoices', 'Share'], a.channels.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(share(c.n, a.total.n), 1)}</tr>`))}
 <div style="height:10px"></div>
@@ -224,6 +247,8 @@ for (const { json: r } of $('Get All Rows').all()) {
     i: r.Invoice, d: String(d).slice(0, 10), rd: String(r.Received_Date || '').slice(0, 10), ad: String(r.Allocated_Date || '').slice(0, 10),
     c: String(r.Customer || 'UNKNOWN CUSTOMER').trim().toUpperCase(), cc: String(r.Company_Code || '').trim().toUpperCase(),
     pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,
+    sap: String(r.SAP_Customer_Code || '').trim(), pc: String(r.Profit_Center || '').trim().toUpperCase(),
+    pl: String(r.Product_Line || '').trim().toUpperCase(), bt: String(r.Business_Type || '').trim().toUpperCase(),
   });
 }
 const rows = [...seen.values()];
@@ -235,12 +260,18 @@ if (!recipients) throw new Error('Add at least one email address to RECIPIENTS a
 
 const safeJson = (x) => JSON.stringify(x).replace(/</g, '\\u003c');
 const companyCodes = [...new Set(rows.map((r) => r.cc).filter(Boolean))].sort();
+const listOf = (f) => [...new Set(rows.map(f))].sort();
+const options = (list) => list.map((c) => `<option>${String(c).replace(/[&<>"]/g, '')}</option>`).join('');
+const profitCentreList = listOf((r) => r.pc || (r.cc === 'G367' ? 'N/A (G367)' : 'NOT FOUND'));
+const productLineList = listOf((r) => r.pl || 'NOT FOUND');
 const dashboard = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Production Tracker Dashboard</title></head><body style="margin:0;padding:18px;background:#fff">
 <div style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#f3f4f6;padding:12px;border-radius:6px;margin-bottom:12px;max-width:900px">
 <b>Choose:</b> Report <select id="t"><option>Overview</option><option>Weekly</option><option>Monthly</option><option>Custom period</option></select>
 From <input id="f" type="date"> To <input id="o" type="date">
 Company code <select id="cc"><option value="">All</option>${companyCodes.map((c) => `<option>${c}</option>`).join('')}</select>
+Profit centre <select id="pc"><option value="">All</option>${options(profitCentreList)}</select>
+Product line <select id="pl"><option value="">All</option>${options(productLineList)}</select>
 Customer contains <input id="cu" size="18"> <button id="go">Show</button></div>
 <div id="out"></div>
 <script>
@@ -250,7 +281,7 @@ ${analyse.toString()}
 ${render.toString()}
 const $id = (x) => document.getElementById(x);
 function show() {
-  const opts = { type: $id('t').value, from: $id('f').value, to: $id('o').value, companyCode: $id('cc').value, customer: $id('cu').value };
+  const opts = { type: $id('t').value, from: $id('f').value, to: $id('o').value, companyCode: $id('cc').value, customer: $id('cu').value, profitCentre: $id('pc').value, productLine: $id('pl').value };
   if ((opts.from || opts.to) && opts.type !== 'Custom period') { opts.type = 'Custom period'; $id('t').value = opts.type; }
   $id('out').innerHTML = render(analyse(ROWS, opts, RULES));
 }
@@ -265,7 +296,7 @@ const quality = (() => { try { return $('Summarise Upload').first().json.message
 const r2 = (x) => Math.round(x * 100) / 100;
 const p1 = (x) => (x === null || x === undefined ? null : Math.round(x * 1000) / 10);
 const facts = a.empty ? { empty: true } : {
-  report: a.type, period: `${a.from} to ${a.to}`, scope: { companyCode: a.cc || 'all', customer: a.cust || 'all' },
+  report: a.type, period: `${a.from} to ${a.to}`, scope: { companyCode: a.cc || 'all', profitCentre: a.pcSel || 'all', productLine: a.plSel || 'all', customer: a.cust || 'all' },
   invoices: a.total.n, value: r2(a.total.v),
   previousPeriod: { invoices: a.prevTotal.n, value: r2(a.prevTotal.v) },
   changePercent: { invoices: p1(a.nChange), value: p1(a.vChange) },
@@ -281,7 +312,10 @@ const facts = a.empty ? { empty: true } : {
     nextMonth: { month: a.forecast.nextMonth, expectedInvoices: Math.round(a.forecast.monthN.avg), low: a.forecast.monthN.lo, high: a.forecast.monthN.hi, expectedValue: r2(a.forecast.monthV.avg) },
   },
   companyCodes: a.companies.map((c) => ({ code: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
-  topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
+  profitCentres: a.profitCentres.slice(0, 12).map((c) => ({ profitCentre: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, avgDays: c.tat === null ? null : r2(c.tat), topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
+  productLines: a.productLines.map((c) => ({ productLine: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
+  businessTypes: a.businessTypes.map((c) => ({ businessType: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
+  topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, sapCode: c.sap || null, profitCentre: c.pc || null, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
   channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),
   dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
 };
@@ -294,7 +328,7 @@ return [{
     to: recipients,
     subject,
     facts: JSON.stringify(facts),
-    html: uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code and customer. Open it in your browser.</p>',
+    html: uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code, profit centre, product line and customer. Open it in your browser.</p>',
     doneMessage: (quality ? quality + '. ' : '') + `Report "${a.label || ''}" sent to ${recipients}.`,
   },
   binary: {

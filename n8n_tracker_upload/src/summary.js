@@ -71,7 +71,9 @@ try {
   const looked = $('Add Lookups').all().map((i) => i.json);
   const pcRows = looked.filter((r) => ['3060', '3487', '3485'].includes(String(r.Company_Code)));
   parts.push(`SAP customer code found for ${fmt(looked.filter((r) => r.SAP_Customer_Code).length)} of ${fmt(looked.length)} invoices` +
-    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)} (3060 / 3487 / 3485)`);
+    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)} (3060 / 3487 / 3485)` +
+    ` · product line found for ${fmt(pcRows.filter((r) => r.Product_Line).length)} of ${fmt(pcRows.length)} (G367 = PQP)`);
+  if (looked[0]?._lookupNotes) parts.push(`Columns used – ${looked[0]._lookupNotes}`);
 } catch (e) { /* step not in this workflow */ }
 if (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');
 

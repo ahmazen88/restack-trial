@@ -60,7 +60,7 @@ const makeSheet = (count) => {
 };
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
-  SAP_Customer_Code: null, Profit_Center: null };
+  SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null };
 const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
 const fullRun = (sheet, tableRow, aiOut, files = {}) => {
@@ -165,13 +165,13 @@ const zsd = [ // ZSD log: invoice in an unnamed-looking column, customer code in
 ];
 const zsd2025 = [{ json: { 'Billing Doc.': '7001300002', 'Company Code': 'G367', Customer: '170940', Name: 'EKU Power Drives Inc.' } }];
 const tableau = [ // Tableau: several "customer" columns, profit centre, invoice in "Billing Document" (Excel number)
-  { json: { Code: 'GWJ1', 'Company Code': '3060', 'Profit Center': 'GPJ908', 'Customer Number': 106685, 'Key Customer': 'SIEMENS', 'Customer Name': 'SIEMENS AG', 'Billing Document': 9001400001, 'Accounting Document': 2000000001 } },
-  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': ' gpj777 ', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': ' 9,001,400,002 ' } },
+  { json: { Code: 'GWJ1', 'Company Code': '3060', 'Profit Center': 'GPJ908', Product: 'X', 'Product Line': 'PTI', 'Nature of Business': 'Manufacturing', 'Customer Number': 106685, 'Key Customer': 'SIEMENS', 'Customer Name': 'SIEMENS AG', 'Billing Document': 9001400001, 'Accounting Document': 2000000001 } },
+  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': ' gpj777 ', 'Product Line': 'AIS', 'Nature of Business': 'Services', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': ' 9,001,400,002 ' } },
   { json: { Code: 'GWJ1', 'Company Code': '3487', 'Profit Center': '', 'Customer Number': 22806, 'Customer Name': 'ABB', 'Billing Document': '9001400003.0' } },
   { json: { 'Profit Center': 'GPJ999', 'Customer Number': 99999, 'Billing Document': 7001300001 } }, // G367 invoice: no profit centre
 ];
 const earlier = [ // the Data Table before this upload: 9001400004 was matched last time, is not in today's Tableau file
-  { ...TABLE_ROW, id: 7, Invoice: 9001400004, Company_Code: '3060', SAP_Customer_Code: '45454', Profit_Center: 'GPJ123' },
+  { ...TABLE_ROW, id: 7, Invoice: 9001400004, Company_Code: '3060', SAP_Customer_Code: '45454', Profit_Center: 'GPJ123', Product_Line: 'GIS', Business_Type: 'TRADING' },
 ];
 const L = fullRun(lookSheet, earlier, [{ json: {} }], { zsd: zsd.concat(NOFILE.slice(0, 0)), zsd2025, tableau });
 const by = Object.fromEntries(L['Rows to Save'].map((i) => [i.json.Invoice, i.json]));
@@ -181,8 +181,23 @@ assert(by[7001300001].Profit_Center === null && by[7001300002].Profit_Center ===
 assert(by[9001400001].SAP_Customer_Code === '106685' && by[9001400001].Profit_Center === 'GPJ908', '3060: SAP customer code and profit centre from Tableau ("Customer Number", not "Key Customer"/"Customer Name")');
 assert(by[9001400002].Profit_Center === 'GPJ777' && by[9001400003].SAP_Customer_Code === '22806' && by[9001400003].Profit_Center === null,
   'cleaned before matching: leading zeros, spaces, commas, "9001400003.0"; profit centre tidied to GPJ777; empty stays empty');
-assert(by[9001400004].SAP_Customer_Code === '45454' && by[9001400004].Profit_Center === 'GPJ123', 'invoice no longer in the Tableau file keeps the codes found on an earlier upload');
+assert(by[9001400004].SAP_Customer_Code === '45454' && by[9001400004].Profit_Center === 'GPJ123' && by[9001400004].Product_Line === 'GIS', 'invoice no longer in the Tableau file keeps the codes found on an earlier upload');
 assert(/SAP customer code found for 6 of 6 invoices · profit centre found for 3 of 4/.test(L['Summarise Upload'][0].json.message), 'Done page: ' + L['Summarise Upload'][0].json.message.match(/SAP customer code.*?\)/)[0]);
+assert(by[9001400001].Product_Line === 'PTI' && by[9001400001].Business_Type === 'MANUFACTURING' && by[9001400002].Product_Line === 'AIS' && by[9001400002].Business_Type === 'SERVICES',
+  'product line ("Product Line" chosen over "Product") and business type from Tableau');
+assert(by[7001300001].Product_Line === 'PQP' && by[7001300002].Business_Type === 'MANUFACTURING', 'Clearwater (G367): product line PQP, business type Manufacturing');
+assert(L['Rows to Save'].every((i) => !('_lookupNotes' in i.json)), 'helper notes are not saved to the Data Table');
+const doneMsg = L['Summarise Upload'][0].json.message;
+assert(/Columns used – Read ZSD Log: 1 matching rows \(invoice column "Billing Doc\.", customer code "Customer"\)/.test(doneMsg) && /product line "Product Line"/.test(doneMsg),
+  'Done page lists the columns used from each file');
+const lh = L['Build Report'][0].json.html;
+assert(/Profit centre split/.test(lh) && /GPJ908/.test(lh) && /N\/A \(G367\)/.test(lh) && /Product line split/.test(lh) && /PQP/.test(lh) && /Business type split/.test(lh),
+  'report has profit centre, product line and business type splits');
+const lf = JSON.parse(L['Build Report'][0].json.facts);
+assert(lf.profitCentres.some((p) => p.profitCentre === 'GPJ908') && lf.productLines.some((p) => p.productLine === 'PQP'), 'AI facts include profit centres and product lines');
+const dash = Buffer.from(L['Build Report'][0].binary.dashboard.data, 'base64').toString();
+if (process.env.DASH_OUT) fs.writeFileSync(process.env.DASH_OUT, dash);
+assert(/id="pc"/.test(dash) && /<option>GPJ908<\/option>/.test(dash) && /id="pl"/.test(dash), 'dashboard has profit centre and product line filters');
 const wrongZsd = fullRun(lookSheet, {}, [{ json: {} }], { zsd: [{ json: { A: 1, B: 'x' } }] });
 assert(wrongZsd['Rows to Save'].every((i) => i.json.SAP_Customer_Code === null), 'a file with no matching invoice numbers fills nothing (no guessing)');
 
