@@ -9,7 +9,13 @@ const SOURCES = [ // the read steps, in order of preference for the SAP customer
 ];
 
 const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const key = (v) => String(v ?? '').trim().replace(/\.0+$/, ''); // 7001212645 and "7001212645.0" match
+// cleaned value for matching: "0007001212645", " 7,001,212,645 ", "'7001212645" and 7001212645.0 all become 7001212645
+const key = (v) => {
+  let t = String(v ?? '').trim().replace(/^'/, '').replace(/\.0+$/, '');
+  if (/^[\d\s,]+$/.test(t)) t = t.replace(/[\s,]/g, '').replace(/^0+(?=\d)/, '');
+  return t;
+};
+const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toUpperCase(); // profit centre as text, e.g. GPJ908
 const rows = $('Clean Rows').all().map((i) => ({ ...i.json, SAP_Customer_Code: null, Profit_Center: null }));
 const wanted = new Set(rows.map((r) => key(r.Invoice)));
 
@@ -49,7 +55,7 @@ for (const { step, label } of SOURCES) {
     if (!wanted.has(k)) continue;
     matched++;
     if (cust && key(r[cust]) && !found.customer.has(k)) found.customer.set(k, key(r[cust]));
-    if (prof && key(r[prof]) && !found.profit.has(k)) found.profit.set(k, String(r[prof]).trim());
+    if (prof && key(r[prof]) && !found.profit.has(k)) found.profit.set(k, tidy(r[prof]));
   }
   notes.push(`${step}: ${matched} matching rows (invoice column "${inv}"` +
     (cust ? `, customer code "${cust}"` : ', no customer code column found') +

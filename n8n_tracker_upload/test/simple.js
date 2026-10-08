@@ -160,13 +160,13 @@ const lookSheet = [
   { json: { Invoice: 9001400004, Value: 60, Customer: 'OLD ONE', 'Company Code': '3060', Received_Date: '2026-04-03' } },
 ];
 const zsd = [ // ZSD log: invoice in an unnamed-looking column, customer code in "Customer", name in "Name"
-  { json: { 'Billing Doc.': 7001300001, 'Billing Date': 46000, 'Company Code': 'G367', Customer: 89598, Name: 'IDAHO POWER COMPANY', Text: 'Successfully Processed', 'Net Value': 10 } },
+  { json: { 'Billing Doc.': '0007001300001', 'Billing Date': 46000, 'Company Code': 'G367', Customer: '0000089598', Name: 'IDAHO POWER COMPANY', Text: 'Successfully Processed', 'Net Value': 10 } },
   { json: { 'Billing Doc.': 5555555555, 'Company Code': 'G367', Customer: 11111, Name: 'NOT IN TRACKER' } },
 ];
 const zsd2025 = [{ json: { 'Billing Doc.': '7001300002', 'Company Code': 'G367', Customer: '170940', Name: 'EKU Power Drives Inc.' } }];
 const tableau = [ // Tableau: several "customer" columns, profit centre, invoice in "Billing Document" (Excel number)
   { json: { Code: 'GWJ1', 'Company Code': '3060', 'Profit Center': 'GPJ908', 'Customer Number': 106685, 'Key Customer': 'SIEMENS', 'Customer Name': 'SIEMENS AG', 'Billing Document': 9001400001, 'Accounting Document': 2000000001 } },
-  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': 'GPJ777', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': 9001400002 } },
+  { json: { Code: 'GWJ1', 'Company Code': '3485', 'Profit Center': ' gpj777 ', 'Customer Number': 80950, 'Key Customer': 'EATON', 'Customer Name': 'EATON', 'Billing Document': ' 9,001,400,002 ' } },
   { json: { Code: 'GWJ1', 'Company Code': '3487', 'Profit Center': '', 'Customer Number': 22806, 'Customer Name': 'ABB', 'Billing Document': '9001400003.0' } },
   { json: { 'Profit Center': 'GPJ999', 'Customer Number': 99999, 'Billing Document': 7001300001 } }, // G367 invoice: no profit centre
 ];
@@ -180,7 +180,7 @@ assert(by[7001300001].SAP_Customer_Code === '89598' && by[7001300002].SAP_Custom
 assert(by[7001300001].Profit_Center === null && by[7001300002].Profit_Center === null, 'G367: no profit centre (even if Tableau has one)');
 assert(by[9001400001].SAP_Customer_Code === '106685' && by[9001400001].Profit_Center === 'GPJ908', '3060: SAP customer code and profit centre from Tableau ("Customer Number", not "Key Customer"/"Customer Name")');
 assert(by[9001400002].Profit_Center === 'GPJ777' && by[9001400003].SAP_Customer_Code === '22806' && by[9001400003].Profit_Center === null,
-  '3485 / 3487 matched; "9001400003.0" matches 9001400003; empty profit centre stays empty');
+  'cleaned before matching: leading zeros, spaces, commas, "9001400003.0"; profit centre tidied to GPJ777; empty stays empty');
 assert(by[9001400004].SAP_Customer_Code === '45454' && by[9001400004].Profit_Center === 'GPJ123', 'invoice no longer in the Tableau file keeps the codes found on an earlier upload');
 assert(/SAP customer code found for 6 of 6 invoices · profit centre found for 3 of 4/.test(L['Summarise Upload'][0].json.message), 'Done page: ' + L['Summarise Upload'][0].json.message.match(/SAP customer code.*?\)/)[0]);
 const wrongZsd = fullRun(lookSheet, {}, [{ json: {} }], { zsd: [{ json: { A: 1, B: 'x' } }] });
