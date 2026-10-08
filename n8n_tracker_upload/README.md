@@ -102,5 +102,27 @@ Behaviour:
 - The file is in a personal OneDrive. If it moves to a team SharePoint site, swap the two OneDrive nodes for
   SharePoint nodes; everything else stays the same.
 
+## Upload, reports & dashboard: one workflow (`tracker_reports_workflow.json`)
+Four ways in, one report engine:
+```
+Upload Tracker (form) ─► Read ─► Clean Rows ─► Upsert ─► Summarise ─┐
+Request a Report (form: type, From/To, company code, customer, send to) ──┤
+Every Monday 07:00 (weekly) ──────────────────────────────────────────────┼─► Get All Rows ─► Report Settings ─► Build Report
+1st of month 07:00 (monthly) ─────────────────────────────────────────────┘        ─► [GEV Send Email] ─► Done Page (forms only)
+```
+The report covers headlines with change vs the previous period and a forecast, **customers to look out for**
+(volume spike / sharp fall / gone quiet / new / high value share / slow turnaround / portal / data issues),
+incoming volume by month and week, the **workload heatmap** (day of month × month), busiest weekdays,
+the **forecast** (next 4 weeks and next month, with range), the company code split with top customers,
+customer details with a 6-month trend, channels, project managers and data quality.
+All rules are fixed and listed at the top of **Build Report** (`RULES`). The same data always gives the same report.
+
+The email has the report; the attached **dashboard.html** has the same report with its own filters (period,
+company code, customer). It opens in any browser. If the company blocks .html attachments, use the request form.
+
+Setup: Data Table in **Upsert** and **Get All Rows**; `RECIPIENTS` in **Build Report**; swap the placeholder
+**Send Report** for the GEV *Send an Email* node (To `{{ $json.to }}`, Subject `{{ $json.subject }}`, HTML
+`{{ $json.html }}`, Attachments `dashboard`); publish and share the two form links.
+
 ## Editing
 Edit `src/*.js`, run `python3 build.py` to regenerate both workflow JSON files, and `node test/run.js` to re-test.

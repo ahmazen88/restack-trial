@@ -145,9 +145,83 @@ def onedrive_workflow():
     return 'Production Tracker – OneDrive to Report', nodes, connections
 
 
+def reports_workflow():
+    """One workflow: upload the tracker, request a report, or get weekly/monthly reports automatically."""
+    p = 'reports-'
+    upload = upload_workflow()[1]
+    form = next(n for n in upload if n['name'] == 'Upload Tracker')
+    form = {**form, 'id': str(uuid.uuid5(uuid.NAMESPACE_URL, p + 'Upload Tracker')), 'position': [0, 0]}
+    proc = processing_nodes(p, 220, 'Tracker_File', js('summary.js'))
+    for i, n in enumerate(proc):
+        n['position'] = [220 + 220 * i, 0]
+    data_table = {'__rl': True, 'mode': 'list', 'value': ''}
+    nodes = [
+        form, *proc,
+        node(p, 'Request a Report', 'formTrigger', 2.2, [0, 260], {
+            'formTitle': 'Production Tracker – Request a Report',
+            'formDescription': 'Choose the period and filters. The report is emailed to you, with an interactive '
+                               'dashboard attached. Leave fields empty for everything.',
+            'formFields': {'values': [
+                {'fieldLabel': 'Report type', 'fieldType': 'dropdown', 'requiredField': True,
+                 'fieldOptions': {'values': [{'option': o} for o in
+                                             ['Overview', 'Weekly', 'Monthly', 'Custom period']]}},
+                {'fieldLabel': 'From', 'fieldType': 'date'},
+                {'fieldLabel': 'To', 'fieldType': 'date'},
+                {'fieldLabel': 'Company code (optional)', 'placeholder': 'e.g. 3485'},
+                {'fieldLabel': 'Customer contains (optional)', 'placeholder': 'e.g. SALT RIVER'},
+                {'fieldLabel': 'Send to (optional)', 'fieldType': 'email', 'placeholder': 'name.surname@company.com'},
+            ]},
+            'responseMode': 'lastNode',
+            'options': {'path': 'production-tracker-report', 'buttonLabel': 'Generate report'}}),
+        node(p, 'Every Monday 7am', 'scheduleTrigger', 1.2, [0, 460], {
+            'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 7 * * 1'}]}}),
+        node(p, '1st of Month 7am', 'scheduleTrigger', 1.2, [0, 640], {
+            'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 7 1 * *'}]}}),
+        node(p, 'Get All Rows', 'dataTable', 1, [1160, 300], {
+            'resource': 'row', 'operation': 'get', 'dataTableId': data_table,
+            'matchType': 'anyCondition', 'filters': {}, 'returnAll': True}, executeOnce=True, alwaysOutputData=True),
+        node(p, 'Report Settings', 'code', 2, [1380, 300], {'jsCode': js('settings.js')}),
+        node(p, 'Build Report', 'code', 2, [1600, 300], {'jsCode': js('analytics.js')}),
+        node(p, 'Send Report – paste GEV Send Email here', 'noOp', 1, [1820, 300], {}),
+        node(p, 'Started from a form?', 'if', 2.2, [2040, 300], {
+            'conditions': {
+                'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 2},
+                'conditions': [{'id': str(uuid.uuid5(uuid.NAMESPACE_URL, p + 'is-form')),
+                                'leftValue': "={{ $('Report Settings').first().json.source }}",
+                                'rightValue': 'form', 'operator': {'type': 'string', 'operation': 'equals'}}],
+                'combinator': 'and'},
+            'options': {}}),
+        node(p, 'Done Page', 'form', 1, [2260, 220], {
+            'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
+            'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
+        sticky(p, '## Production Tracker – upload, reports & dashboard\n'
+                  '**Before the first run**\n'
+                  '1. **Upsert into Data Table** and **Get All Rows** → pick `datatable`\n'
+                  '2. **Build Report** → put default recipients in `RECIPIENTS`\n'
+                  '3. Replace **Send Report – paste GEV Send Email here**: copy *Send an Email* from *Report copy*, '
+                  'paste, connect Build Report → it → Started from a form?, then set To `{{ $json.to }}`, '
+                  'Subject `{{ $json.subject }}`, Email Format HTML, HTML `{{ $json.html }}`, Attachments `dashboard`\n'
+                  '4. Publish. Share the two form links (Upload Tracker, Request a Report)\n\n'
+                  '**Runs**: on upload (overview) · on request (your period & filters) · Mondays 07:00 (weekly) · '
+                  '1st of month 07:00 (monthly)', [-40, -420], height=380),
+    ]
+    connections = {
+        **chain('Upload Tracker', 'Read Tracker Sheet', 'Clean Rows', 'Upsert into Data Table', 'Summarise Upload',
+                'Get All Rows'),
+        'Request a Report': {'main': [[{'node': 'Get All Rows', 'type': 'main', 'index': 0}]]},
+        'Every Monday 7am': {'main': [[{'node': 'Get All Rows', 'type': 'main', 'index': 0}]]},
+        '1st of Month 7am': {'main': [[{'node': 'Get All Rows', 'type': 'main', 'index': 0}]]},
+        **chain('Get All Rows', 'Report Settings', 'Build Report', 'Send Report – paste GEV Send Email here',
+                'Started from a form?'),
+        'Started from a form?': {'main': [[{'node': 'Done Page', 'type': 'main', 'index': 0}], []]},
+    }
+    return 'Production Tracker – Upload, Reports & Dashboard', nodes, connections
+
+
 if __name__ == '__main__':
     for filename, (name, nodes, connections) in [('tracker_upload_workflow.json', upload_workflow()),
-                                                 ('tracker_onedrive_workflow.json', onedrive_workflow())]:
+                                                 ('tracker_onedrive_workflow.json', onedrive_workflow()),
+                                                 ('tracker_reports_workflow.json', reports_workflow())]:
         workflow = {'name': name, 'nodes': nodes, 'connections': connections, 'pinData': {},
                     'settings': {'executionOrder': 'v1'}, 'active': False, 'tags': []}
         (HERE / filename).write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + '\n')

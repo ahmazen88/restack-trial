@@ -3,7 +3,7 @@
 // 2. ALIASES = other headings the SharePoint tracker might use for the same column.
 // 3. TYPES   = 'string' (default), 'number', 'numberText' (plain number stored as text, e.g. 1157.44)
 //             or 'date' – match your Data Table column types
-//             (the Column dropdown in the Data Table node shows each type, e.g. "Invoice (number)").
+//             (the Column list in the Data Table node shows each type, e.g. "Invoice (number)").
 //             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.
 // 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).
 const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manager', 'Name_the_PortalEmail_ID',
