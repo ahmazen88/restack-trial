@@ -32,7 +32,7 @@ assert(first.Customer === 'RIO TINTO ALCAN INC' && first.Company_Code === 'CC10'
 assert(first.Received_Date === '2026-04-06' && first.Allocated_Date === '2026-04-06' && first.Invoice_Date === '2026-03-26',
   'Excel serial dates (number or text) become YYYY-MM-DD');
 assert(/No "Invoice" column found/.test(throws(() => run(src('clean.js'), [{ json: { Foo: 1, Bar: 2 } }]))), 'wrong-file guard');
-assert(/no rows/.test(throws(() => run(src('clean.js'), []))), 'empty-sheet guard');
+assert(/sheet is empty/.test(throws(() => run(src('clean.js'), []))) && /sheet is empty/.test(throws(() => run(src('clean.js'), [{ json: {} }]))), 'empty-sheet guard');
 
 // --- Summarise Upload
 const nodes = {

@@ -149,9 +149,14 @@ Edit `src/*.js`, run `python3 build.py` to regenerate both workflow JSON files, 
 
 ## The one to use: `production_tracker.json` (one start, one end)
 ```
-Upload Tracker (form) → Read Tracker Sheet → Clean Rows → Clear Table → Rows to Save → Save All Rows
-  → Summarise Upload → Build Report → AI Commentary → Add AI Commentary → Send an Email → Done Page
+Upload Tracker (form) → Read Tracker Sheet → Clean Rows → Check Table → Safety Check → Clear Table → Rows to Save
+  → Save All Rows → Summarise Upload → Build Report → AI Commentary → Add AI Commentary → Send an Email → Done Page
 ```
 A straight line: no branches and no choices. On every upload the table is emptied and refilled in one bulk call,
 so it doesn't spin, and the tracker is always the source of truth. Setup is the 5 steps in the yellow note
-inside the workflow. Test: `node test/simple.js`.
+inside the workflow. Test: `node test/simple.js` (57 checks).
+
+Safety: **Safety Check** runs before **Clear Table**. An empty sheet, the wrong file or tab, no usable invoice
+numbers, or a Data Table missing one of the columns all stop the run with a clear message, and the table is left
+as it was. Invoice numbers that are not a plain number (e.g. `7001 / 7002`) are skipped and listed on the Done page,
+never guessed. Amounts like `$1,157.44` and `(1,157.44)` are read correctly; Excel dates with a time part keep their day.

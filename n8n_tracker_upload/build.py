@@ -295,7 +295,8 @@ def simple_workflow():
                           "const settings = { type: 'Overview', source: 'form' };")
                  .replace("$('Get All Rows').all()", "$('Clean Rows').all()"))
     y = 300
-    names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows', 'Clear Table', 'Rows to Save', 'Save All Rows',
+    names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows', 'Check Table', 'Safety Check', 'Clear Table',
+             'Rows to Save', 'Save All Rows',
              'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary', send, 'Done Page']
     pos = {n: [220 * i, y] for i, n in enumerate(names)}
     nodes = [
@@ -308,8 +309,14 @@ def simple_workflow():
             'responseMode': 'lastNode',
             'options': {'path': 'production-tracker', 'buttonLabel': 'Upload'}}),
         node(p, 'Read Tracker Sheet', 'extractFromFile', 1, pos['Read Tracker Sheet'], {
-            'operation': 'xlsx', 'binaryPropertyName': 'Tracker_File', 'options': {}}),
+            'operation': 'xlsx', 'binaryPropertyName': 'Tracker_File', 'options': {}},
+             alwaysOutputData=True),  # an empty sheet still reaches Clean Rows, which explains the problem
         node(p, 'Clean Rows', 'code', 2, pos['Clean Rows'], {'jsCode': js('clean.js')}),
+        node(p, 'Check Table', 'dataTable', 1, pos['Check Table'], {
+            'resource': 'row', 'operation': 'get', 'dataTableId': DATA_TABLE,
+            'matchType': 'anyCondition', 'filters': {}, 'returnAll': False, 'limit': 1},
+             executeOnce=True, alwaysOutputData=True),
+        node(p, 'Safety Check', 'code', 2, pos['Safety Check'], {'jsCode': js('safety.js')}),
         node(p, 'Clear Table', 'dataTable', 1, pos['Clear Table'], {
             'resource': 'table', 'operation': 'clear', 'dataTableId': DATA_TABLE}, executeOnce=True),
         node(p, 'Rows to Save', 'code', 2, pos['Rows to Save'], {'jsCode': js('restore_all.js')}),
@@ -331,7 +338,7 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
-                  '1. **Clear Table** and **Save All Rows** → Data table: choose `datatable`\n'
+                  '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
                   '3. From *Report copy* copy **GEV LLM Model** → paste here → drag it to the *Model* dot under '
                   '**AI Commentary**\n'

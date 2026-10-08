@@ -10,7 +10,7 @@ const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manage
   'Received_Date', 'Allocated_Date', 'Invoice_Date'];
 const ALIASES = {
   Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],
-  Value: ['value', 'amount', 'invoice value', 'total'],
+  Value: ['value', 'amount', 'invoice value'],
   Customer: ['customer', 'customer name', 'client'],
   Company_Code: ['company code', 'coco', 'co code', 'company_code'],
   Project_Manager: ['project manager', 'pm', 'manager'],
@@ -30,29 +30,44 @@ for (const col of COLUMNS) {
   lookup.set(norm(col), col);
   for (const a of ALIASES[col] || []) lookup.set(norm(a), col);
 }
+// Excel serial day numbers (e.g. 46118 = 2026-04-06); the time of day is ignored
+const fromSerial = (n) => (n >= 20000 && n <= 80000
+  ? new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000).toISOString().slice(0, 10) : null);
+const pad = (n) => String(n).padStart(2, '0');
 const convert = (col, v) => {
   if (v === '' || v == null) return null;
   if (TYPES[col] === 'number' || TYPES[col] === 'numberText') {
-    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
-    if (!Number.isFinite(n)) return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? (TYPES[col] === 'number' ? v : String(v)) : null;
+    let t = String(v).trim().replace(/[\s,$€£]/g, '');
+    const negative = /^\(.*\)$/.test(t) || t.startsWith('-'); // (1157.44) and -1157.44 are negative amounts
+    t = t.replace(/^\((.*)\)$/, '$1').replace(/^-/, '');
+    if (TYPES[col] === 'number') t = t.replace(/\.0+$/, '');
+    // whole value must be a plain number: "7001 / 7002" or "INV-12" are not guessed
+    if (!(TYPES[col] === 'number' ? /^\d+$/ : /^\d*\.?\d+$/).test(t)) return null;
+    const n = Number(t) * (negative ? -1 : 1);
     return TYPES[col] === 'number' ? n : String(n);
   }
   if (TYPES[col] === 'date') {
-    const serial = typeof v === 'number' ? v : /^\d{4,6}(\.\d+)?$/.test(String(v).trim()) ? Number(v) : null;
-    const d = serial !== null ? new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000) : new Date(v);
-    return isNaN(d) ? null : d.toISOString().slice(0, 10);
+    if (typeof v === 'number') return fromSerial(v);
+    const t = String(v).trim();
+    if (/^\d{5}(\.\d+)?$/.test(t)) return fromSerial(Number(t));
+    const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const d = new Date(t); // e.g. 4/6/2026 (US order) or "Apr 6, 2026"
+    return isNaN(d) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   const text = String(v).replace(/\s+/g, ' ').trim();
   return UPPER.includes(col) ? text.toUpperCase() : text;
 };
 
 // Stop early on the wrong file / wrong tab instead of saving nothing
-const input = $input.all();
-if (!input.length) throw new Error('The uploaded sheet has no rows. Check the file and the Sheet Name option on "Read Tracker Sheet".');
-const headings = Object.keys(input[0].json);
+const input = $input.all().filter((i) => Object.keys(i.json || {}).length);
+if (!input.length) throw new Error('The uploaded sheet is empty. Check the file and the Sheet Name option on "Read Tracker Sheet". Nothing was changed.');
+// Excel leaves empty cells out of a row, so collect the headings from every row
+const headings = [...new Set(input.flatMap((i) => Object.keys(i.json)))];
 if (!headings.some((h) => lookup.get(norm(h)) === KEY)) {
   throw new Error(`No "${KEY}" column found. Headings in the sheet: ${headings.join(', ')}. ` +
-    'Check the file, the Sheet Name option on "Read Tracker Sheet", or add the heading to ALIASES.');
+    'Check the file, the Sheet Name option on "Read Tracker Sheet", or add the heading to ALIASES. Nothing was changed.');
 }
 
 const rows = new Map();

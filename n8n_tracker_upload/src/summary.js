@@ -17,11 +17,13 @@ const num = (v) => {
 // Raw sheet: blank-key rows and repeated invoices
 const raw = $('Read Tracker Sheet').all().map((i) => i.json);
 const seen = new Map();
+const unreadable = []; // invoice cells that are not a plain number (e.g. "7001 / 7002"): skipped, not guessed
 let blank = 0;
 for (const r of raw) {
   const h = Object.keys(r).find((k) => keyNames.has(norm(k)));
   const id = h == null ? '' : String(r[h] ?? '').trim();
-  if (!id) { blank++; continue; }
+  if (!/\d/.test(id)) { blank++; continue; } // empty, or a label such as "Total"
+  if (!/^\d+(\.0+)?$/.test(id.replace(/[\s,]/g, ''))) { unreadable.push(id); continue; }
   seen.set(id, (seen.get(id) || 0) + 1);
 }
 const duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();
@@ -52,7 +54,11 @@ const written = (() => {
 const parts = written === null
   ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]
   : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];
-if (blank) parts.push(`${fmt(blank)} blank rows skipped`);
+if (blank) parts.push(`${fmt(blank)} blank or total rows skipped`);
+if (unreadable.length) {
+  parts.push(`${fmt(unreadable.length)} rows skipped because the invoice number is not a plain number: ` +
+    unreadable.slice(0, LIST_LIMIT).join(', ') + (unreadable.length > LIST_LIMIT ? ', …' : ''));
+}
 if (duplicates.length) {
   parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +
     duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));
@@ -60,7 +66,7 @@ if (duplicates.length) {
 for (const [label, { count, examples }] of Object.entries(issues)) {
   parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);
 }
-if (!duplicates.length && !Object.keys(issues).length) parts.push('no data quality issues found');
+if (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');
 
 return [{
   json: {
@@ -68,6 +74,7 @@ return [{
     rowsRead: raw.length,
     rowsSaved: rows.length,
     blankRows: blank,
+    unreadableInvoices: unreadable,
     duplicateInvoices: duplicates,
     issues,
     message: parts.join(' · '),
