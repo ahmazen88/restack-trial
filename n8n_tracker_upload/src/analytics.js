@@ -266,6 +266,7 @@ const profitCentreList = listOf((r) => r.pc || (r.cc === 'G367' ? 'N/A (G367)' :
 const productLineList = listOf((r) => r.pl || 'NOT FOUND');
 const dashboard = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Production Tracker Dashboard</title></head><body style="margin:0;padding:18px;background:#fff">
+<!--charts-->
 <div style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#f3f4f6;padding:12px;border-radius:6px;margin-bottom:12px;max-width:900px">
 <b>Choose:</b> Report <select id="t"><option>Overview</option><option>Weekly</option><option>Monthly</option><option>Custom period</option></select>
 From <input id="f" type="date"> To <input id="o" type="date">
@@ -302,7 +303,9 @@ const facts = a.empty ? { empty: true } : {
   changePercent: { invoices: p1(a.nChange), value: p1(a.vChange) },
   avgDaysReceivedToAllocated: a.avgTat === null ? null : r2(a.avgTat),
   watchlist: a.watch.slice(0, 10).map((w) => ({ customer: w.customer, invoices: w.n, value: r2(w.v), flags: w.reasons.map(([k, d]) => `${k}: ${d}`) })),
-  monthly: a.monthly.slice(-6).map((m) => ({ month: m.key, invoices: m.n, value: r2(m.v) })),
+  monthly: a.monthly.slice(-6).map((m) => ({ month: m.key, invoices: m.n, value: r2(m.v),
+    ...(m.key === a.latest.slice(0, 7) && a.latest.slice(8, 10) !== String(new Date(Date.UTC(+m.key.slice(0, 4), +m.key.slice(5, 7), 0)).getUTCDate())
+      ? { monthToDate: true } : {}) })),
   weekly: a.weekly.map((w) => ({ weekStarting: w.key, invoices: w.n, value: r2(w.v) })),
   busiestDaysOfMonth: Array.from({ length: 31 }, (_, d) => ({ day: d + 1, avgInvoices: r2(a.heat.reduce((s, m) => s + m.cells[d], 0) / Math.max(1, a.heat.length)) }))
     .sort((x, y) => y.avgInvoices - x.avgInvoices || x.day - y.day).slice(0, 5),
@@ -328,7 +331,7 @@ return [{
     to: recipients,
     subject,
     facts: JSON.stringify(facts),
-    html: uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code, profit centre, product line and customer. Open it in your browser.</p>',
+    html: '<!--charts-->' + uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code, profit centre, product line and customer. Open it in your browser.</p>',
     doneMessage: (quality ? quality + '. ' : '') + `Report "${a.label || ''}" sent to ${recipients}.`,
   },
   binary: {

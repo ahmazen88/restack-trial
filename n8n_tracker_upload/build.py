@@ -186,6 +186,7 @@ RULES
 3. Write the commentary itself. No preamble, no "Here is…", no questions, no offers of further help.
 4. Plain business English, short sentences, no hype, no emojis.
 5. Name customers and company codes exactly as they appear in the facts.
+6. A month marked "monthToDate": true is not finished yet – do not describe it as a fall in volume.
 
 OUTPUT FORMAT
 Return an HTML fragment only – no <html>, <body>, <style>, scripts, images, links or markdown. Use only <h3>, <p>, <ul>, <li> and <b>. Exactly these four sections, in this order:
@@ -201,6 +202,33 @@ FACTS (JSON – the only source you may use):
 {{ $json.facts }}
 
 Write the commentary now, following the output format exactly."""
+
+CHART_SYSTEM_PROMPT = """You are a data-visualisation designer for an accounts-receivable Production Tracker report at GE Vernova. You choose the charts that make the most important patterns in this period obvious to the billing team and their manager.
+
+You do NOT draw charts and you do NOT write numbers. A program draws each chart you choose from the real data.
+
+AVAILABLE DATASETS (only these; each must exist in the FACTS with at least 2 entries)
+monthly, weekly (time series) · busiestDaysOfMonth, busiestWeekdays (workload, metric "invoices" only) · companyCodes, profitCentres, productLines, businessTypes, topCustomers, watchlist (splits) · channels (metric "invoices" only)
+METRICS: "invoices" or "value"
+CHART TYPES: "line" (time series only – trends), "column" (time series, weekdays, days of month), "bar" (rankings and splits)
+
+HOW TO CHOOSE
+1. Pick 3 or 4 charts, most important first. Prefer what changed or needs attention: a trend that moved, a dominant or growing profit centre or product line, workload peaks, customers on the watchlist.
+2. Do not pick two charts that show the same thing.
+3. Ignore a split where one entry is almost everything, or where "NOT FOUND" dominates.
+5. A month marked "monthToDate": true is not finished yet – never present it as a fall in volume.
+4. For each chart write a short title and a "why" of at most 20 words, with NO digits or numbers.
+
+OUTPUT
+Return ONLY a JSON array, no other text, no code fences. Example:
+[{"title":"Value by profit centre","dataset":"profitCentres","metric":"value","chart":"bar","why":"One profit centre carries most of the value this period"}]"""
+
+CHART_USER_PROMPT = """=Report: {{ $json.subject }}
+
+FACTS (JSON):
+{{ $json.facts }}
+
+Choose the charts now. Return only the JSON array."""
 
 
 def reports_workflow():
@@ -299,7 +327,8 @@ def simple_workflow():
              'Pick ZSD File', 'Read ZSD Log', 'Pick ZSD File Again', 'Read ZSD 2025 Sheet',
              'Pick Tableau File', 'Read Tableau Extract', 'Check Table', 'Add Lookups', 'Safety Check', 'Clear Table',
              'Rows to Save', 'Save All Rows',
-             'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary', send, 'Done Page']
+             'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary',
+             'AI Chart Designer', 'Add AI Charts', send, 'Done Page']
     pos = {n: [220 * i, y] for i, n in enumerate(names)}
     nodes = [
         node(p, 'Upload Tracker', 'formTrigger', 2.2, pos['Upload Tracker'], {
@@ -358,6 +387,12 @@ def simple_workflow():
             'batching': {}},
             retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput'),
         node(p, 'Add AI Commentary', 'code', 2, pos['Add AI Commentary'], {'jsCode': js('commentary.js')}),
+        node(p, 'AI Chart Designer', '@n8n/n8n-nodes-langchain.chainLlm', 1.7, pos['AI Chart Designer'], {
+            'promptType': 'define', 'text': CHART_USER_PROMPT, 'hasOutputParser': False,
+            'messages': {'messageValues': [{'type': 'SystemMessagePromptTemplate', 'message': CHART_SYSTEM_PROMPT}]},
+            'batching': {}},
+            retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput'),
+        node(p, 'Add AI Charts', 'code', 2, pos['Add AI Charts'], {'jsCode': js('charts.js')}),
         node(p, send, 'noOp', 1, pos[send], {}),
         node(p, 'Done Page', 'form', 1, pos['Done Page'], {
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
@@ -367,10 +402,10 @@ def simple_workflow():
                   '`Product_Line`, `Business_Type`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
-                  '3. From *Report copy* copy **GEV LLM Model** → paste here → drag it to the *Model* dot under '
-                  '**AI Commentary**\n'
+                  '3. From *Report copy* copy **GEV LLM Model** → paste it here **twice** → connect one to the *Model* '
+                  'dot under **AI Commentary** and the other under **AI Chart Designer** (temperature 0.1–0.2)\n'
                   '4. From *Report copy* copy **Send an Email** → paste here → put it in place of the grey box '
-                  '(connect Add AI Commentary → Send an Email → Done Page, delete the grey box) and fill in: '
+                  '(connect Add AI Charts → Send an Email → Done Page, delete the grey box) and fill in: '
                   'To `{{ $json.to }}` · Subject `{{ $json.subject }}` · Email Format `HTML` · '
                   'HTML `{{ $json.html }}` · Attachments `dashboard`\n'
                   '5. **Publish** → open **Upload Tracker** → copy the *Production URL* → open it and upload the tracker',

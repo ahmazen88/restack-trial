@@ -172,3 +172,9 @@ The upload form has two optional boxes: **ZSD Log** and **Tableau Extract**.
   longer in a later Tableau extract keep their codes.
 - The Data Table needs two extra string columns: `SAP_Customer_Code`, `Profit_Center`. The Safety Check stops with a
   clear message until they exist.
+
+### AI Chart Designer
+A second Basic LLM Chain reads the same facts and returns a JSON list of 3–4 charts (dataset, metric, chart type,
+title, a short "why"). **Add AI Charts** draws them from the facts only: unknown datasets, splits with one entry and
+any "why" containing numbers are dropped; if nothing usable comes back, standard charts are drawn. Email: table-based
+charts (work in Outlook). dashboard.html: SVG charts. An unfinished month is marked `*` and drawn lighter / dashed.

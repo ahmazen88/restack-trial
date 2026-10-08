@@ -81,6 +81,8 @@ const fullRun = (sheet, tableRow, aiOut, files = {}) => {
   run(out, 'Build Report', out['Summarise Upload'], withMail);
   out['AI Commentary'] = aiOut;
   run(out, 'Add AI Commentary', out['AI Commentary']);
+  out['AI Chart Designer'] = files.chartsAi || [{ json: { error: 'model unavailable' } }];
+  run(out, 'Add AI Charts', out['AI Chart Designer']);
   return out;
 };
 
@@ -101,7 +103,7 @@ assert(ms < 5000, `all Code steps together take ${ms} ms for 4,100 rows (no spin
 const rep = big['Build Report'][0];
 assert(rep.json.to === 'me@example.com' && rep.binary.dashboard && rep.binary.dashboard.fileName === 'dashboard.html', 'report built and dashboard.html attached');
 assert(typeof rep.json.facts === 'string' && rep.json.facts.length < 20000, `AI receives compact facts (${rep.json.facts.length} characters)`);
-const sent = big['Add AI Commentary'][0];
+const sent = big['Add AI Charts'][0];
 assert(/AI commentary/.test(sent.json.html) && sent.binary.dashboard && sent.json.to === 'me@example.com' && sent.json.subject,
   'email item has to, subject, html with AI commentary, and the attachment');
 assert(/4,100 invoices saved/.test(rep.json.doneMessage) && /me@example\.com/.test(rep.json.doneMessage), 'Done page: ' + rep.json.doneMessage.slice(0, 140) + '…');
@@ -113,7 +115,7 @@ assert(!/AI commentary/.test(first['Add AI Commentary'][0].json.html), 'too-shor
 
 // 3c. AI step failed (node continues with an error item)
 const aiFail = fullRun(makeSheet(50), TABLE_ROW, [{ json: { error: 'model unavailable' } }]);
-assert(aiFail['Add AI Commentary'][0].json.html === aiFail['Build Report'][0].json.html && aiFail['Add AI Commentary'][0].binary.dashboard,
+assert(aiFail['Add AI Commentary'][0].json.html === aiFail['Build Report'][0].json.html && aiFail['Add AI Charts'][0].binary.dashboard,
   'AI unavailable → the normal report still goes out with the attachment');
 
 // 3d. AI answer with junk is cleaned
@@ -121,6 +123,31 @@ const junk = fullRun(makeSheet(50), TABLE_ROW, [{ json: { text: '```html\n<h3 st
 const jh = junk['Add AI Commentary'][0].json.html;
 const aiPart = jh.slice(jh.indexOf('Check before acting.</div>') + 26, jh.indexOf('</div>', jh.indexOf('Check before acting.</div>') + 26));
 assert(aiPart === '<h3>Summary</h3><p>Fifty invoices arrived, all within normal range for the period.</p>\n', 'AI answer: code fences, scripts and attributes removed');
+
+// 3e. AI chart designer
+const chartAi = [{ json: { text: '```json\n[{"title":"Value by customer","dataset":"topCustomers","metric":"value","chart":"bar","why":"One customer carries most of the value"},' +
+  '{"title":"Profit centres","dataset":"profitCentres","metric":"value","chart":"bar"},' +
+  '{"title":"Monthly trend","dataset":"monthly","metric":"invoices","chart":"line","why":"Volume rose 25% in the last month"},' +
+  '{"title":"Made up","dataset":"secretNumbers","metric":"value","chart":"bar"},' +
+  '{"title":"Line on a split","dataset":"companyCodes","metric":"invoices","chart":"line"}]\n```' } }];
+const C1 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }], { chartsAi: chartAi });
+const c1 = C1['Add AI Charts'][0];
+assert(c1.json.aiCharts === true && c1.json.chartsUsed.join() === 'topCustomers/value/bar,monthly/invoices/line,companyCodes/invoices/bar',
+  'AI chart choices used; unknown dataset and a split with only one entry dropped; "line" on a split drawn as bar: ' + c1.json.chartsUsed.join(', '));
+assert(/One customer carries most of the value/.test(c1.json.html) && !/25%/.test(c1.json.html), 'AI "why" shown, but a "why" containing numbers is dropped');
+const facts1 = JSON.parse(C1['Build Report'][0].json.facts);
+const m0 = facts1.monthly.at(-1);
+assert(c1.json.html.includes(m0.invoices.toLocaleString('en-US')), 'chart figures come from the report facts');
+const dash1 = Buffer.from(c1.binary.dashboard.data, 'base64').toString();
+assert(!c1.json.html.includes('<!--charts-->') && !dash1.includes('<!--charts-->') && /<svg/.test(dash1) && /<polyline/.test(dash1),
+  'charts placed in the email (tables) and in dashboard.html (SVG, line chart for the trend)');
+assert(c1.json.to === 'me@example.com' && c1.json.subject && c1.binary.dashboard.fileName === 'dashboard.html', 'email item still has to, subject and attachment');
+const C2 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }], { chartsAi: [{ json: { text: 'Sure! Here are some ideas for charts.' } }] });
+assert(C2['Add AI Charts'][0].json.aiCharts === false && C2['Add AI Charts'][0].json.chartsUsed.length >= 2 && /Standard charts/.test(C2['Add AI Charts'][0].json.html),
+  'unusable AI answer → standard charts: ' + C2['Add AI Charts'][0].json.chartsUsed.join(', '));
+const C3 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }]);
+assert(C3['Add AI Charts'][0].json.aiCharts === false && /Standard charts/.test(C3['Add AI Charts'][0].json.html), 'AI chart step failed → standard charts, email still goes out');
+if (process.env.CHART_OUT) { fs.writeFileSync(process.env.CHART_OUT + '_email.html', c1.json.html); fs.writeFileSync(process.env.CHART_OUT + '_dash.html', dash1); }
 
 // ---------- 4. Messy tracker values ----------
 const messy = [

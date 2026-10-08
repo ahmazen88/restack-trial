@@ -1,0 +1,132 @@
+// Add AI Charts — the "AI Chart Designer" only CHOOSES which charts to show and why.
+// Every figure is taken from the facts built by "Build Report"; numbers written by the AI are never shown.
+// If the AI step failed or its answer is not usable, a standard set of charts is drawn instead.
+const MAX_CHARTS = 4;
+const DEFAULT_CHARTS = [
+  { title: 'Incoming invoices by month', dataset: 'monthly', metric: 'invoices', chart: 'column' },
+  { title: 'Value by profit centre', dataset: 'profitCentres', metric: 'value', chart: 'bar' },
+  { title: 'Invoices by product line', dataset: 'productLines', metric: 'invoices', chart: 'bar' },
+  { title: 'Busiest weekdays', dataset: 'busiestWeekdays', metric: 'invoices', chart: 'column' },
+];
+// dataset → which fact field is the label and which fields hold each metric
+const DATASETS = {
+  monthly: { label: 'month', invoices: 'invoices', value: 'value' },
+  weekly: { label: 'weekStarting', invoices: 'invoices', value: 'value' },
+  busiestDaysOfMonth: { label: 'day', invoices: 'avgInvoices' },
+  busiestWeekdays: { label: 'weekday', invoices: 'avgInvoices' },
+  companyCodes: { label: 'code', invoices: 'invoices', value: 'value' },
+  profitCentres: { label: 'profitCentre', invoices: 'invoices', value: 'value' },
+  productLines: { label: 'productLine', invoices: 'invoices', value: 'value' },
+  businessTypes: { label: 'businessType', invoices: 'invoices', value: 'value' },
+  topCustomers: { label: 'customer', invoices: 'invoices', value: 'value' },
+  channels: { label: 'channel', invoices: 'invoices' },
+  watchlist: { label: 'customer', invoices: 'invoices', value: 'value' },
+};
+const TIME_SERIES = ['monthly', 'weekly'];
+const COLORS = { bar: '#2b6cb0', part: '#9dbbe0', line: '#1f3a5f', grid: '#e5e7eb', ink: '#111827', mute: '#6b7280' };
+
+const base = $('Add AI Commentary').first();
+const facts = JSON.parse($('Build Report').first().json.facts || '{}');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (n, metric) => (metric === 'value'
+  ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  : n.toLocaleString('en-US', { maximumFractionDigits: 1 }));
+
+// ---------- read the AI's choice (JSON list), keep only valid entries ----------
+const raw = String($input.first().json.text ?? $input.first().json.output ?? '');
+let picked = [];
+try {
+  const m = raw.replace(/```[a-z]*\n?/gi, '').match(/\[[\s\S]*\]/);
+  picked = m ? JSON.parse(m[0]) : [];
+} catch (e) { picked = []; }
+const valid = (c) => c && DATASETS[c.dataset] && DATASETS[c.dataset][c.metric] && ['bar', 'column', 'line'].includes(c.chart)
+  && Array.isArray(facts[c.dataset]) && facts[c.dataset].length >= 2;
+let charts = (Array.isArray(picked) ? picked : []).filter(valid).slice(0, MAX_CHARTS).map((c) => ({
+  title: String(c.title || '').replace(/[<>]/g, '').slice(0, 80) || `${c.metric} by ${c.dataset}`,
+  dataset: c.dataset, metric: c.metric, chart: c.chart === 'line' && !TIME_SERIES.includes(c.dataset) ? 'bar' : c.chart,
+  // a short "why", only kept if it contains no numbers (figures must come from the data, not the AI)
+  why: /\d/.test(String(c.why || '')) ? '' : String(c.why || '').replace(/[<>]/g, '').slice(0, 160),
+}));
+const aiUsed = charts.length > 0;
+if (!aiUsed) charts = DEFAULT_CHARTS.filter(valid).map((c) => ({ ...c, why: '' }));
+
+const points = (c) => {
+  const d = DATASETS[c.dataset];
+  // a month that is not finished yet is marked with * and drawn lighter, so it is not read as a fall in volume
+  let list = facts[c.dataset].map((x) => ({ label: String(x[d.label]) + (x.monthToDate ? '*' : ''), y: Number(x[d[c.metric]]) || 0, part: !!x.monthToDate }));
+  if (!TIME_SERIES.includes(c.dataset) && c.dataset !== 'busiestWeekdays' && c.dataset !== 'busiestDaysOfMonth') {
+    list = list.sort((a, b) => b.y - a.y).slice(0, 10); // biggest first, top 10
+  }
+  return list;
+};
+
+// ---------- email version: plain tables, works in Outlook ----------
+const partNote = (pts) => (pts.some((p) => p.part)
+  ? `<div style="color:${COLORS.mute};font-size:11px;margin-top:2px">* month to date – not a full month yet</div>` : '');
+const emailChart = (c) => {
+  const pts = points(c);
+  const max = Math.max(1, ...pts.map((p) => p.y));
+  const head = `<div style="font-weight:600;color:${COLORS.line};font-size:14px;margin:14px 0 2px">${esc(c.title)}</div>` +
+    (c.why ? `<div style="color:${COLORS.mute};font-size:12px;margin-bottom:6px">${esc(c.why)}</div>` : '');
+  if (c.chart === 'bar') {
+    return head + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;max-width:860px;font-size:12px">' +
+      pts.map((p) => `<tr><td style="padding:3px 8px 3px 0;white-space:nowrap;width:28%">${esc(p.label)}</td>` +
+        `<td style="padding:3px 0;width:57%"><table cellspacing="0" cellpadding="0" width="${Math.max(2, Math.round((100 * p.y) / max))}%"><tr>` +
+        `<td bgcolor="${COLORS.bar}" height="12" style="font-size:0;line-height:0">&nbsp;</td></tr></table></td>` +
+        `<td style="padding:3px 0 3px 8px;text-align:right;white-space:nowrap">${fmt(p.y, c.metric)}</td></tr>`).join('') + '</table>';
+  }
+  const H = 110; // column (and line, drawn as columns in email)
+  return head + '<table cellspacing="2" cellpadding="0" style="font-size:10px;max-width:860px"><tr>' +
+    pts.map((p) => { const h = Math.max(2, Math.round((H * p.y) / max)); return `<td valign="bottom" align="center" style="padding:0 2px">` +
+      `<div style="color:${COLORS.mute};font-size:10px">${fmt(p.y, c.metric)}</div>` +
+      `<table cellspacing="0" cellpadding="0" width="26"><tr><td bgcolor="${p.part ? COLORS.part : COLORS.bar}" height="${h}" style="font-size:0;line-height:0">&nbsp;</td></tr></table></td>`; }).join('') +
+    '</tr><tr>' + pts.map((p) => `<td align="center" style="color:${COLORS.mute};padding-top:2px;white-space:nowrap">${esc(p.label)}</td>`).join('') +
+    '</tr></table>' + partNote(pts);
+};
+
+// ---------- dashboard version: real SVG charts ----------
+const svgChart = (c) => {
+  const pts = points(c);
+  const max = Math.max(1, ...pts.map((p) => p.y));
+  const W = 840; const head = `<h3 style="margin:22px 0 2px;color:${COLORS.line};font-size:15px">${esc(c.title)}</h3>` +
+    (c.why ? `<div style="color:${COLORS.mute};font-size:12px;margin-bottom:6px">${esc(c.why)}</div>` : '');
+  if (c.chart === 'bar') {
+    const rowH = 24; const left = 200; const H = pts.length * rowH + 10;
+    return head + `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:Segoe UI,Arial,sans-serif;font-size:12px">` +
+      pts.map((p, i) => { const w = Math.max(2, ((W - left - 90) * p.y) / max); const y = i * rowH + 4;
+        return `<text x="${left - 8}" y="${y + 14}" text-anchor="end" fill="${COLORS.ink}">${esc(p.label.slice(0, 28))}</text>` +
+          `<rect x="${left}" y="${y + 2}" width="${w}" height="16" rx="2" fill="${COLORS.bar}"><title>${esc(p.label)}: ${fmt(p.y, c.metric)}</title></rect>` +
+          `<text x="${left + w + 6}" y="${y + 14}" fill="${COLORS.mute}">${fmt(p.y, c.metric)}</text>`; }).join('') + '</svg>';
+  }
+  const H = 220; const top = 16; const bottom = 34; const plotH = H - top - bottom; const step = (W - 40) / pts.length;
+  const x = (i) => 30 + step * i + step / 2; const y = (v) => top + plotH - (plotH * v) / max;
+  const labels = pts.map((p, i) => `<text x="${x(i)}" y="${H - 14}" text-anchor="middle" fill="${COLORS.mute}" font-size="11">${esc(p.label.slice(0, 10))}</text>`).join('');
+  const grid = `<line x1="20" y1="${top + plotH}" x2="${W - 10}" y2="${top + plotH}" stroke="${COLORS.grid}"/>`;
+  const marks = c.chart === 'line'
+    ? `<polyline fill="none" stroke="${COLORS.line}" stroke-width="2" points="${pts.map((p, i) => (p.part ? '' : `${x(i)},${y(p.y)}`)).join(' ')}"/>` +
+      // the unfinished month is joined with a dashed, lighter line
+      pts.map((p, i) => (p.part && i > 0 ? `<line x1="${x(i - 1)}" y1="${y(pts[i - 1].y)}" x2="${x(i)}" y2="${y(p.y)}" stroke="${COLORS.part}" stroke-width="2" stroke-dasharray="5 4"/>` : '')).join('') +
+      pts.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.y)}" r="3.5" fill="${p.part ? COLORS.part : COLORS.line}"><title>${esc(p.label)}: ${fmt(p.y, c.metric)}</title></circle>` +
+        `<text x="${x(i)}" y="${y(p.y) - 7}" text-anchor="middle" fill="${COLORS.mute}" font-size="10">${fmt(p.y, c.metric)}</text>`).join('')
+    : pts.map((p, i) => { const bw = Math.min(46, step * 0.7); const h = Math.max(1, top + plotH - y(p.y));
+      return `<rect x="${x(i) - bw / 2}" y="${top + plotH - h}" width="${bw}" height="${h}" rx="2" fill="${p.part ? COLORS.part : COLORS.bar}"><title>${esc(p.label)}: ${fmt(p.y, c.metric)}</title></rect>` +
+        `<text x="${x(i)}" y="${top + plotH - h - 4}" text-anchor="middle" fill="${COLORS.mute}" font-size="10">${fmt(p.y, c.metric)}</text>`; }).join('');
+  return head + `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:Segoe UI,Arial,sans-serif">${grid}${marks}${labels}</svg>` + partNote(pts);
+};
+
+const note = aiUsed ? 'Charts chosen by the AI chart designer; all figures come from the report data.' : 'Standard charts.';
+const emailBlock = charts.length
+  ? `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:860px;margin:0 0 18px;padding:6px 16px 12px;border:1px solid ${COLORS.grid}">` +
+    `<div style="font-size:11px;color:${COLORS.mute};margin-top:6px">${note}</div>${charts.map(emailChart).join('')}</div>`
+  : '';
+const svgBlock = charts.length
+  ? `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:900px;margin-bottom:12px"><div style="font-size:11px;color:${COLORS.mute}">${note} These charts show the report period; use the filters below for the detailed sections.</div>${charts.map(svgChart).join('')}</div>`
+  : '';
+
+const html = String(base.json.html).replace('<!--charts-->', emailBlock);
+const binary = { ...base.binary };
+if (binary.dashboard?.data) {
+  const page = Buffer.from(binary.dashboard.data, 'base64').toString('utf8').replace('<!--charts-->', svgBlock);
+  binary.dashboard = { ...binary.dashboard, data: Buffer.from(page, 'utf8').toString('base64') };
+}
+return [{ json: { ...base.json, html, chartsUsed: charts.map((c) => `${c.dataset}/${c.metric}/${c.chart}`), aiCharts: aiUsed }, binary }];
