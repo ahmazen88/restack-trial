@@ -18,7 +18,7 @@ const key = (v) => {
   return t;
 };
 const tidy = (v) => String(v ?? '').replace(/\s+/g, ' ').trim().toUpperCase(); // profit centre as text, e.g. GPJ908
-const rows = $('Clean Rows').all().map((i) => ({ ...i.json, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null }));
+const rows = $('Clean Rows').all().map((i) => ({ ...i.json, Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null }));
 const wanted = new Set(rows.map((r) => key(r.Invoice)));
 
 // rows from one read step (a missing file or sheet gives an error item, which is skipped)
@@ -44,7 +44,23 @@ const isProfitCentre = (h) => /profit/.test(h);
 const isProductLine = (h) => /product/.test(h) && !/desc|name/.test(h); // e.g. PTI, AIS, PTR, GIS
 const isBusinessType = (h) => /nature|business type|type of business/.test(h); // e.g. Manufacturing / Services / Trading
 
-const found = { customer: new Map(), profit: new Map(), product: new Map(), business: new Map() };
+const found = { customer: new Map(), profit: new Map(), product: new Map(), business: new Map(), salesOrg: new Map() };
+const SALES_ORGS = ['G36C', 'GS5C']; // sales orgs of G367 (same list as COMPANY_CODE_FIX in "Clean Rows")
+const isSalesOrg = (h) => /sales org|sorg/.test(h);
+
+// the tracker may hold the sales org in its company code column: keep it before it was changed to G367
+{
+  const raw = $('Read Tracker Sheet').all().map((i) => i.json);
+  const heads = [...new Set(raw.flatMap((r) => Object.keys(r || {})))];
+  const ccHead = heads.find((h) => ['company code', 'coco', 'co code', 'company_code'].includes(norm(h)));
+  const invHead = heads.find((h) => ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'].includes(norm(h)));
+  if (ccHead && invHead) {
+    for (const r of raw) {
+      const so = String(r[ccHead] ?? '').trim().toUpperCase();
+      if (SALES_ORGS.includes(so)) found.salesOrg.set(key(r[invHead]), so);
+    }
+  }
+}
 const notes = [];
 for (const { step, label } of SOURCES) {
   const data = readRows(step);
@@ -56,6 +72,7 @@ for (const { step, label } of SOURCES) {
   // a heading with "line" in it wins for product line ("Product Line" over "Product")
   const prod = label === 'Tableau' ? (columnBy(data, (h) => isProductLine(h) && /line/.test(h)) || columnBy(data, isProductLine)) : null;
   const biz = label === 'Tableau' ? columnBy(data, isBusinessType) : null;
+  const sorg = label === 'ZSD' ? columnBy(data, (h, v) => isSalesOrg(h) && SALES_ORGS.includes(tidy(v))) : null;
   let matched = 0;
   for (const r of data) {
     const k = key(r[inv]);
@@ -65,6 +82,7 @@ for (const { step, label } of SOURCES) {
     if (prof && key(r[prof]) && !found.profit.has(k)) found.profit.set(k, tidy(r[prof]));
     if (prod && key(r[prod]) && !found.product.has(k)) found.product.set(k, tidy(r[prod]));
     if (biz && key(r[biz]) && !found.business.has(k)) found.business.set(k, tidy(r[biz]));
+    if (sorg && SALES_ORGS.includes(tidy(r[sorg])) && !found.salesOrg.has(k)) found.salesOrg.set(k, tidy(r[sorg]));
   }
   notes.push(`${step}: ${matched} matching rows (invoice column "${inv}"` +
     (cust ? `, customer code "${cust}"` : ', no customer code column found') +
@@ -85,6 +103,7 @@ for (const r of rows) {
   if (String(r.Company_Code) === CLEARWATER.companyCode) {
     r.Product_Line = CLEARWATER.Product_Line;
     r.Business_Type = CLEARWATER.Business_Type;
+    r.Sales_Org = found.salesOrg.get(k) ?? old.Sales_Org ?? null;
   } else {
     r.Product_Line = found.product.get(k) ?? old.Product_Line ?? null;
     r.Business_Type = found.business.get(k) ?? old.Business_Type ?? null;

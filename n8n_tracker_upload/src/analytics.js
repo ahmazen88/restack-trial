@@ -140,6 +140,66 @@ function analyse(all, opts, RULES) {
   const profitCentres = split(pcKey);
   const productLines = split(plKey);
   const businessTypes = split((r) => r.bt || 'NOT FOUND');
+  // ----- breakdown tree: entity → company code → sales org → (profit centre, business type, product line) -----
+  const ENTITY = { '3060': 'LA PRAIRIE (CANADA)', '3487': 'LA PRAIRIE (CANADA)', '3485': 'CHARLEROI', G367: 'CLEARWATER' };
+  const LEVEL = {
+    entity: { name: 'Entity', of: (r) => ENTITY[r.cc] || (r.cc ? 'OTHER' : '') },
+    cc: { name: 'Company code', of: (r) => r.cc || '' },
+    so: { name: 'Sales org', of: (r) => r.so || '' },
+    pc: { name: 'Profit centre', of: (r) => r.pc || '' },
+    bt: { name: 'Business type', of: (r) => r.bt || '' },
+    pl: { name: 'Product line', of: (r) => r.pl || '' },
+  };
+  // values of `child` that appear under more than one value of `parent` (checked on all data, not just this period)
+  const clashes = (parent, child) => {
+    const m = new Map();
+    for (const r of scoped) {
+      const c = LEVEL[child].of(r); const pv = LEVEL[parent].of(r);
+      if (!c || !pv) continue;
+      if (!m.has(c)) m.set(c, new Set());
+      m.get(c).add(pv);
+    }
+    return [...m].filter(([, set]) => set.size > 1).map(([c]) => c).sort();
+  };
+  // order of the lower three levels: the one with the fewest clashes; ties keep the expected order (first in the list)
+  const ORDERS = [['pc', 'bt', 'pl'], ['pc', 'pl', 'bt'], ['bt', 'pc', 'pl'], ['bt', 'pl', 'pc'], ['pl', 'pc', 'bt'], ['pl', 'bt', 'pc']];
+  const scored = ORDERS.map((o, i) => ({ o, i, n: clashes('cc', o[0]).length + clashes(o[0], o[1]).length + clashes(o[1], o[2]).length }));
+  const lower = scored.sort((x, y) => x.n - y.n || x.i - y.i)[0].o;
+  const levels = ['entity', 'cc', 'so', ...lower];
+  const structure = {
+    order: levels.map((k) => LEVEL[k].name),
+    // sales org only exists for G367, so the lower levels are checked against the company code
+    exceptions: [['entity', 'cc'], ['cc', 'so'], ['cc', lower[0]], [lower[0], lower[1]], [lower[1], lower[2]]]
+      .map(([pk, ck]) => ({ parent: LEVEL[pk].name, child: LEVEL[ck].name, values: clashes(pk, ck) }))
+      .filter((e) => e.values.length),
+  };
+  // only overlaps at the top (e.g. one profit centre under two company codes) are data problems;
+  // lower down, e.g. "Manufacturing" under several profit centres, is normal and simply repeats under each parent
+  structure.problems = structure.exceptions.filter((e) => ['Entity', 'Company code', 'Sales org'].includes(e.parent));
+  const MAX_CHILDREN = 8;
+  const buildTree = (curRows, prevRows, depth) => {
+    if (depth >= levels.length || !curRows.length) return [];
+    const lv = LEVEL[levels[depth]];
+    // an empty value (e.g. no sales org, no profit centre for G367) skips the level instead of adding a blank row
+    if (curRows.every((r) => !lv.of(r))) return buildTree(curRows, prevRows, depth + 1);
+    const nodes = groupBy(curRows, (r) => lv.of(r) || '(not set)').sort(byValue).map((g) => {
+      const pr = prevRows.filter((r) => (lv.of(r) || '(not set)') === g.key);
+      let node = { label: g.key, level: lv.name, n: g.n, v: g.v, prevN: pr.length, tat: avgTat(g.rows), children: buildTree(g.rows, pr, depth + 1) };
+      // one child with the same invoices = the same thing again: show it on the same line
+      while (node.children.length === 1 && node.children[0].n === node.n) {
+        const c = node.children[0];
+        node = { ...node, label: `${node.label} › ${c.label}`, level: `${node.level} › ${c.level}`, children: c.children, more: c.more };
+      }
+      return node;
+    });
+    const shown = nodes.slice(0, MAX_CHILDREN);
+    if (nodes.length > MAX_CHILDREN) {
+      const rest = nodes.slice(MAX_CHILDREN);
+      shown.push({ label: `+ ${rest.length} more`, level: lv.name, n: sum(rest, (x) => x.n), v: sum(rest, (x) => x.v), prevN: null, tat: null, children: [] });
+    }
+    return shown;
+  };
+  const tree = buildTree(cur, prev, 0);
   const mostCommon = (rows, f) => groupBy(rows, f).sort((a, b) => b.n - a.n || String(a.key).localeCompare(String(b.key)))[0]?.key || '';
   const customers = groupBy(cur, (r) => r.c).sort(byValue).slice(0, 15).map((g) => ({
     key: g.key, n: g.n, v: g.v, tat: avgTat(g.rows), prevN: prev.filter((r) => r.c === g.key).length,
@@ -155,7 +215,7 @@ function analyse(all, opts, RULES) {
   };
 
   return {
-    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, businessTypes, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
+    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, businessTypes, tree, structure, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
     nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),
     watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,
   };
@@ -189,11 +249,13 @@ function render(a) {
   const f = a.forecast;
   const scope = [a.cc && `company code ${a.cc}`, a.pcSel && `profit centre ${a.pcSel}`, a.plSel && `product line ${a.plSel}`,
     a.cust && `customer contains "${a.cust}"`].filter(Boolean).join(', ') || 'all company codes, profit centres, product lines and customers';
-  const splitTable = (title, sub, head, list) => h(title, sub) + table([head, 'Invoices', 'Value', 'Share', 'vs previous', 'Avg days'], list.map((c) => {
-    const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null;
-    return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}</tr>` +
-      c.top.slice(0, 3).map((t) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}${td('')}</tr>`).join('');
-  }));
+  const treeRows = (nodes, depth) => nodes.flatMap((nd) => {
+    const ch = nd.prevN ? (nd.n - nd.prevN) / nd.prevN : null;
+    const name = depth === 0 ? `<b>${esc(nd.label)}</b>` : `<span style="color:${depth > 1 ? C.mute : C.ink}">${'&nbsp;'.repeat(depth * 4)}↳ ${esc(nd.label)}</span>`;
+    const row = `<tr>${td(name)}${td(`<span style="color:${C.mute};font-size:11px">${esc(nd.level)}</span>`)}${td(int(nd.n), 1)}${td(money(nd.v), 1)}${td(share(nd.v, a.total.v), 1)}` +
+      `${td(nd.prevN === null ? '' : pct(ch), 1, changeColor(ch))}${td(nd.tat === null ? '–' : nd.tat.toFixed(1), 1)}</tr>`;
+    return [row, ...treeRows(nd.children, depth + 1)];
+  });
 
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:${C.ink};max-width:900px">
 <h2 style="margin:0;color:${C.head}">Production Tracker – ${esc(a.type)} report</h2>
@@ -217,12 +279,10 @@ ${h('Forecast', 'Average of recent complete periods; range = lowest–highest of
 ${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [
     ...f.nextWeeks.map((w) => `<tr>${td(`Week of ${w}`)}${td(int(f.weekN.avg), 1)}${td(`${int(f.weekN.lo)}–${int(f.weekN.hi)}`, 1)}${td(money(f.weekV.avg), 1)}</tr>`),
     `<tr>${td(`<b>${f.nextMonth}</b>`)}${td(`<b>${int(f.monthN.avg)}</b>`, 1)}${td(`${int(f.monthN.lo)}–${int(f.monthN.hi)}`, 1)}${td(`<b>${money(f.monthV.avg)}</b>`, 1)}</tr>`])}
-${h('Company code split', 'With the top customers of each company code')}
-${table(['Company code', 'Invoices', 'Value', 'Share', 'vs previous'], a.companies.map((c) => { const ch = c.prevN ? (c.n - c.prevN) / c.prevN : null; return `<tr>${td(`<b>${esc(c.key)}</b>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(pct(ch), 1, changeColor(ch))}</tr>` +
-      c.top.map((t) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;↳ ${esc(t.key)}</span>`)}${td(int(t.n), 1)}${td(money(t.v), 1)}${td(share(t.v, c.v), 1)}${td('')}</tr>`).join(''); }))}
-${splitTable('Profit centre split', 'Profit centre applies to 3060 / 3487 / 3485 (from the Tableau extract); with the top customers of each', 'Profit centre', a.profitCentres)}
-${splitTable('Product line split', 'From the Tableau extract; Clearwater (G367) = PQP', 'Product line', a.productLines)}
-${splitTable('Business type split', 'Manufacturing / services / trading, from the Tableau extract; Clearwater (G367) = Manufacturing', 'Business type', a.businessTypes)}
+${h('Breakdown: ' + a.structure.order.join(' → '), 'One line per group; a level is skipped where it does not apply (e.g. no profit centre for G367), and repeated single groups are shown on one line')}
+${table(['Group', 'Level', 'Invoices', 'Value', 'Share', 'vs previous', 'Avg days'], treeRows(a.tree, 0))}
+${a.structure.problems.length ? `<div style="font-size:11px;color:${C.warn};margin-top:4px">Check the data: ${a.structure.problems.map((e) =>
+    `${e.values.length} ${esc(e.child.toLowerCase())}(s) appear under more than one ${esc(e.parent.toLowerCase())} (${esc(e.values.slice(0, 5).join(', '))}${e.values.length > 5 ? ' …' : ''})`).join('; ')}</div>` : ''}
 ${h('Customer details (top 15 by value)', 'Trend = invoices per month, last 6 months')}
 ${table(['Customer', 'SAP code', 'Profit centre', 'Product line', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(esc(c.sap || '–'))}${td(esc(c.pc || '–'))}${td(esc(c.pl || '–'))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}
 ${h('Channels & project managers')}
@@ -248,6 +308,7 @@ for (const { json: r } of $('Get All Rows').all()) {
     c: String(r.Customer || 'UNKNOWN CUSTOMER').trim().toUpperCase(), cc: String(r.Company_Code || '').trim().toUpperCase(),
     pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,
     sap: String(r.SAP_Customer_Code || '').trim(), pc: String(r.Profit_Center || '').trim().toUpperCase(),
+    so: String(r.Sales_Org || '').trim().toUpperCase(),
     pl: String(r.Product_Line || '').trim().toUpperCase(), bt: String(r.Business_Type || '').trim().toUpperCase(),
   });
 }
@@ -315,6 +376,9 @@ const facts = a.empty ? { empty: true } : {
     nextMonth: { month: a.forecast.nextMonth, expectedInvoices: Math.round(a.forecast.monthN.avg), low: a.forecast.monthN.lo, high: a.forecast.monthN.hi, expectedValue: r2(a.forecast.monthV.avg) },
   },
   companyCodes: a.companies.map((c) => ({ code: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
+  structure: { order: a.structure.order, exceptions: a.structure.exceptions.map((e) => `${e.values.length} ${e.child} values under more than one ${e.parent}`) },
+  breakdown: (function flat(nodes, depth, path) { return nodes.flatMap((nd) => [{ group: [...path, nd.label].join(' / '), level: nd.level, invoices: nd.n, value: r2(nd.v), previousPeriodInvoices: nd.prevN },
+    ...(depth < 2 ? flat(nd.children, depth + 1, [...path, nd.label]) : [])]); })(a.tree, 0, []).slice(0, 40),
   profitCentres: a.profitCentres.slice(0, 12).map((c) => ({ profitCentre: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, avgDays: c.tat === null ? null : r2(c.tat), topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
   productLines: a.productLines.map((c) => ({ productLine: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
   businessTypes: a.businessTypes.map((c) => ({ businessType: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),

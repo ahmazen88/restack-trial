@@ -398,8 +398,8 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
-                  '0. In the Data Table `datatable` add four columns (type *string*): `SAP_Customer_Code`, `Profit_Center`, '
-                  '`Product_Line`, `Business_Type`\n'
+                  '0. In the Data Table `datatable` add five columns (type *string*): `Sales_Org`, `SAP_Customer_Code`, '
+                  '`Profit_Center`, `Product_Line`, `Business_Type`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
                   '3. From *Report copy* copy **GEV LLM Model** → paste it here **twice** → connect one to the *Model* '

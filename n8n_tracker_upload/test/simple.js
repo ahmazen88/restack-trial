@@ -60,7 +60,7 @@ const makeSheet = (count) => {
 };
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
-  SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null };
+  Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null, Business_Type: null };
 const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
 const fullRun = (sheet, tableRow, aiOut, files = {}) => {
@@ -218,8 +218,10 @@ const doneMsg = L['Summarise Upload'][0].json.message;
 assert(/Columns used – Read ZSD Log: 1 matching rows \(invoice column "Billing Doc\.", customer code "Customer"\)/.test(doneMsg) && /product line "Product Line"/.test(doneMsg),
   'Done page lists the columns used from each file');
 const lh = L['Build Report'][0].json.html;
-assert(/Profit centre split/.test(lh) && /GPJ908/.test(lh) && /N\/A \(G367\)/.test(lh) && /Product line split/.test(lh) && /PQP/.test(lh) && /Business type split/.test(lh),
-  'report has profit centre, product line and business type splits');
+assert(by[7001300001].Sales_Org === 'G36C' && by[7001300002].Sales_Org === 'GS5C' && by[9001400001].Sales_Org === null, 'sales org kept for G367 (G36C / GS5C), empty for the others');
+assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Business type → Product line/.test(lh) && /CLEARWATER/.test(lh) && /G36C › MANUFACTURING › PQP/.test(lh) && /LA PRAIRIE \(CANADA\)/.test(lh),
+  'one breakdown tree: entity → company code → sales org → profit centre → business type → product line, single groups merged on one line');
+assert(!/Profit centre split|Product line split|Business type split|Company code split/.test(lh), 'no separate, repeated split tables any more');
 const lf = JSON.parse(L['Build Report'][0].json.facts);
 assert(lf.profitCentres.some((p) => p.profitCentre === 'GPJ908') && lf.productLines.some((p) => p.productLine === 'PQP'), 'AI facts include profit centres and product lines');
 const dash = Buffer.from(L['Build Report'][0].binary.dashboard.data, 'base64').toString();
@@ -227,6 +229,33 @@ if (process.env.DASH_OUT) fs.writeFileSync(process.env.DASH_OUT, dash);
 assert(/id="pc"/.test(dash) && /<option>GPJ908<\/option>/.test(dash) && /id="pl"/.test(dash), 'dashboard has profit centre and product line filters');
 const wrongZsd = fullRun(lookSheet, {}, [{ json: {} }], { zsd: [{ json: { A: 1, B: 'x' } }] });
 assert(wrongZsd['Rows to Save'].every((i) => i.json.SAP_Customer_Code === null), 'a file with no matching invoice numbers fills nothing (no guessing)');
+
+// ---------- 5b. breakdown order is checked against the data ----------
+const treeOf = (rowsIn) => {
+  const out = { 'Add Lookups': rowsIn.map((json) => ({ json })), 'Summarise Upload': [{ json: { message: '' } }] };
+  run(out, 'Build Report', [], withMail.replace("$('Add Lookups').all()", "$('Add Lookups').all()"));
+  return out['Build Report'][0];
+};
+const mk = (i, cc, pc, bt, pl) => ({ Invoice: 8000000000 + i, Value: '100', Customer: 'C' + (i % 4), Company_Code: cc, Received_Date: '2026-03-' + String(1 + (i % 20)).padStart(2, '0'),
+  Profit_Center: pc, Business_Type: bt, Product_Line: pl, Sales_Org: null });
+// expected shape: company code → profit centre → business type → product line
+const clean = [];
+for (let i = 0; i < 40; i++) clean.push(mk(i, ['3060', '3485'][i % 2], i % 2 ? 'PC-B' : (i % 4 < 2 ? 'PC-A1' : 'PC-A2'), i % 3 ? 'MANUFACTURING' : 'SERVICES', i % 3 ? 'PTI' : 'AIS'));
+const t1 = treeOf(clean);
+assert(/Breakdown: Entity → Company code → Sales org → Profit centre → Business type → Product line/.test(t1.json.html) && !/Check the data/.test(t1.json.html),
+  'expected order kept; "Manufacturing" under several profit centres is normal, no warning');
+// here each profit centre sits under ONE product line, but product lines span profit centres → product line goes above profit centre
+const swapped = [];
+for (let i = 0; i < 40; i++) { const pl = ['GIS', 'AIS'][i % 2]; swapped.push(mk(i, '3060', pl + '-PC' + (i % 4 < 2 ? 1 : 2), 'MANUFACTURING', pl)); }
+if (process.env.TREE_OUT) {
+  const cw = []; for (let i = 0; i < 12; i++) cw.push({ ...mk(100 + i, 'G367', null, 'MANUFACTURING', 'PQP'), Sales_Org: i % 3 ? 'G36C' : 'GS5C' });
+  const pr = []; for (let i = 0; i < 6; i++) pr.push(mk(200 + i, '3487', 'PC-C', i % 2 ? 'TRADING' : 'MANUFACTURING', i % 2 ? 'GIS' : 'PTR'));
+  fs.writeFileSync(process.env.TREE_OUT, treeOf(clean.concat(cw, pr)).json.html.replace('<!--charts-->', ''));
+}
+const t2 = JSON.parse(treeOf(swapped).json.facts).structure.order.join(' → ');
+assert(/Business type → Product line → Profit centre|Product line → Profit centre/.test(t2) && !/Profit centre → .*Product line/.test(t2), 'data decides when it contradicts the guess: ' + t2);
+const messyTree = clean.map((r, i) => (i === 0 ? { ...r, Company_Code: '3485', Profit_Center: 'PC-A1' } : r));
+assert(/Check the data: 1 profit centre\(s\) appear under more than one company code \(PC-A1\)/.test(treeOf(messyTree).json.html), 'a profit centre under two company codes is pointed out');
 
 // ---------- 5. Stops BEFORE emptying the table when something is wrong ----------
 const stop = (sheet, tableRow) => throws(() => fullRun(sheet, tableRow, [{ json: {} }]));
