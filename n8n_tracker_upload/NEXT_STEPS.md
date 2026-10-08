@@ -22,6 +22,15 @@ Findings from the company n8n:
     `tracker_onedrive_workflow.json` will load, but they still need the IT app registration and network access
     to Microsoft.
 
+- **Company mail node** ("Send an Email" in *Report copy*): **GEV Send Email node, version 1**.
+  - Credential: GEV SMTP account 1539. Operation: Send. From Email: noreply@gevernova.com (dropdown).
+  - To Email: text. Subject: text. Email Format: HTML. HTML: field (currently `{{ $json.output }}`).
+    Options: Attachments.
+  - Settings: On Error = Stop Workflow.
+  - To map from Build Report: To `{{ $json.to }}`, Subject `{{ $json.subject }}`, HTML `{{ $json.html }}`.
+  - Exact internal node type not known yet. Copying the node (Ctrl+C) and pasting the JSON would let it be
+    embedded directly in the workflow file.
+
 Decision: **stay with what already works.** That's the upload form (confirmed working up to the Data Table),
 plus the rule-based report sent through the company GEV SMTP mail node. No Microsoft connectors for now.
 
