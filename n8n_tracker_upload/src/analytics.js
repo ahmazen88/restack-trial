@@ -1,7 +1,7 @@
 // Build Report — incoming volume, watchlist, company code & customer split, weekly/monthly trends,
 // workload heatmap and forecast. Fixed rules only: the same data and choices always give the same report.
 // The email shows the report; the attached dashboard.html lets you change period / company code / customer.
-const RECIPIENTS = []; // default recipients, e.g. ['name.surname@company.com']; the request form can override
+const RECIPIENTS = ['']; // put your email between the quotes, e.g. ['name.surname@company.com']
 const RULES = {
   spike: 1.5, // flag when a customer's invoices are 50%+ above their usual (average of previous 3 periods)
   fall: 0.5, // flag when an active customer falls 50%+ below their usual
@@ -230,7 +230,7 @@ const rows = [...seen.values()];
 const a = analyse(rows, settings, RULES);
 const html = render(a);
 
-const recipients = String(settings.sendTo || '').trim() || RECIPIENTS.join(', ');
+const recipients = String(settings.sendTo || '').trim() || RECIPIENTS.filter((x) => String(x).trim()).join(', ');
 if (!recipients) throw new Error('Add at least one email address to RECIPIENTS at the top of "Build Report".');
 
 const safeJson = (x) => JSON.stringify(x).replace(/</g, '\\u003c');

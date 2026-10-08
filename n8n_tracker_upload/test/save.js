@@ -56,7 +56,7 @@ const plain = run(src('commentary.js'), [{ json: { text: 'Summary: volume steady
 assert(/<p>Summary: volume steady/.test(plain.json.html), 'plain-text AI answer wrapped in paragraphs');
 
 // Build Report facts for the AI
-const build = wf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode.replace('const RECIPIENTS = [];', "const RECIPIENTS = ['a@x'];");
+const build = wf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode.replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['a@x'];");
 const rep = new Function('$', build)((n) => ({ all: () => (n === 'Get All Rows' ? table : []), first: () => (n === 'Report Settings' ? { json: { type: 'Overview' } } : { json: { message: 'Upload ok' } }) }))[0];
 const facts = JSON.parse(rep.json.facts);
 assert(facts.invoices > 0 && facts.forecast && Array.isArray(facts.watchlist) && facts.busiestDaysOfMonth.length === 5, 'facts for AI built');

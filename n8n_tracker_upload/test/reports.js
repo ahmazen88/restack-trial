@@ -35,7 +35,7 @@ const triggers = ['Upload Tracker', 'Every Monday 7am', '1st of Month 7am'];
 const settingsFor = (executed, form) => run(code('Report Settings'),
   { 'Request a Report': [{ json: form || {} }], ...Object.fromEntries(triggers.map((t) => [t, [{ json: {} }]])) }, executed)[0].json;
 const build = (settings, recipients = "['a@example.com']") => {
-  const src = code('Build Report').replace('const RECIPIENTS = [];', `const RECIPIENTS = ${recipients};`);
+  const src = code('Build Report').replace("const RECIPIENTS = [''];", `const RECIPIENTS = ${recipients};`);
   return run(src, { 'Report Settings': [{ json: settings }], 'Get All Rows': rows })[0];
 };
 

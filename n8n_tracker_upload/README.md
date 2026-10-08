@@ -146,3 +146,12 @@ Connect a **GEV LLM Model** to its *Model* input and set the temperature to 0.1�
 
 ## Editing
 Edit `src/*.js`, run `python3 build.py` to regenerate both workflow JSON files, and `node test/run.js` to re-test.
+
+## The one to use: `production_tracker.json` (one start, one end)
+```
+Upload Tracker (form) → Read Tracker Sheet → Clean Rows → Clear Table → Rows to Save → Save All Rows
+  → Summarise Upload → Build Report → AI Commentary → Add AI Commentary → Send an Email → Done Page
+```
+A straight line: no branches and no choices. On every upload the table is emptied and refilled in one bulk call,
+so it doesn't spin, and the tracker is always the source of truth. Setup is the 5 steps in the yellow note
+inside the workflow. Test: `node test/simple.js`.

@@ -286,10 +286,70 @@ def reports_workflow():
     return 'Production Tracker – Upload, Reports & AI Commentary', nodes, connections
 
 
+def simple_workflow():
+    """ONE start (upload form) → one straight line → ONE end (Done page). No branches, no options."""
+    p = 'simple-'
+    send = '⬜ Send Report – paste "Send an Email" here'
+    report_js = (js('analytics.js')
+                 .replace("const settings = $('Report Settings').first().json;",
+                          "const settings = { type: 'Overview', source: 'form' };")
+                 .replace("$('Get All Rows').all()", "$('Clean Rows').all()"))
+    y = 300
+    names = ['Upload Tracker', 'Read Tracker Sheet', 'Clean Rows', 'Clear Table', 'Rows to Save', 'Save All Rows',
+             'Summarise Upload', 'Build Report', 'AI Commentary', 'Add AI Commentary', send, 'Done Page']
+    pos = {n: [220 * i, y] for i, n in enumerate(names)}
+    nodes = [
+        node(p, 'Upload Tracker', 'formTrigger', 2.2, pos['Upload Tracker'], {
+            'formTitle': 'Upload Production Tracker',
+            'formDescription': 'Upload the latest tracker (.xlsx). It is saved to the Data Table and the report '
+                               'is emailed to you. Please wait on this page until it says Done.',
+            'formFields': {'values': [{'fieldLabel': 'Tracker File', 'fieldType': 'file', 'multipleFiles': False,
+                                       'acceptFileTypes': '.xlsx,.xlsm', 'requiredField': True}]},
+            'responseMode': 'lastNode',
+            'options': {'path': 'production-tracker', 'buttonLabel': 'Upload'}}),
+        node(p, 'Read Tracker Sheet', 'extractFromFile', 1, pos['Read Tracker Sheet'], {
+            'operation': 'xlsx', 'binaryPropertyName': 'Tracker_File', 'options': {}}),
+        node(p, 'Clean Rows', 'code', 2, pos['Clean Rows'], {'jsCode': js('clean.js')}),
+        node(p, 'Clear Table', 'dataTable', 1, pos['Clear Table'], {
+            'resource': 'table', 'operation': 'clear', 'dataTableId': DATA_TABLE}, executeOnce=True),
+        node(p, 'Rows to Save', 'code', 2, pos['Rows to Save'], {'jsCode': js('restore_all.js')}),
+        node(p, 'Save All Rows', 'dataTable', 1, pos['Save All Rows'], {
+            'resource': 'row', 'operation': 'insert', 'dataTableId': DATA_TABLE,
+            'columns': {'mappingMode': 'autoMapInputData', 'value': {}, 'matchingColumns': [], 'schema': []},
+            'options': {'optimizeBulk': True}}),
+        node(p, 'Summarise Upload', 'code', 2, pos['Summarise Upload'], {'jsCode': js('summary.js')},
+             executeOnce=True),
+        node(p, 'Build Report', 'code', 2, pos['Build Report'], {'jsCode': report_js}),
+        node(p, 'AI Commentary', '@n8n/n8n-nodes-langchain.chainLlm', 1.7, pos['AI Commentary'], {
+            'promptType': 'define', 'text': USER_PROMPT, 'hasOutputParser': False,
+            'messages': {'messageValues': [{'type': 'SystemMessagePromptTemplate', 'message': SYSTEM_PROMPT}]},
+            'batching': {}},
+            retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput'),
+        node(p, 'Add AI Commentary', 'code', 2, pos['Add AI Commentary'], {'jsCode': js('commentary.js')}),
+        node(p, send, 'noOp', 1, pos[send], {}),
+        node(p, 'Done Page', 'form', 1, pos['Done Page'], {
+            'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
+            'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
+        sticky(p, '## Setup – 5 steps\n'
+                  '1. **Clear Table** and **Save All Rows** → Data table: choose `datatable`\n'
+                  '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
+                  '3. From *Report copy* copy **GEV LLM Model** → paste here → drag it to the *Model* dot under '
+                  '**AI Commentary**\n'
+                  '4. From *Report copy* copy **Send an Email** → paste here → put it in place of the grey box '
+                  '(connect Add AI Commentary → Send an Email → Done Page, delete the grey box) and fill in: '
+                  'To `{{ $json.to }}` · Subject `{{ $json.subject }}` · Email Format `HTML` · '
+                  'HTML `{{ $json.html }}` · Attachments `dashboard`\n'
+                  '5. **Publish** → open **Upload Tracker** → copy the *Production URL* → open it and upload the tracker',
+               [0, -120], height=360, width=900),
+    ]
+    return 'Production Tracker', nodes, chain(*names)
+
+
 if __name__ == '__main__':
     for filename, (name, nodes, connections) in [('tracker_upload_workflow.json', upload_workflow()),
                                                  ('tracker_onedrive_workflow.json', onedrive_workflow()),
-                                                 ('tracker_reports_workflow.json', reports_workflow())]:
+                                                 ('tracker_reports_workflow.json', reports_workflow()),
+                                                 ('production_tracker.json', simple_workflow())]:
         workflow = {'name': name, 'nodes': nodes, 'connections': connections, 'pinData': {},
                     'settings': {'executionOrder': 'v1'}, 'active': False, 'tags': []}
         (HERE / filename).write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + '\n')
