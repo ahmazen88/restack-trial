@@ -101,6 +101,7 @@ assert(/as of 2026-08-28/.test(r1.subject), 'as-of date comes from the data, not
 assert(!/<script/i.test(r1.html), 'no scripts in email');
 assert(r1.mail.message.toRecipients.length === 2 && r1.mail.message.body.contentType === 'HTML' &&
   r1.mail.message.body.content === r1.html, 'Graph sendMail body built');
+assert(r1.to === 'a@example.com, b@example.com', 'plain "to" field for other mail nodes');
 const send = odWf.nodes.find((n) => n.name === 'Send Report').parameters;
 assert(send.url.endsWith('/me/sendMail') && send.nodeCredentialType === 'microsoftOutlookOAuth2Api', 'Send Report calls Graph sendMail');
 const dl = odWf.nodes.find((n) => n.name === 'Download Tracker').parameters;

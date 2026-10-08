@@ -87,6 +87,7 @@ return [{
   json: {
     subject,
     html,
+    to: RECIPIENTS.join(', '), // for mail nodes with a plain "To" field (e.g. the company SMTP mail node)
     invoices: rows.length,
     totalValue,
     // Body for Microsoft Graph "send mail" (used by the Send Report step)

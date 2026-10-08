@@ -81,7 +81,9 @@ Setup:
    Summarise Upload if you don't need the Data Table.
 5. **Build Report**: put the email addresses in `RECIPIENTS` at the top (the run stops with a message if it's
    empty). **Send Report** (HTTP Request → Graph `sendMail`): select a **Microsoft Outlook OAuth2 API**
-   credential. If your company has its own mail node, swap it in and map `subject` / `html`.
+   credential. **Or use the company mail node** (the GEV SMTP "Send an Email" node from *Report copy*): copy it in,
+   connect Build Report → it → Remember Version, and set To `{{ $json.to }}`, Subject `{{ $json.subject }}`,
+   HTML body `{{ $json.html }}`.
 6. Click **Test Run**, check the email, then **Publish**. Set the timezone under *Workflow settings*.
 
 The report (rule-based, no AI: the same file always gives the same email):
