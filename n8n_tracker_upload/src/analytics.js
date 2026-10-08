@@ -53,6 +53,9 @@ function analyse(all, opts, RULES) {
   const plKey = (r) => r.pl || 'NOT FOUND';
   const scoped = all.filter((r) => r.d && (!cc || r.cc === cc) && (!cust || r.c.includes(cust))
     && (!pcSel || pcKey(r) === pcSel) && (!plSel || plKey(r) === plSel));
+  // pending items and fill-in checks also include rows without any date
+  const scopedAny = all.filter((r) => (!cc || r.cc === cc) && (!cust || r.c.includes(cust))
+    && (!pcSel || pcKey(r) === pcSel) && (!plSel || plKey(r) === plSel));
   const inRange = (a, b) => scoped.filter((r) => r.d >= a && r.d <= b);
   const cur = inRange(from, to);
   const [pf, pt] = shift(1);
@@ -216,16 +219,25 @@ function analyse(all, opts, RULES) {
   const daysBetween = (x, y) => Math.round((ms(y) - ms(x)) / DAY);
   const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   // dates written in "Reason for Pending" ("email sent on 23 June", "follow up on 3 July", "19th september")
-  const actionDates = (text) => {
+  // a date without a year is read in order: on or after the previous date (and the received date), not after today
+  const actionDates = (text, start) => {
     const found = new Set();
+    let prev = start ? addDays(start, -7) : null;
+    const lastYear = +today.slice(0, 4);
     const re = /\b(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s*(\d{4}))?|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s*(\d{4}))?/gi;
     for (const m of String(text || '').matchAll(re)) {
       const day = +(m[1] || m[5]); const mon = MONTHS.indexOf(String(m[2] || m[4]).toLowerCase().slice(0, 3));
       if (!(day >= 1 && day <= 31) || mon < 0) continue;
       const at = (y) => `${y}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      let yr = +(m[3] || m[6]) || +today.slice(0, 4);
-      if (!(m[3] || m[6]) && at(yr) > addDays(today, 1)) yr -= 1; // no year written: the latest such date up to today
-      if (iso(ms(at(yr))) === at(yr)) found.add(at(yr)); // skips impossible dates like 31 Sep
+      let yr = +(m[3] || m[6]) || 0;
+      if (!yr) {
+        // with an earlier date to go by: the first such date on or after it; otherwise the latest one up to today
+        if (prev) for (let y = +prev.slice(0, 4); y <= lastYear && !yr; y++) if (at(y) >= prev && at(y) <= addDays(today, 1)) yr = y;
+        if (!yr) yr = at(lastYear) <= addDays(today, 1) ? lastYear : lastYear - 1; // fallback: the latest such date up to today
+      }
+      if (iso(ms(at(yr))) !== at(yr)) continue; // skips impossible dates like 31 Sep
+      found.add(at(yr));
+      if (!prev || at(yr) > prev) prev = at(yr);
     }
     return [...found].sort();
   };
@@ -247,9 +259,9 @@ function analyse(all, opts, RULES) {
     const t = r.cat || r.why || ''; if (!t) return 'No reason given';
     return (BLOCKERS.find(([, re]) => re.test(t)) || ['Other'])[0];
   };
-  const open = scoped.filter(isOpen).map((r) => {
+  const open = scopedAny.filter(isOpen).map((r) => {
     const start = r.rd || r.ad || r.d;
-    const acts = actionDates(r.why);
+    const acts = actionDates(r.why, start);
     const last = acts[acts.length - 1] || null;
     const age = start ? Math.max(0, daysBetween(start, today)) : null;
     const sinceLast = last ? Math.max(0, daysBetween(last, today)) : null;
@@ -288,7 +300,7 @@ function analyse(all, opts, RULES) {
     ['Pending without an owner (Uploaded by)', (r) => isOpen(r) && !r.ub],
     ['Pending but has an upload date', (r) => isOpen(r) && !!r.ud],
     ['Completed without upload date or TAT', (r) => r.st === 'Completed' && !r.ud && (r.tt === '' || r.tt === null || r.tt === undefined)],
-  ].map(([label, test]) => { const hit = scoped.filter(test); return { label, n: hit.length, examples: hit.slice(0, 8).map((r) => String(r.i)) }; }).filter((x) => x.n);
+  ].map(([label, test]) => { const hit = scopedAny.filter(test); return { label, n: hit.length, examples: hit.slice(0, 8).map((r) => String(r.i)) }; }).filter((x) => x.n);
   const quality = {
     fillIn,
     noValue: cur.filter((r) => !num(r.v)).length,

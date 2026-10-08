@@ -303,6 +303,18 @@ const ph = P['Build Report'][0].json.html;
 assert(!/Past due/.test(ph) && /Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
   'report has the pending section: KPIs, ageing, blockers, owners, act-now list with reasons');
 assert(P['Rows to Save'].every((i) => i.json.Invoice !== 7001100001 || i.json.Status === 'Completed'), 'completed rows saved too');
+const yr = fullRun([
+  { json: { 'Invoice#': 7002000001, '$ Value': '10', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Abdul', Category: 'Quantity Mismatch', Customer: 'OLD',
+    'Reason for Pending': 'Email sent on 23 June. Follow up on 3 July. Escalated 3 Feb. Chased again 20 June', Received_Date: '2025-06-01' } },
+  { json: { 'Invoice#': 7002000002, '$ Value': '20', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Abdul', Category: 'Quantity Mismatch', Customer: 'NODATE',
+    'Reason for Pending': 'Email sent on 5 Oct' } },
+  { json: { 'Invoice#': 7002000003, '$ Value': '30', 'Company Code': '3060', Status: 'Completed', Customer: 'X', Received_Date: '2026-10-01', 'Invoice upload Date': '2026-10-02' } },
+], TABLE_ROW, [{ json: {} }]);
+const yp = JSON.parse(yr['Build Report'][0].json.facts).pending;
+const y1 = yp.actNow.find((x) => x.invoice === '7002000001');
+assert(y1 && y1.followUps === 4 && y1.lastAction === '2026-06-20' && y1.daysPending === 494,
+  'an item open since 2025: 23 June / 3 July read as 2025, 3 Feb and 20 June as 2026 (dates read in order)');
+assert(yp.open === 2 && yp.actNow.some((x) => x.invoice === '7002000002' && x.daysPending === null && x.lastAction === '2026-10-05'), 'a pending item with no dates at all is still counted (days pending unknown)');
 if (process.env.PEND_OUT) fs.writeFileSync(process.env.PEND_OUT, ph.replace('<!--charts-->', ''));
 
 // ---------- 5d. AI only for wordings the rules cannot place; answers limited to the fixed list; remembered ----------
