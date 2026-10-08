@@ -199,8 +199,8 @@ New tracker columns read: Status, Invoice upload Date, TAT, Uploaded by, Categor
 - Days pending = Received date (else Allocated date) → today. "Past due" is not shown yet: it needs payment terms
   (planned: Tableau's Net Due Date / payment-terms days).
 - Follow-ups = the dates written in "Reason for Pending" ("23 June", "3 July", "19th september"; a date without a year is
-  the latest such date up to today). Follow-up due when the last one is `RULES.followUpDays` (7) or more days ago
-  (or, with no date, 7+ days since received).
+  the latest such date up to today). Follow-up due when the last one is `RULES.followUpDays` (2) or more days ago
+  (or, with no date, 2+ days since received).
 - Blocker groups from Category (rules in `BLOCKERS`): price / quantity / amount mismatch, invoice can't be raised,
   PO / PO lines missing on portal, portal access / setup, other.
 - Completed TAT = Received → Invoice upload date (else the tracker's TAT), for items uploaded in the period.

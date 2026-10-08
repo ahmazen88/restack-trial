@@ -289,7 +289,7 @@ assert(act['7001238182'].daysPending === 110 && act['7001238182'].lastAction ===
   'dates read from the reason: 23 June + 3 July → 2 follow-ups, last action 3 July, 97 days ago; 110 days pending');
 assert(act['7001265146'].followUps === 3 && act['7001265146'].lastAction === '2026-10-06' && act['7001265146'].daysSinceLastAction === 2, '"10 Sep", "19th september", "6 Oct" all read; followed up 2 days ago');
 assert(act['7001247206'].lastAction === null && act['7001247206'].followUps === 0, 'no date in the reason → no follow-up logged');
-assert(!('pastDue' in pf) && pf.followUpDue === 4, 'no "past due" yet (needs payment terms); follow-up due (nothing for 7+ days): 4');
+assert(!('pastDue' in pf) && pf.followUpDue === 5, 'no "past due" yet (needs payment terms); follow-up due (nothing logged for 2+ days): 5');
 const bl = Object.fromEntries(pf.blockers.map((b) => [b.blocker, b.invoices]));
 assert(bl['PO issue on portal'] === 3 && bl['Invoice vs PO mismatch'] === 1 && bl['Portal access'] === 1, 'blocker groups: ' + JSON.stringify(bl));
 const sc = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json.Standard_Category]));

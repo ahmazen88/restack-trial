@@ -9,7 +9,7 @@ const RULES = {
   slowDays: 3, // flag when average Received → Allocated takes more than 3 days
   minInvoices: 3, // ignore customers with fewer invoices than this for spike / fall / turnaround / portal flags
   // past due needs each customer's payment terms – planned as a later addition, so it is not shown yet
-  followUpDays: 7, // a follow-up is due when nothing was done for this many days (last date in "Reason for Pending")
+  followUpDays: 2, // a follow-up is due when nothing was done for this many days (last date in "Reason for Pending")
 };
 const TODAY = new Date().toISOString().slice(0, 10); // days pending are counted up to this date
 RULES.today = TODAY;
