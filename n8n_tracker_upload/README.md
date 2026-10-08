@@ -190,3 +190,18 @@ value) under more than one company code is pointed out. Needs the `Sales_Org` co
 - G367 is looked up in Tableau too: SAP customer code from the ZSD log first, then Tableau; profit centre and product line
   from Tableau; product line PQP when Tableau has none.
 - Business type (Nature of Activities PL / PC) and Customer Type are not used for now.
+
+### Pending invoices & follow-ups
+New tracker columns read: Status, Invoice upload Date, TAT, Uploaded by, Category, Reason for Pending (saved as
+`Status`, `Upload_Date`, `Tracker_TAT`, `Uploaded_By`, `Pending_Category`, `Pending_Reason`).
+- Open = Status contains pending / hold / open / in progress / query / blocked. All open items in the selection are shown,
+  whatever their date.
+- Days pending = Received date (else Allocated date) → today. Past due after `RULES.pastDueDays` (30).
+- Follow-ups = the dates written in "Reason for Pending" ("23 June", "3 July", "19th september"; a date without a year is
+  the latest such date up to today). Follow-up due when the last one is `RULES.followUpDays` (7) or more days ago
+  (or, with no date, 7+ days since received).
+- Blocker groups from Category (rules in `BLOCKERS`): price / quantity / amount mismatch, invoice can't be raised,
+  PO / PO lines missing on portal, portal access / setup, other.
+- Completed TAT = Received → Invoice upload date (else the tracker's TAT), for items uploaded in the period.
+- Report: KPIs, ageing buckets, blocker / owner / company code tables, "Act now" top 15 with the reason text.
+  The AI commentary and chart designer get these figures too.

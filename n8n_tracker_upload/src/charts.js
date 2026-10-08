@@ -20,12 +20,17 @@ const DATASETS = {
   topCustomers: { label: 'customer', invoices: 'invoices', value: 'value' },
   channels: { label: 'channel', invoices: 'invoices' },
   watchlist: { label: 'customer', invoices: 'invoices', value: 'value' },
+  pendingAgeing: { label: 'bucket', invoices: 'invoices', value: 'value' },
+  pendingBlockers: { label: 'blocker', invoices: 'invoices', value: 'value' },
 };
 const TIME_SERIES = ['monthly', 'weekly'];
 const COLORS = { bar: '#2b6cb0', part: '#9dbbe0', line: '#1f3a5f', grid: '#e5e7eb', ink: '#111827', mute: '#6b7280' };
 
 const base = $('Add AI Commentary').first();
 const facts = JSON.parse($('Build Report').first().json.facts || '{}');
+// pending datasets live inside facts.pending
+facts.pendingAgeing = facts.pending?.ageing || [];
+facts.pendingBlockers = facts.pending?.blockers || [];
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n, metric) => (metric === 'value'
   ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
@@ -53,7 +58,7 @@ const points = (c) => {
   const d = DATASETS[c.dataset];
   // a month that is not finished yet is marked with * and drawn lighter, so it is not read as a fall in volume
   let list = facts[c.dataset].map((x) => ({ label: String(x[d.label]) + (x.monthToDate ? '*' : ''), y: Number(x[d[c.metric]]) || 0, part: !!x.monthToDate }));
-  if (!TIME_SERIES.includes(c.dataset) && c.dataset !== 'busiestWeekdays' && c.dataset !== 'busiestDaysOfMonth') {
+  if (!TIME_SERIES.includes(c.dataset) && !['busiestWeekdays', 'busiestDaysOfMonth', 'pendingAgeing'].includes(c.dataset)) {
     list = list.sort((a, b) => b.y - a.y).slice(0, 10); // biggest first, top 10
   }
   return list;

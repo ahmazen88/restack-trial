@@ -7,7 +7,8 @@
 //             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.
 // 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).
 const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manager', 'Name_the_PortalEmail_ID',
-  'Received_Date', 'Allocated_Date', 'Invoice_Date'];
+  'Received_Date', 'Allocated_Date', 'Invoice_Date',
+  'Status', 'Upload_Date', 'Tracker_TAT', 'Uploaded_By', 'Pending_Category', 'Pending_Reason'];
 const ALIASES = {
   Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],
   Value: ['value', 'amount', 'invoice value'],
@@ -19,8 +20,15 @@ const ALIASES = {
   Received_Date: ['received date', 'date received', 'received'],
   Allocated_Date: ['allocated date', 'date allocated', 'allocated'],
   Invoice_Date: ['invoice date', 'inv date'],
+  Status: ['status', 'invoice status'],
+  Upload_Date: ['invoice upload date', 'upload date', 'uploaded date', 'invoice upload dt', 'date uploaded'],
+  Tracker_TAT: ['tat', 'turn around time', 'turnaround time', 'tat days'],
+  Uploaded_By: ['uploaded by', 'processed by', 'owner', 'done by'],
+  Pending_Category: ['category', 'pending category', 'blocker category'],
+  Pending_Reason: ['reason for pending', 'pending reason', 'reason', 'comments', 'remarks'],
 };
-const TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
+const TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date',
+  Upload_Date: 'date', Tracker_TAT: 'numberText' }; // "NA" in a date or TAT cell becomes empty
 const KEY = 'Invoice';
 const UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together
 // The tracker sometimes holds the sales org instead of the company code. Left = sales org, right = real company code.

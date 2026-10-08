@@ -60,8 +60,10 @@ const makeSheet = (count) => {
 };
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
-  Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null };
-const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];");
+  Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null,
+  Status: null, Upload_Date: null, Tracker_TAT: null, Uploaded_By: null, Pending_Category: null, Pending_Reason: null };
+const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];")
+  .replace('const TODAY = new Date().toISOString().slice(0, 10);', "const TODAY = '2026-10-08';");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
 const fullRun = (sheet, tableRow, aiOut, files = {}) => {
   const out = { 'Upload Tracker': [{ json: {}, binary: { Tracker_File: { fileName: 'Trackers - NAM Distribution.xlsx' } } }] };
@@ -257,6 +259,45 @@ const t2 = JSON.parse(treeOf(swapped).json.facts).structure.order.join(' → ');
 assert(/Sales org → Product line → Profit centre$/.test(t2), 'data decides when it contradicts the guess: ' + t2);
 const messyTree = clean.map((r, i) => (i === 0 ? { ...r, Company_Code: '3485', Profit_Center: 'PC-A1' } : r));
 assert(/Check the data: 1 profit centre\(s\) appear under more than one company code \(PC-A1\)/.test(treeOf(messyTree).json.html), 'a profit centre under two company codes is pointed out');
+
+// ---------- 5c. pending invoices, ageing and follow-ups ----------
+const pend = [ // like the tracker screenshot; "today" = 2026-10-08
+  { json: { 'Invoice#': 7001238182, '$ Value': '$411', 'Company Code': 'G367', Status: 'Pending', 'Invoice upload Date': 'NA', TAT: 'NA', 'Uploaded by': 'Tushar',
+    Category: 'PO Lines not available on Portal', 'Reason for Pending': 'PO lines not available on portal. Email sent to Romero Walter on 23 June. Follow up email sent on 3 July.', Received_Date: '2026-06-20', Customer: 'IDAHO POWER' } },
+  { json: { 'Invoice#': 7001264821, '$ Value': '$28,687', 'Company Code': 'G367', Status: 'Pending', 'Uploaded by': 'Tushar', Category: 'Quantity Mismatch',
+    'Reason for Pending': 'Quantity Mismatch. Email sent to Stacy on 10 Sep', Received_Date: '2026-09-08', Customer: 'SALT RIVER' } },
+  { json: { 'Invoice#': 7001265146, '$ Value': '$158,466', 'Company Code': '3485', Status: 'Pending', 'Uploaded by': 'Tushar', Category: 'PO unavailable on portal',
+    'Reason for Pending': 'PO unavailable on portal. Email sent to Michael Gralewski on 10 Sep and mail sent on 19th september for follow up. Follow up email sent to Gavin on 6 Oct', Received_Date: '2026-09-09', Customer: 'EXELON' } },
+  { json: { 'Invoice#': 7001247206, '$ Value': '$1,682', 'Company Code': 'G367', Status: 'Pending', 'Uploaded by': 'Abdul', Category: 'Unable to create invoice',
+    'Reason for Pending': 'PO lines unavailable on portal. Escalated to Dispute Team (Yogita) for review.', Received_Date: '2026-07-15', Customer: 'EKU' } },
+  { json: { 'Invoice#': 7001156057, '$ Value': '$19,589', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Tushar', Category: 'No Portal Access',
+    'Reason for Pending': 'No Portal Access. Email sent to Bruno on 28 Aug', Received_Date: '2026-08-25', Customer: 'HYDRO' } },
+  { json: { 'Invoice#': 7001100001, '$ Value': '$5,000', 'Company Code': '3060', Status: 'Completed', 'Invoice upload Date': '2026-10-02', 'Uploaded by': 'Lynette', Received_Date: '2026-09-28', Customer: 'HYDRO',
+    'Reason for Pending': 'old note 1 Jan' } },
+  { json: { 'Invoice#': 7001100002, '$ Value': '$7,000', 'Company Code': '3060', Status: 'Uploaded', TAT: '3', 'Uploaded by': 'Lynette', Received_Date: '2026-10-01', Customer: 'HYDRO' } },
+];
+const P = fullRun(pend, TABLE_ROW, [{ json: {} }]);
+const saved = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json]));
+assert(saved[7001238182].Status === 'Pending' && saved[7001238182].Upload_Date === null && saved[7001238182].Tracker_TAT === null && saved[7001238182].Uploaded_By === 'Tushar'
+  && saved[7001238182].Pending_Category === 'PO Lines not available on Portal' && /Romero Walter/.test(saved[7001238182].Pending_Reason), 'tracker Status / upload date / TAT / uploaded by / category / reason saved ("NA" → empty)');
+const pf = JSON.parse(P['Build Report'][0].json.facts).pending;
+assert(pf.open === 5 && pf.countedTo === '2026-10-08', '5 open items (Completed / Uploaded are not pending), counted to today');
+const act = Object.fromEntries(pf.actNow.map((x) => [x.invoice, x]));
+assert(act['7001238182'].daysPending === 110 && act['7001238182'].lastAction === '2026-07-03' && act['7001238182'].followUps === 2 && act['7001238182'].daysSinceLastAction === 97,
+  'dates read from the reason: 23 June + 3 July → 2 follow-ups, last action 3 July, 97 days ago; 110 days pending');
+assert(act['7001265146'].followUps === 3 && act['7001265146'].lastAction === '2026-10-06' && act['7001265146'].daysSinceLastAction === 2, '"10 Sep", "19th september", "6 Oct" all read; followed up 2 days ago');
+assert(act['7001247206'].lastAction === null && act['7001247206'].followUps === 0, 'no date in the reason → no follow-up logged');
+assert(pf.pastDue === 3 && pf.followUpDue === 4, 'past due (> 30 days): 3; follow-up due (nothing for 7+ days): 4');
+const bl = Object.fromEntries(pf.blockers.map((b) => [b.blocker, b.invoices]));
+assert(bl['PO / PO lines missing on portal'] === 2 && bl['Price / quantity / amount mismatch'] === 1 && bl["Invoice can't be raised on portal"] === 1 && bl['Portal access / setup'] === 1,
+  'blocker groups: ' + JSON.stringify(bl));
+assert(pf.actNow[0].invoice === '7001265146' || pf.actNow[0].daysPending > 30, 'act-now list starts with past-due items, highest value first: ' + pf.actNow.map((x) => x.invoice).join(', '));
+assert(pf.completedAvgTatDays === 3.5, 'completed TAT: 4 days (received → uploaded) and 3 days (tracker TAT) → average 3.5');
+const ph = P['Build Report'][0].json.html;
+assert(/Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
+  'report has the pending section: KPIs, ageing, blockers, owners, act-now list with reasons');
+assert(P['Rows to Save'].every((i) => i.json.Invoice !== 7001100001 || i.json.Status === 'Completed'), 'completed rows saved too');
+if (process.env.PEND_OUT) fs.writeFileSync(process.env.PEND_OUT, ph.replace('<!--charts-->', ''));
 
 // ---------- 5. Stops BEFORE emptying the table when something is wrong ----------
 const stop = (sheet, tableRow) => throws(() => fullRun(sheet, tableRow, [{ json: {} }]));

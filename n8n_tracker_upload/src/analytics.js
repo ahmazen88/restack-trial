@@ -8,7 +8,11 @@ const RULES = {
   share: 0.2, // flag when one customer is over 20% of the period's value
   slowDays: 3, // flag when average Received → Allocated takes more than 3 days
   minInvoices: 3, // ignore customers with fewer invoices than this for spike / fall / turnaround / portal flags
+  pastDueDays: 30, // a pending invoice is past due after this many days (from Received date, else Allocated date)
+  followUpDays: 7, // a follow-up is due when nothing was done for this many days (last date in "Reason for Pending")
 };
+const TODAY = new Date().toISOString().slice(0, 10); // days pending are counted up to this date
+RULES.today = TODAY;
 
 // ---------- shared helpers (also embedded in the dashboard) ----------
 function analyse(all, opts, RULES) {
@@ -206,6 +210,68 @@ function analyse(all, opts, RULES) {
   }));
   const channels = groupBy(cur, channel).sort((a, b) => b.n - a.n);
   const managers = groupBy(cur, (r) => r.pm || 'Not recorded').sort((a, b) => b.n - a.n);
+  // ----- pending invoices & follow-ups: every open item in the selection, whatever its date -----
+  const today = opts.today || RULES.today || latest;
+  const isOpen = (r) => /pend|hold|open|progress|query|block/i.test(r.st || '');
+  const daysBetween = (x, y) => Math.round((ms(y) - ms(x)) / DAY);
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  // dates written in "Reason for Pending" ("email sent on 23 June", "follow up on 3 July", "19th september")
+  const actionDates = (text) => {
+    const found = new Set();
+    const re = /\b(\d{1,2})(?:st|nd|rd|th)?\s*(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:,?\s*(\d{4}))?|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s*(\d{4}))?/gi;
+    for (const m of String(text || '').matchAll(re)) {
+      const day = +(m[1] || m[5]); const mon = MONTHS.indexOf(String(m[2] || m[4]).toLowerCase().slice(0, 3));
+      if (!(day >= 1 && day <= 31) || mon < 0) continue;
+      const at = (y) => `${y}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      let yr = +(m[3] || m[6]) || +today.slice(0, 4);
+      if (!(m[3] || m[6]) && at(yr) > addDays(today, 1)) yr -= 1; // no year written: the latest such date up to today
+      if (iso(ms(at(yr))) === at(yr)) found.add(at(yr)); // skips impossible dates like 31 Sep
+    }
+    return [...found].sort();
+  };
+  // blocker groups from "Category" (or the reason when the category is empty); first matching rule wins
+  const BLOCKERS = [
+    ['Price / quantity / amount mismatch', /mismatch|variance|quantity|qty|price|amount|tax|tariff|freight/i],
+    ['Invoice can\'t be raised on portal', /(unable|cannot|can not|not able)\b.*invoice/i], // e.g. the tracker category "Unable to ... invoice"
+    ['PO / PO lines missing on portal', /\bpo\b|purchase order/i],
+    ['Portal access / setup', /access|migrat|coupa|oracle|ariba|login|regist|portal/i],
+  ];
+  const blockerOf = (r) => { const t = r.cat || r.why || ''; if (!t) return 'No category'; return (BLOCKERS.find(([, re]) => re.test(t)) || ['Other'])[0]; };
+  const open = scoped.filter(isOpen).map((r) => {
+    const start = r.rd || r.ad || r.d;
+    const acts = actionDates(r.why);
+    const last = acts[acts.length - 1] || null;
+    const age = start ? Math.max(0, daysBetween(start, today)) : null;
+    const sinceLast = last ? Math.max(0, daysBetween(last, today)) : null;
+    return { ...r, age, last, sinceLast, followUps: acts.length, blocker: blockerOf(r),
+      pastDue: age !== null && age > RULES.pastDueDays,
+      due: sinceLast !== null ? sinceLast >= RULES.followUpDays : (age !== null && age >= RULES.followUpDays) };
+  });
+  const avgOf = (rows, f) => { const x = rows.map(f).filter((v) => v !== null && v !== undefined); return x.length ? sum(x, (v) => v) / x.length : null; };
+  const BUCKETS = [[0, 7, '0–7 days'], [8, 15, '8–15 days'], [16, 30, '16–30 days'], [31, 60, '31–60 days'], [61, 90, '61–90 days'], [91, 1e9, 'Over 90 days']];
+  const pendingStats = (rows) => ({ n: rows.length, v: sum(rows, (r) => num(r.v)), pastDue: rows.filter((r) => r.pastDue).length,
+    pastDueV: sum(rows.filter((r) => r.pastDue), (r) => num(r.v)), due: rows.filter((r) => r.due).length, avgAge: avgOf(rows, (r) => r.age),
+    oldest: Math.max(0, ...rows.map((r) => r.age || 0)) });
+  // completed in the period = uploaded in the period (received date when there is no upload date)
+  const closedTat = scoped.filter((r) => !isOpen(r) && r.st && (r.ud || r.d) >= from && (r.ud || r.d) <= to).map((r) => {
+    const t = r.ud && (r.rd || r.ad) ? daysBetween(r.rd || r.ad, r.ud) : (r.tt !== '' && r.tt !== null && r.tt !== undefined && Number.isFinite(+r.tt) ? +r.tt : null);
+    return { ...r, tat2: t !== null && t >= 0 ? t : null };
+  }).filter((r) => r.tat2 !== null);
+  const median = (x) => { if (!x.length) return null; const y = [...x].sort((p, q) => p - q); const m = Math.floor(y.length / 2); return y.length % 2 ? y[m] : (y[m - 1] + y[m]) / 2; };
+  const pending = {
+    today, rules: { pastDueDays: RULES.pastDueDays, followUpDays: RULES.followUpDays },
+    total: pendingStats(open),
+    ageing: BUCKETS.map(([lo, hi, label]) => { const rows = open.filter((r) => r.age !== null && r.age >= lo && r.age <= hi); return { key: label, n: rows.length, v: sum(rows, (r) => num(r.v)) }; }),
+    blockers: groupBy(open, (r) => r.blocker).map((g) => ({ key: g.key, ...pendingStats(g.rows),
+      categories: groupBy(g.rows, (r) => r.cat || '(none)').sort((a, b) => b.n - a.n).slice(0, 3).map((c) => c.key) })).sort((a, b) => b.v - a.v),
+    owners: groupBy(open, (r) => r.ub || 'Not recorded').map((g) => ({ key: g.key, ...pendingStats(g.rows) })).sort((a, b) => b.n - a.n),
+    companies: groupBy(open, (r) => r.cc || 'UNKNOWN').map((g) => ({ key: g.key, ...pendingStats(g.rows) })).sort((a, b) => b.v - a.v),
+    actNow: [...open].sort((a, b) => (b.pastDue - a.pastDue) || (b.due - a.due) || (num(b.v) - num(a.v)) || ((b.age || 0) - (a.age || 0))).slice(0, 15),
+    noDateInReason: open.filter((r) => !r.last).length,
+    completed: { n: closedTat.length, avg: avgOf(closedTat, (r) => r.tat2), median: median(closedTat.map((r) => r.tat2)),
+      owners: groupBy(closedTat, (r) => r.ub || 'Not recorded').map((g) => ({ key: g.key, n: g.n, avg: avgOf(g.rows, (r) => r.tat2) })).sort((a, b) => b.n - a.n) },
+  };
+
   const quality = {
     noValue: cur.filter((r) => !num(r.v)).length,
     repeated: groupBy(cur, (r) => String(r.i)).filter((g) => g.n > 1).map((g) => g.key),
@@ -213,7 +279,7 @@ function analyse(all, opts, RULES) {
   };
 
   return {
-    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, tree, structure, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
+    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, tree, structure, pending, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
     nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),
     watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,
   };
@@ -264,6 +330,27 @@ ${kpi('Avg received → allocated', a.avgTat === null ? '–' : `${a.avgTat.toFi
 </tr></table>
 ${h(`Customers to look out for (${a.watch.length})`, `Fixed rules: spike / fall vs the previous ${a.baseN} period(s) with full data, value share, turnaround, portal use, data issues`)}
 ${table(['Customer', 'Invoices', 'Value', 'Why'], a.watch.slice(0, 20).map((w) => `<tr>${td(esc(w.customer))}${td(int(w.n), 1)}${td(money(w.v), 1)}${td(w.reasons.map(([k, d]) => `<b style="color:${flagColor[k] || C.ink}">${esc(k)}</b> – ${esc(d)}`).join('<br>'))}</tr>`))}
+${(() => { const P = a.pending; const T = P.total; if (!T.n && !P.completed.n) return '';
+  const nv = (v) => parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+  const maxA = Math.max(1, ...P.ageing.map((b) => b.n)); const d1 = (x) => (x === null || x === undefined ? '–' : x.toFixed(1));
+  const statRow = (k, x) => `<tr>${td(`<b>${esc(k)}</b>`)}${td(int(x.n), 1)}${td(money(x.v), 1)}${td(int(x.pastDue), 1, x.pastDue ? C.bad : '')}${td(int(x.due), 1, x.due ? C.warn : '')}${td(d1(x.avgAge), 1)}${td(int(x.oldest), 1)}</tr>`;
+  const heads = ['Invoices', 'Value', 'Past due', 'Follow-up due', 'Avg days', 'Oldest'];
+  return `${h(`Pending invoices & follow-ups (${int(T.n)} open)`, `All open items in this selection, counted to ${P.today}. Past due = over ${P.rules.pastDueDays} days since received; follow-up due = nothing logged for ${P.rules.followUpDays}+ days (dates in "Reason for Pending")`)}
+<table cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px"><tr>
+${kpi('Open', int(T.n), money(T.v))}${kpi('Past due', int(T.pastDue), money(T.pastDueV))}${kpi('Follow-up due', int(T.due), 'nothing logged recently')}${kpi('Avg days pending', d1(T.avgAge), `oldest ${int(T.oldest)} days`)}${kpi('Completed: avg TAT', P.completed.n ? `${d1(P.completed.avg)} days` : '–', P.completed.n ? `median ${d1(P.completed.median)} · ${int(P.completed.n)} invoices` : '')}
+</tr></table>
+${table(['Ageing', 'Invoices', 'Value', ''], P.ageing.map((b, i) => `<tr>${td(esc(b.key))}${td(int(b.n), 1)}${td(money(b.v), 1)}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:40%">${bar(b.n, maxA, i >= 4 ? C.bad : i >= 3 ? C.warn : C.bar)}</td></tr>`))}
+<div style="height:10px"></div>
+${table(['Blocker', ...heads], P.blockers.map((x) => statRow(x.key, x) + `<tr>${td(`<span style="color:${C.mute};font-size:11px">&nbsp;&nbsp;e.g. ${esc(x.categories.join(' · '))}</span>`)}${td('')}${td('')}${td('')}${td('')}${td('')}${td('')}</tr>`))}
+<div style="height:10px"></div>
+${table(['Owner (uploaded by)', ...heads], P.owners.map((x) => statRow(x.key, x)))}
+<div style="height:10px"></div>
+${table(['Company code', ...heads], P.companies.map((x) => statRow(x.key, x)))}
+${h('Act now (top 15)', 'Past due first, then follow-up due, then highest value')}
+${table(['Invoice', 'Customer', 'Co. code', 'Value', 'Days', 'Blocker', 'Last action', 'Since', 'F-ups'], P.actNow.map((r) => `<tr>${td(esc(r.i))}${td(esc(r.c))}${td(esc(r.cc))}${td(money(nv(r.v)), 1)}${td(r.age === null ? '–' : int(r.age), 1, r.pastDue ? C.bad : '')}${td(esc(r.blocker))}${td(esc(r.last || 'none logged'))}${td(r.sinceLast === null ? '–' : int(r.sinceLast), 1, r.due ? C.warn : '')}${td(int(r.followUps), 1)}</tr>` +
+  (r.why ? `<tr><td colspan="9" style="padding:0 10px 6px;border-bottom:1px solid ${C.line};font-size:11px;color:${C.mute}">${esc(String(r.why).slice(0, 220))}${String(r.why).length > 220 ? ' …' : ''}</td></tr>` : '')))}
+${P.noDateInReason ? `<div style="font-size:11px;color:${C.mute};margin-top:4px">${int(P.noDateInReason)} open item(s) have no date in "Reason for Pending", so their follow-up timing is counted from the received date.</div>` : ''}
+${P.completed.owners.length ? `<div style="height:10px"></div>${table(['Completed in period – owner', 'Invoices', 'Avg TAT (days)'], P.completed.owners.map((o) => `<tr>${td(esc(o.key))}${td(int(o.n), 1)}${td(d1(o.avg), 1)}</tr>`))}` : ''}`; })()}
 ${h('Incoming volume by month', 'Invoices received per month, with change from the month before')}
 ${table(['Month', 'Invoices', 'Value', 'Change', ''], a.monthly.map((m, i) => { const c = i ? (a.monthly[i - 1].n ? (m.n - a.monthly[i - 1].n) / a.monthly[i - 1].n : null) : null; return `<tr>${td(m.key)}${td(int(m.n), 1)}${td(money(m.v), 1)}${td(pct(c), 1, changeColor(c))}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:35%">${bar(m.n, maxM)}</td></tr>`; }))}
 ${h('Weekly details (last 8 weeks)', 'Weeks start on Monday')}
@@ -308,6 +395,10 @@ for (const { json: r } of $('Get All Rows').all()) {
     sap: String(r.SAP_Customer_Code || '').trim(), pc: String(r.Profit_Center || '').trim().toUpperCase(),
     so: String(r.Sales_Org || '').trim().toUpperCase(),
     pl: String(r.Product_Line || '').trim().toUpperCase(),
+    st: String(r.Status || '').trim(), ud: String(r.Upload_Date || '').slice(0, 10), tt: r.Tracker_TAT ?? '', ub: String(r.Uploaded_By || '').trim(),
+    cat: String(r.Pending_Category || '').trim(),
+    // the reason text is only kept for open items (keeps the dashboard small)
+    why: /pend|hold|open|progress|query|block/i.test(String(r.Status || '')) ? String(r.Pending_Reason || '').trim() : '',
   });
 }
 const rows = [...seen.values()];
@@ -381,6 +472,17 @@ const facts = a.empty ? { empty: true } : {
   productLines: a.productLines.map((c) => ({ productLine: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
   topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, sapCode: c.sap || null, profitCentre: c.pc || null, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
   channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),
+  pending: a.empty ? null : {
+    countedTo: a.pending.today, pastDueAfterDays: a.pending.rules.pastDueDays, followUpAfterDays: a.pending.rules.followUpDays,
+    open: a.pending.total.n, openValue: r2(a.pending.total.v), pastDue: a.pending.total.pastDue, pastDueValue: r2(a.pending.total.pastDueV),
+    followUpDue: a.pending.total.due, avgDaysPending: a.pending.total.avgAge === null ? null : r2(a.pending.total.avgAge), oldestDays: a.pending.total.oldest,
+    ageing: a.pending.ageing.map((b) => ({ bucket: b.key, invoices: b.n, value: r2(b.v) })),
+    blockers: a.pending.blockers.map((x) => ({ blocker: x.key, invoices: x.n, value: r2(x.v), pastDue: x.pastDue, followUpDue: x.due, avgDays: x.avgAge === null ? null : r2(x.avgAge), examples: x.categories })),
+    owners: a.pending.owners.map((x) => ({ owner: x.key, open: x.n, pastDue: x.pastDue, followUpDue: x.due })),
+    actNow: a.pending.actNow.slice(0, 8).map((r) => ({ invoice: String(r.i), customer: r.c, companyCode: r.cc, value: r2(parseFloat(String(r.v ?? '').replace(/[^0-9.\-]/g, '')) || 0), daysPending: r.age, blocker: r.blocker,
+      lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, reason: String(r.why || '').slice(0, 160) })),
+    completedAvgTatDays: a.pending.completed.avg === null ? null : r2(a.pending.completed.avg),
+  },
   dataQuality: { withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
 };
 const uploadNote = quality
