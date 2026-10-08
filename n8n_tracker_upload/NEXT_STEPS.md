@@ -95,3 +95,8 @@ step is uploading the file. If the Microsoft connectors turn out to be blocked, 
 2. The exact name of the email node in *Report copy*
 3. What the *Microsoft Drive OAuth2 API* credential screen asks for
 4. Data Table column types (e.g. Value: number or string)
+
+## Later additions (agreed)
+- **Past due by payment terms**: Tableau has payment-terms days (30 / 60 / 90) and a Net Due Date column; use them per
+  invoice (or per customer) instead of a fixed number of days.
+- Business type (Nature of Activities PL / PC) and Customer Type (TP / OOB / WOB): skipped until their meaning is confirmed.

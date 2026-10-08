@@ -289,7 +289,7 @@ assert(act['7001238182'].daysPending === 110 && act['7001238182'].lastAction ===
   'dates read from the reason: 23 June + 3 July → 2 follow-ups, last action 3 July, 97 days ago; 110 days pending');
 assert(act['7001265146'].followUps === 3 && act['7001265146'].lastAction === '2026-10-06' && act['7001265146'].daysSinceLastAction === 2, '"10 Sep", "19th september", "6 Oct" all read; followed up 2 days ago');
 assert(act['7001247206'].lastAction === null && act['7001247206'].followUps === 0, 'no date in the reason → no follow-up logged');
-assert(pf.pastDue === 3 && pf.followUpDue === 4, 'past due (> 30 days): 3; follow-up due (nothing for 7+ days): 4');
+assert(!('pastDue' in pf) && pf.followUpDue === 4, 'no "past due" yet (needs payment terms); follow-up due (nothing for 7+ days): 4');
 const bl = Object.fromEntries(pf.blockers.map((b) => [b.blocker, b.invoices]));
 assert(bl['PO issue on portal'] === 3 && bl['Invoice vs PO mismatch'] === 1 && bl['Portal access'] === 1, 'blocker groups: ' + JSON.stringify(bl));
 const sc = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json.Standard_Category]));
@@ -297,10 +297,10 @@ assert(sc[7001238182] === 'PO lines not available on portal' && sc[7001264821] =
   && sc[7001156057] === 'No portal access / portal migration' && sc[7001100001] === null,
   'standard categories by fixed rules; completed rows get none');
 assert(sc[7001247206] === 'PO lines not available on portal', '"Unable to create invoice" with reason "PO lines unavailable" → the cause (PO lines) wins');
-assert(pf.actNow[0].daysPending > 30, 'act-now list starts with past-due items, highest value first: ' + pf.actNow.map((x) => x.invoice).join(', '));
+assert(pf.actNow.map((x) => x.invoice).join() === '7001238182,7001247206,7001156057,7001264821,7001265146', 'act-now: follow-up due first, then oldest: ' + pf.actNow.map((x) => x.invoice).join(', '));
 assert(pf.completedAvgTatDays === 3.5, 'completed TAT: 4 days (received → uploaded) and 3 days (tracker TAT) → average 3.5');
 const ph = P['Build Report'][0].json.html;
-assert(/Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
+assert(!/Past due/.test(ph) && /Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
   'report has the pending section: KPIs, ageing, blockers, owners, act-now list with reasons');
 assert(P['Rows to Save'].every((i) => i.json.Invoice !== 7001100001 || i.json.Status === 'Completed'), 'completed rows saved too');
 if (process.env.PEND_OUT) fs.writeFileSync(process.env.PEND_OUT, ph.replace('<!--charts-->', ''));

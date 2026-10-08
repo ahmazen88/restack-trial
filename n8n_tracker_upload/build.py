@@ -191,7 +191,7 @@ RULES
 OUTPUT FORMAT
 Return an HTML fragment only – no <html>, <body>, <style>, scripts, images, links or markdown. Use only <h3>, <p>, <ul>, <li> and <b>. Exactly these four sections, in this order:
 <h3>Summary</h3> 2–3 sentences: incoming invoices and value versus the previous period, the largest profit centres and product lines, and the overall picture.
-<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the pending items (past due, follow-ups due, biggest blockers, the act-now list with its reasons), the watchlist and data quality. Each bullet names the customer, company code or profit centre, the reason and its figure. Ignore the bucket "NOT FOUND" except as a data coverage point.
+<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the pending items (oldest items, follow-ups due, biggest blockers, the act-now list with its reasons), the watchlist and data quality. Each bullet names the customer, company code or profit centre, the reason and its figure. Ignore the bucket "NOT FOUND" except as a data coverage point.
 <h3>Workload outlook</h3> 2–3 sentences using the forecast, the busiest days of the month and the busiest weekdays: when should the team expect heavy days?
 <h3>Suggested actions</h3> up to 4 concrete bullets (e.g. follow up with a customer, check portal submissions, fix tracker data). Each must follow directly from a fact above.
 Keep the whole commentary under 250 words. If the facts say "empty": true, write one <p> saying there is no data for this selection."""
@@ -213,8 +213,8 @@ METRICS: "invoices" or "value"
 CHART TYPES: "line" (time series only – trends), "column" (time series, weekdays, days of month), "bar" (rankings and splits)
 
 HOW TO CHOOSE
-1. Pick 3 or 4 charts, most important first. Prefer what changed or needs attention: past-due or ageing pending items, the biggest blockers, a trend that moved, a dominant profit centre or product line, workload peaks, customers on the watchlist.
-2. Do not pick two charts that show the same thing.
+1. Pick 3 or 4 charts, most important first. Prefer what changed or needs attention: ageing pending items, the biggest blockers, a trend that moved, a dominant profit centre or product line, workload peaks, customers on the watchlist.
+2. Do not pick two charts that show the same thing. Never call an item \"past due\": payment terms are not in the data.
 3. Ignore a split where one entry is almost everything, or where "NOT FOUND" dominates.
 5. A month marked "monthToDate": true is not finished yet – never present it as a fall in volume.
 4. For each chart write a short title and a "why" of at most 20 words, with NO digits or numbers.
