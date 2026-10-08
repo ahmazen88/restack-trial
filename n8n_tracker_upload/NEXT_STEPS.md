@@ -1,5 +1,21 @@
 # Where we are and what to do next
 
+## Paused (2026-10-08): work with what we have
+Findings from the company n8n:
+- **Microsoft credentials need IT:** *Microsoft Drive OAuth2 API* asks for a Client ID and Client Secret, so an
+  app registration in the company Microsoft account is needed. Redirect URL to give IT:
+  `https://ampworkflow.gevernova.net/rest/oauth2-credential/callback`
+- **Outbound network is restricted:** a Datadog credential test failed with `ECONNREFUSED`, so the server only
+  reaches approved destinations. Whether Microsoft (login.microsoftonline.com, graph.microsoft.com) is reachable
+  is untested; the user chose not to test for now.
+- **Approved email exists:** the *GEV SMTP* credential (used in *Report copy*'s "Send an Email" node).
+
+Decision: **stay with what already works.** That's the upload form (confirmed working up to the Data Table),
+plus the rule-based report sent through the company GEV SMTP mail node. No Microsoft connectors for now.
+
+When resuming, build: Upload form → Read Tracker Sheet → Clean Rows → (Upsert) → Summarise → Build Report →
+company "Send an Email" node (To `{{ $json.to }}`, Subject `{{ $json.subject }}`, HTML `{{ $json.html }}`).
+
 ## Status
 | Piece | State |
 |---|---|
