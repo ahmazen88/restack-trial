@@ -10,6 +10,18 @@ Findings from the company n8n:
   is untested; the user chose not to test for now.
 - **Approved email exists:** the *GEV SMTP* credential (used in *Report copy*'s "Send an Email" node).
 
+- **Nodes confirmed installed** (node panel, 2026-10-08):
+  - Core: Code, Data table, **HTTP Request**, **Webhook**, Execute Sub-workflow, n8n Form
+  - Data transformation: Date & Time, Edit Fields (Set), Filter, Limit, Remove Duplicates, Split Out, combine-items group
+  - Flow: If, Switch, Merge, Loop Over Items, Compare Datasets, Wait
+  - AI: AI Agent, Guardrails, Basic LLM Chain, Information Extractor, Q&A Chain, Sentiment Analysis,
+    Summarization Chain, Text Classifier
+  - Triggers: schedule, webhook, form, called by another workflow, chat message, evaluation, app events
+  - Apps: mostly HTTP-based security tools, plus the company **AMP Agent** node
+  - The OneDrive and Outlook nodes are *not* available. Because HTTP Request is installed, the Graph-based nodes in
+    `tracker_onedrive_workflow.json` will load, but they still need the IT app registration and network access
+    to Microsoft.
+
 Decision: **stay with what already works.** That's the upload form (confirmed working up to the Data Table),
 plus the rule-based report sent through the company GEV SMTP mail node. No Microsoft connectors for now.
 
