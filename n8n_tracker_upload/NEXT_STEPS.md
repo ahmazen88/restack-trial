@@ -31,6 +31,13 @@ Findings from the company n8n:
   - Exact internal node type not known yet. Copying the node (Ctrl+C) and pasting the JSON would let it be
     embedded directly in the workflow file.
 
+- **Data Table "datatable"** columns: Received_Date, Allocated_Date, Invoice_Date (text, `YYYY-MM-DD`),
+  Project_Manager (text), Customer (text), Name_the_PortalEmail_ID (text), **Invoice (number)**,
+  **Value (text, e.g. `1157.44`)**, Company_Code (text, e.g. `3060`), plus system id/createdAt.
+  Clean Rows now matches this exactly.
+  - Open question: the table has repeated invoice numbers (e.g. 7001212645 twice, same value). Are these accidental
+    duplicates, or can one invoice really have several rows? Upsert on Invoice keeps one row per invoice.
+
 Decision: **stay with what already works.** That's the upload form (confirmed working up to the Data Table),
 plus the rule-based report sent through the company GEV SMTP mail node. No Microsoft connectors for now.
 

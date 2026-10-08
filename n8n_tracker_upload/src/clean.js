@@ -1,21 +1,26 @@
 // Clean Rows
 // 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).
 // 2. ALIASES = other headings the SharePoint tracker might use for the same column.
-// 3. TYPES   = 'string' (default), 'number' or 'date' – match your Data Table column types
+// 3. TYPES   = 'string' (default), 'number', 'numberText' (plain number stored as text, e.g. 1157.44)
+//             or 'date' – match your Data Table column types
 //             (the Column dropdown in the Data Table node shows each type, e.g. "Invoice (number)").
 //             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.
 // 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).
-const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Received_Date', 'Allocated_Date', 'Invoice_Date'];
+const COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manager', 'Name_the_PortalEmail_ID',
+  'Received_Date', 'Allocated_Date', 'Invoice_Date'];
 const ALIASES = {
   Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],
   Value: ['value', 'amount', 'invoice value', 'total'],
   Customer: ['customer', 'customer name', 'client'],
   Company_Code: ['company code', 'coco', 'co code', 'company_code'],
+  Project_Manager: ['project manager', 'pm', 'manager'],
+  Name_the_PortalEmail_ID: ['name the portal email id', 'portal email id', 'portal email', 'portal', 'email id',
+    'submission portal'],
   Received_Date: ['received date', 'date received', 'received'],
   Allocated_Date: ['allocated date', 'date allocated', 'allocated'],
   Invoice_Date: ['invoice date', 'inv date'],
 };
-const TYPES = { Invoice: 'number', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
+const TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date' };
 const KEY = 'Invoice';
 const UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together
 
@@ -27,9 +32,10 @@ for (const col of COLUMNS) {
 }
 const convert = (col, v) => {
   if (v === '' || v == null) return null;
-  if (TYPES[col] === 'number') {
+  if (TYPES[col] === 'number' || TYPES[col] === 'numberText') {
     const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
-    return Number.isFinite(n) ? n : null;
+    if (!Number.isFinite(n)) return null;
+    return TYPES[col] === 'number' ? n : String(n);
   }
   if (TYPES[col] === 'date') {
     const serial = typeof v === 'number' ? v : /^\d{4,6}(\.\d+)?$/.test(String(v).trim()) ? Number(v) : null;

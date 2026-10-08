@@ -22,8 +22,11 @@ const out = run(src('clean.js'), sheet).map((i) => i.json);
 const byId = Object.fromEntries(out.map((r) => [r.Invoice, r]));
 assert(out.length === 3, 'drops blank-key row and keeps one row per invoice');
 assert(Object.keys(byId).every((k) => typeof byId[k].Invoice === 'number'), 'Invoice sent as a number');
-assert(byId[7001211479].Value === '1,300.00' && byId[7001211479].Received_Date === '2026-04-07', 'last duplicate wins');
+assert(byId[7001211479].Value === '1300' && byId[7001211479].Received_Date === '2026-04-07', 'last duplicate wins');
 assert(byId[7001211480].Customer === 'SALT RIVER PROJECT', 'text kept');
+const pmRow = run(src('clean.js'), [{ json: { Invoice: 1, 'Project Manager': 'LOMBARD Axel', 'Name the Portal/Email ID': 'Taulia', Value: '1,157.44' } }])[0].json;
+assert(pmRow.Project_Manager === 'LOMBARD Axel' && pmRow.Name_the_PortalEmail_ID === 'Taulia' && pmRow.Value === '1157.44',
+  'maps Project Manager and Portal/Email ID; Value 1,157.44 -> "1157.44"');
 const first = run(src('clean.js'), [sheet[0]]).map((i) => i.json)[0];
 assert(first.Customer === 'RIO TINTO ALCAN INC' && first.Company_Code === 'CC10', 'spaces collapsed, Customer/Company_Code upper-cased');
 assert(first.Received_Date === '2026-04-06' && first.Allocated_Date === '2026-04-06' && first.Invoice_Date === '2026-03-26',
