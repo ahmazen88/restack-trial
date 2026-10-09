@@ -1,0 +1,617 @@
+{
+  "name": "Production Tracker – OneDrive to Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "e9360ed0-3f4c-5089-bb7d-a3c25dfdd60f",
+      "name": "Weekdays 7am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c43fd212-1e3b-5cfb-9448-3985a6841eab",
+      "name": "Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.microsoft.com/v1.0/me/drive/root/search(q='NAM%20Distribution')",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "a7534a0d-f8ef-55f3-a481-fb3bfa37c1d3",
+      "name": "Find Tracker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick Tracker File — choose the exact file from the OneDrive search results.\n// Stops with a clear message if the file is missing or the name matches more than one file.\n// ONLY_WHEN_CHANGED: skip the run (no upsert, no report) when the file's version (eTag) is the same as\n// the last successful scheduled run. Manual test runs always process the file.\nconst TRACKER_NAME = 'Trackers - NAM Distribution.xlsx';\nconst ONLY_WHEN_CHANGED = true;\n\n// Microsoft Graph returns the search results as { value: [...] }; accept a plain list too\nconst found = $input.all().flatMap((i) => (Array.isArray(i.json.value) ? i.json.value : [i.json]));\nconst matches = found.filter((f) => f.file && f.name === TRACKER_NAME);\nif (matches.length === 0) {\n  throw new Error(`\"${TRACKER_NAME}\" was not found in your OneDrive. Check the file name in TRACKER_NAME ` +\n    'and the search text on \"Find Tracker\".');\n}\nif (matches.length > 1) {\n  const where = matches.map((f) => f.parentReference?.path ?? f.webUrl ?? f.id).join(' | ');\n  throw new Error(`${matches.length} files are named \"${TRACKER_NAME}\": ${where}. Rename or move the extra copies.`);\n}\nconst file = matches[0];\n\nconst memory = $getWorkflowStaticData('global');\nif (ONLY_WHEN_CHANGED && memory.lastETag && memory.lastETag === file.eTag) {\n  return []; // unchanged since the last run – nothing to do\n}\nreturn [{\n  json: { id: file.id, name: file.name, eTag: file.eTag, lastModified: file.lastModifiedDateTime },\n}];\n"
+      },
+      "id": "926a76a0-f060-5889-b584-b3482de144cc",
+      "name": "Pick Tracker File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.microsoft.com/v1.0/me/drive/items/{{ $json.id }}/content",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOneDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "f923963a-baee-525a-81b3-acd2fe7611ac",
+      "name": "Download Tracker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "id": "21728c78-38df-5602-9b86-b7b5baabff2c",
+      "name": "Read Tracker Sheet",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean Rows\n// 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).\n// 2. ALIASES = other headings the SharePoint tracker might use for the same column.\n// 3. TYPES   = 'string' (default), 'number', 'numberText' (plain number stored as text, e.g. 1157.44)\n//             or 'date' – match your Data Table column types\n//             (the Column list in the Data Table node shows each type, e.g. \"Invoice (number)\").\n//             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.\n// 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).\nconst COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manager', 'Name_the_PortalEmail_ID',\n  'Received_Date', 'Allocated_Date', 'Invoice_Date',\n  'Status', 'Upload_Date', 'Tracker_TAT', 'Uploaded_By', 'Pending_Category', 'Pending_Reason'];\nconst ALIASES = {\n  Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],\n  Value: ['value', 'amount', 'invoice value'],\n  Customer: ['customer', 'customer name', 'client'],\n  Company_Code: ['company code', 'coco', 'co code', 'company_code'],\n  Project_Manager: ['project manager', 'pm', 'manager'],\n  Name_the_PortalEmail_ID: ['name the portal email id', 'portal email id', 'portal email', 'portal', 'email id',\n    'submission portal'],\n  Received_Date: ['received date', 'date received', 'received'],\n  Allocated_Date: ['allocated date', 'date allocated', 'allocated'],\n  Invoice_Date: ['invoice date', 'inv date'],\n  Status: ['status', 'invoice status'],\n  Upload_Date: ['invoice upload date', 'upload date', 'uploaded date', 'invoice upload dt', 'date uploaded'],\n  Tracker_TAT: ['tat', 'turn around time', 'turnaround time', 'tat days'],\n  Uploaded_By: ['uploaded by', 'processed by', 'owner', 'done by'],\n  Pending_Category: ['category', 'pending category', 'blocker category'],\n  Pending_Reason: ['reason for pending', 'pending reason', 'reason', 'comments', 'remarks'],\n};\nconst TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date',\n  Upload_Date: 'date', Tracker_TAT: 'numberText' }; // \"NA\" in a date or TAT cell becomes empty\nconst KEY = 'Invoice';\nconst UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together\n// The tracker sometimes holds the sales org instead of the company code. Left = sales org, right = real company code.\nconst COMPANY_CODE_FIX = { G36C: 'G367', GS5C: 'G367' };\n\n// Status in one standard wording (first matching rule wins); anything else is kept as written\nconst STATUS_RULES = [\n  [/hold/i, 'On hold'],\n  [/cancel|do not distribute/i, 'Cancelled'],\n  [/pend|open|progress|query|block|wip/i, 'Pending'],\n  [/complet|done|upload|submit|sent|distribut|closed|invoiced|posted/i, 'Completed'],\n];\nconst standardStatus = (t) => (t ? (STATUS_RULES.find(([re]) => re.test(t)) || [null, t])[1] : null);\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lookup = new Map();\nfor (const col of COLUMNS) {\n  lookup.set(norm(col), col);\n  for (const a of ALIASES[col] || []) lookup.set(norm(a), col);\n}\n// Excel serial day numbers (e.g. 46118 = 2026-04-06); the time of day is ignored\nconst fromSerial = (n) => (n >= 20000 && n <= 80000\n  ? new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000).toISOString().slice(0, 10) : null);\nconst pad = (n) => String(n).padStart(2, '0');\nconst convert = (col, v) => {\n  if (v === '' || v == null) return null;\n  if (TYPES[col] === 'number' || TYPES[col] === 'numberText') {\n    if (typeof v === 'number') return Number.isFinite(v) ? (TYPES[col] === 'number' ? v : String(v)) : null;\n    let t = String(v).trim().replace(/[\\s,$€£]/g, '');\n    const negative = /^\\(.*\\)$/.test(t) || t.startsWith('-'); // (1157.44) and -1157.44 are negative amounts\n    t = t.replace(/^\\((.*)\\)$/, '$1').replace(/^-/, '');\n    if (TYPES[col] === 'number') t = t.replace(/\\.0+$/, '');\n    // whole value must be a plain number: \"7001 / 7002\" or \"INV-12\" are not guessed\n    if (!(TYPES[col] === 'number' ? /^\\d+$/ : /^\\d*\\.?\\d+$/).test(t)) return null;\n    const n = Number(t) * (negative ? -1 : 1);\n    return TYPES[col] === 'number' ? n : String(n);\n  }\n  if (TYPES[col] === 'date') {\n    if (typeof v === 'number') return fromSerial(v);\n    const t = String(v).trim();\n    if (/^\\d{5}(\\.\\d+)?$/.test(t)) return fromSerial(Number(t));\n    const iso = t.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;\n    const d = new Date(t); // e.g. 4/6/2026 (US order) or \"Apr 6, 2026\"\n    return isNaN(d) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;\n  }\n  const text = String(v).replace(/\\s+/g, ' ').trim();\n  if (col === 'Status') return standardStatus(text);\n  if (col === 'Uploaded_By') return text.toLowerCase().replace(/\\b[a-z]/g, (c) => c.toUpperCase()); // \"TUSHAR\" / \"tushar\" → \"Tushar\"\n  const out = UPPER.includes(col) ? text.toUpperCase() : text;\n  return col === 'Company_Code' && COMPANY_CODE_FIX[out] ? COMPANY_CODE_FIX[out] : out;\n};\n\n// Stop early on the wrong file / wrong tab instead of saving nothing\nconst input = $input.all().filter((i) => Object.keys(i.json || {}).length);\nif (!input.length) throw new Error('The uploaded sheet is empty. Check the file and the Sheet Name option on \"Read Tracker Sheet\". Nothing was changed.');\n// Excel leaves empty cells out of a row, so collect the headings from every row\nconst headings = [...new Set(input.flatMap((i) => Object.keys(i.json)))];\nif (!headings.some((h) => lookup.get(norm(h)) === KEY)) {\n  throw new Error(`No \"${KEY}\" column found. Headings in the sheet: ${headings.join(', ')}. ` +\n    'Check the file, the Sheet Name option on \"Read Tracker Sheet\", or add the heading to ALIASES. Nothing was changed.');\n}\n\nconst rows = new Map();\nfor (const { json: raw } of input) {\n  const row = {};\n  for (const [header, value] of Object.entries(raw)) {\n    const col = lookup.get(norm(header));\n    if (col && row[col] == null) row[col] = convert(col, value);\n  }\n  if (row[KEY] == null || row[KEY] === '') continue; // blank / totals rows\n  for (const col of COLUMNS) if (!(col in row)) row[col] = null;\n  rows.set(String(row[KEY]), row); // a repeated key keeps the last row\n}\nreturn [...rows.values()].map((json) => ({ json }));\n"
+      },
+      "id": "eebe2520-3257-5bb1-b7d0-791452ce974e",
+      "name": "Clean Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "anyCondition",
+        "filters": {},
+        "returnAll": true
+      },
+      "id": "d9fb9b3f-e88d-5c21-a783-5ae78ff8c6cf",
+      "name": "Get Table Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        300
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare with Table — keep only invoices that are new or changed, so saving takes seconds, not minutes.\n// If the table is empty, or more than BULK_LIMIT rows changed (e.g. the very first upload), ALL rows are passed on\n// for a fast \"clear table + bulk add\" instead. Keep BULK_LIMIT the same as in the \"Few changes?\" step.\nconst BULK_LIMIT = 300;\n\nconst cleaned = $('Clean Rows').all().map((i) => i.json);\nconst columns = Object.keys(cleaned[0] || {});\nconst existing = new Map();\nfor (const { json: r } of $input.all()) {\n  if (r.Invoice === undefined || r.Invoice === null || r.Invoice === '') continue; // empty table gives one empty item\n  existing.set(String(r.Invoice), r);\n}\nconst same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();\nconst changed = cleaned.filter((r) => {\n  const before = existing.get(String(r.Invoice));\n  return !before || columns.some((c) => !same(r[c], before[c]));\n});\nconst rows = !existing.size || changed.length > BULK_LIMIT ? cleaned : changed;\nreturn rows.map((json) => ({ json }));\n"
+      },
+      "id": "887a6fda-28f4-5f9d-ab8e-7130d803e2bd",
+      "name": "Compare with Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4904a505-3577-522b-b4c9-02f05e555a7c",
+              "leftValue": "={{ $json.Invoice !== undefined && $json.Invoice !== null && $json.Invoice !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1c93b1e5-55a4-5973-a5c9-0c18b630c365",
+      "name": "Anything to save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "41685be4-ecfc-50de-9870-68ae0a9e5103",
+              "leftValue": "={{ $('Get Table Rows').all().some(i => i.json.Invoice !== undefined && i.json.Invoice !== null) && $('Compare with Table').all().length <= 300 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6e03e176-bf7b-583a-a9cc-f4dbe166bfca",
+      "name": "Few changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "Invoice",
+              "condition": "eq",
+              "keyValue": "={{ $json.Invoice }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "6bd26938-a6df-5714-b961-c967374625ec",
+      "name": "Save Changed Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "clear",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "ffc729d9-6ab7-53ba-b904-eb0847e124c6",
+      "name": "Clear Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore Rows — after the table is cleared, pass all rows on to the bulk add\nreturn $('Compare with Table').all().map((i) => ({ json: i.json }));\n"
+      },
+      "id": "7ec22d8a-d64d-56b1-aaa1-2fc254e1478f",
+      "name": "Restore Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "optimizeBulk": true
+        }
+      },
+      "id": "088b3ce4-3f19-56a4-86d0-77658e80f04d",
+      "name": "Bulk Add All Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Pick Tracker File').first().json.name;\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nconst unreadable = []; // invoice cells that are not a plain number (e.g. \"7001 / 7002\"): skipped, not guessed\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!/\\d/.test(id)) { blank++; continue; } // empty, or a label such as \"Total\"\n  if (!/^\\d+(\\.0+)?$/.test(id.replace(/[\\s,]/g, ''))) { unreadable.push(id); continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst isOpen = (r) => /pend|hold|open|progress|query|block/i.test(String(r.Status || ''));\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n  // status / reason entries still to be filled in (only checked when the tracker has these columns)\n  ...(rows.some((r) => 'Status' in r) ? {\n    'no status': (r) => !r.Status,\n    'pending status but no reason': (r) => isOpen(r) && !r.Pending_Reason && !r.Pending_Category,\n    'pending status but no category': (r) => isOpen(r) && !r.Pending_Category && !!r.Pending_Reason,\n    'pending status but no owner (Uploaded by)': (r) => isOpen(r) && !r.Uploaded_By,\n    'pending status but an upload date': (r) => isOpen(r) && !!r.Upload_Date,\n    'completed status but no upload date or TAT': (r) => r.Status === 'Completed' && !r.Upload_Date && (r.Tracker_TAT === null || r.Tracker_TAT === undefined || r.Tracker_TAT === ''),\n  } : {}),\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\n// how many rows were actually written (only present when the \"Compare with Table\" step is used)\nconst written = (() => {\n  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }\n  catch (e) { return null; }\n})();\nconst parts = written === null\n  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]\n  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];\nif (blank) parts.push(`${fmt(blank)} blank or total rows skipped`);\nif (unreadable.length) {\n  parts.push(`${fmt(unreadable.length)} rows skipped because the invoice number is not a plain number: ` +\n    unreadable.slice(0, LIST_LIMIT).join(', ') + (unreadable.length > LIST_LIMIT ? ', …' : ''));\n}\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\n// SAP customer code / profit centre coverage (only when the \"Add Lookups\" step is used)\ntry {\n  const looked = $('Add Lookups').all().map((i) => i.json);\n  const pcRows = looked;\n  parts.push(`SAP customer code found for ${fmt(looked.filter((r) => r.SAP_Customer_Code).length)} of ${fmt(looked.length)} invoices` +\n    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)}` +\n    ` · product line found for ${fmt(pcRows.filter((r) => r.Product_Line).length)} of ${fmt(pcRows.length)} (G367 = PQP if Tableau has none)` +\n    ` · sales org found for ${fmt(looked.filter((r) => r.Sales_Org).length)} of ${fmt(looked.filter((r) => String(r.Company_Code) === 'G367').length)} G367 invoices`);\n  if (looked[0]?._lookupNotes) parts.push(`Columns used – ${looked[0]._lookupNotes}`);\n} catch (e) { /* step not in this workflow */ }\nif (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    unreadableInvoices: unreadable,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
+      },
+      "id": "181cf542-9072-5c05-ad00-74f1469a4e4d",
+      "name": "Summarise Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        200
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Report — a simple, rule-based Production Tracker report as an HTML email.\n// Fixed rules only: the same tracker file always produces the same report.\nconst RECIPIENTS = []; // e.g. ['name.surname@company.com', 'team@company.com']\nconst MONTHS_SHOWN = 12;\nconst TOP_CUSTOMERS = 10;\nconst DAYS_SHOWN = 14;\nconst DATE_ORDER = ['Received_Date', 'Allocated_Date', 'Invoice_Date']; // first filled date is used\n\nif (!RECIPIENTS.length) throw new Error('Add at least one email address to RECIPIENTS at the top of \"Build Report\".');\n\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst quality = $('Summarise Upload').first().json;\nconst file = $('Pick Tracker File').first().json;\n\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : 0;\n};\nconst money = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });\nconst count = (n) => n.toLocaleString('en-US');\nconst pct = (part, whole) => (whole ? ((part / whole) * 100).toFixed(1) + '%' : '–');\nconst esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));\nconst dateOf = (r) => DATE_ORDER.map((c) => r[c]).find(Boolean) || null;\n\nfunction group(keyOf) {\n  const m = new Map();\n  for (const r of rows) {\n    const k = keyOf(r);\n    if (!k) continue;\n    const g = m.get(k) || { key: k, invoices: 0, value: 0 };\n    g.invoices++;\n    g.value += num(r.Value);\n    m.set(k, g);\n  }\n  return [...m.values()];\n}\nconst byValueThenKey = (a, b) => b.value - a.value || String(a.key).localeCompare(String(b.key));\n\nconst totalValue = rows.reduce((s, r) => s + num(r.Value), 0);\nconst months = group((r) => dateOf(r)?.slice(0, 7)).sort((a, b) => b.key.localeCompare(a.key)).slice(0, MONTHS_SHOWN);\nconst customers = group((r) => r.Customer || 'UNKNOWN CUSTOMER').sort(byValueThenKey);\nconst companies = group((r) => r.Company_Code || 'UNKNOWN COMPANY').sort(byValueThenKey);\nconst days = group((r) => dateOf(r)).sort((a, b) => b.key.localeCompare(a.key)).slice(0, DAYS_SHOWN);\nconst latestDate = days[0]?.key ?? '–';\n\nconst th = (align) => `style=\"text-align:${align};padding:6px 10px;background:#1f3a5f;color:#fff;font-weight:600\"`;\nconst td = 'style=\"padding:5px 10px;border-bottom:1px solid #e5e7eb\"';\nconst tdr = 'style=\"padding:5px 10px;border-bottom:1px solid #e5e7eb;text-align:right\"';\nfunction table(title, headers, data) {\n  const head = headers.map((h, i) => `<th ${th(i ? 'right' : 'left')}>${esc(h)}</th>`).join('');\n  const body = data.map((cells) => '<tr>' + cells.map((c, i) => `<td ${i ? tdr : td}>${esc(c)}</td>`).join('') + '</tr>').join('');\n  return `<h3 style=\"margin:22px 0 8px;color:#1f3a5f\">${esc(title)}</h3>` +\n    `<table cellspacing=\"0\" style=\"border-collapse:collapse;font-size:13px;min-width:420px\">` +\n    `<tr>${head}</tr>${body || `<tr><td ${td} colspan=\"${headers.length}\">No data</td></tr>`}</table>`;\n}\nconst kpi = (label, value) =>\n  `<td style=\"padding:10px 18px;border:1px solid #e5e7eb\"><div style=\"font-size:12px;color:#6b7280\">${esc(label)}</div>` +\n  `<div style=\"font-size:20px;font-weight:700;color:#111827\">${esc(value)}</div></td>`;\n\nconst issueLines = [\n  ...(quality.blankRows ? [`${count(quality.blankRows)} blank rows skipped`] : []),\n  ...(quality.duplicateInvoices.length ? [`${count(quality.duplicateInvoices.length)} invoices appear more than once (last row kept)`] : []),\n  ...Object.entries(quality.issues).map(([label, { count: n, examples }]) => `${count(n)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`),\n];\n\nconst html = `<div style=\"font-family:Segoe UI,Arial,sans-serif;color:#111827;max-width:900px\">\n<h2 style=\"margin:0 0 4px;color:#1f3a5f\">Production Tracker Report</h2>\n<div style=\"color:#6b7280;font-size:13px\">Source: ${esc(file.name)} · file saved ${esc(String(file.lastModified ?? '').slice(0, 16).replace('T', ' '))} UTC · latest activity date ${esc(latestDate)}</div>\n<table cellspacing=\"0\" style=\"border-collapse:collapse;margin:16px 0\"><tr>\n${kpi('Invoices', count(rows.length))}${kpi('Total value', money(totalValue))}${kpi('Customers', count(customers.length))}${kpi('Company codes', count(companies.length))}\n</tr></table>\n${table(`Monthly summary (last ${MONTHS_SHOWN} months)`, ['Month', 'Invoices', 'Value'],\n    months.map((g) => [g.key, count(g.invoices), money(g.value)]))}\n${table(`Top ${TOP_CUSTOMERS} customers by value`, ['Customer', 'Invoices', 'Value', 'Share'],\n    customers.slice(0, TOP_CUSTOMERS).map((g) => [g.key, count(g.invoices), money(g.value), pct(g.value, totalValue)]))}\n${table('Company codes', ['Company code', 'Invoices', 'Value', 'Share'],\n    companies.map((g) => [g.key, count(g.invoices), money(g.value), pct(g.value, totalValue)]))}\n${table(`Daily activity (last ${DAYS_SHOWN} active days)`, ['Date', 'Invoices', 'Value'],\n    days.map((g) => [g.key, count(g.invoices), money(g.value)]))}\n<h3 style=\"margin:22px 0 8px;color:#1f3a5f\">Data quality</h3>\n<ul style=\"font-size:13px;margin:0;padding-left:18px\">${issueLines.length ? issueLines.map((l) => `<li>${esc(l)}</li>`).join('') : '<li>No data quality issues found</li>'}</ul>\n<p style=\"color:#9ca3af;font-size:11px;margin-top:24px\">Generated automatically by n8n from the tracker file. Dates use ${DATE_ORDER.join(' → ')} (first filled).</p>\n</div>`;\n\nconst subject = `Production Tracker Report – ${count(rows.length)} invoices · ${money(totalValue)} · as of ${latestDate}`;\nreturn [{\n  json: {\n    subject,\n    html,\n    to: RECIPIENTS.join(', '), // for mail nodes with a plain \"To\" field (e.g. the company SMTP mail node)\n    invoices: rows.length,\n    totalValue,\n    // Body for Microsoft Graph \"send mail\" (used by the Send Report step)\n    mail: {\n      message: {\n        subject,\n        body: { contentType: 'HTML', content: html },\n        toRecipients: RECIPIENTS.map((address) => ({ emailAddress: { address } })),\n      },\n      saveToSentItems: true,\n    },\n  },\n}];\n"
+      },
+      "id": "baf6d7b8-bc10-542b-b759-e37db01d9397",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "options": {},
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.mail) }}"
+      },
+      "id": "07ba2a23-21e2-5f21-8bca-2893bec56533",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Remember Version — store the processed file's version so an unchanged file is skipped next time.\n// n8n keeps this only for scheduled (published) runs, not manual test runs.\nconst memory = $getWorkflowStaticData('global');\nmemory.lastETag = $('Pick Tracker File').first().json.eTag;\nreturn $input.all();\n"
+      },
+      "id": "aa08f0ee-f9ce-5a06-8f8a-92b951bb8678",
+      "name": "Remember Version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "width": 640,
+        "height": 340,
+        "content": "## Production Tracker – OneDrive to report (needs Microsoft access from IT)\n1. **Find Tracker** & **Download Tracker** → credential *Microsoft Drive OAuth2 API*\n2. **Pick Tracker File** → `TRACKER_NAME` must match the file name exactly\n3. **Data Table:** pick `datatable` in **Get Table Rows**, **Save Changed Rows**, **Clear Table** and **Bulk Add All Rows**. Only new or changed invoices are saved (seconds). If the table is empty or more than 300 rows changed, the table is cleared and all rows are added in one bulk call.\n4. **Build Report** → `RECIPIENTS`; **Send Report** → *Microsoft Outlook OAuth2 API* (or the GEV Send Email node)\n5. **Test Run**, then **Publish**"
+      },
+      "id": "3aa3fad0-e8e9-54fe-8d80-74ba687e1565",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -160
+      ]
+    }
+  ],
+  "connections": {
+    "Weekdays 7am": {
+      "main": [
+        [
+          {
+            "node": "Find Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Run": {
+      "main": [
+        [
+          {
+            "node": "Find Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Tracker": {
+      "main": [
+        [
+          {
+            "node": "Pick Tracker File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Tracker File": {
+      "main": [
+        [
+          {
+            "node": "Download Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Tracker": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker Sheet": {
+      "main": [
+        [
+          {
+            "node": "Clean Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Table Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Rows": {
+      "main": [
+        [
+          {
+            "node": "Compare with Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare with Table": {
+      "main": [
+        [
+          {
+            "node": "Anything to save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to save?": {
+      "main": [
+        [
+          {
+            "node": "Few changes?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Few changes?": {
+      "main": [
+        [
+          {
+            "node": "Save Changed Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Table": {
+      "main": [
+        [
+          {
+            "node": "Restore Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Rows": {
+      "main": [
+        [
+          {
+            "node": "Bulk Add All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Add All Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Changed Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Upload": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report": {
+      "main": [
+        [
+          {
+            "node": "Remember Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}

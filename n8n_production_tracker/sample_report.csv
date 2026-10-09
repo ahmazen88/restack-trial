@@ -1,0 +1,5 @@
+Job No,Description,Discipline,Area,UOM,Planned,Installed Qty,Due Date,Remarks
+WO-1001,Supply duct fabrication,HVAC,Level 1,m2,1200,600,2026-12-01,
+WO-1002,Chilled water piping,Mechanical,Level 2,m,500,500,2026-11-15,Pressure test passed
+WO-1003,Cable tray installation,Electrical,Level 3,m,800,120,2026-09-30,Waiting on material
+WO-1004,Sprinkler heads,Fire Fighting,Basement,nos,350,0,2027-01-20,

@@ -1,0 +1,954 @@
+{
+  "name": "Production Tracker – Auto Refresh from Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "3b025487-8e16-5196-ae73-bcf9c9a94a84",
+      "name": "New File in Inbox",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "e02ba5e6-5bfb-5fc0-9c72-a25aa20abd3a",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "590dbaab-68ab-5655-b7d0-e656eb0d67b8",
+                    "leftValue": "={{ ($binary.data.fileName || '').toLowerCase().split('.').pop() }}",
+                    "rightValue": "csv",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "CSV"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "802eeaf5-98ae-5865-b609-9f5e26bee817",
+                    "leftValue": "={{ ($binary.data.fileName || '').toLowerCase().split('.').pop() }}",
+                    "rightValue": "xlsx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "79f83157-dedc-5590-89b3-0785f6f5aadd",
+                    "leftValue": "={{ ($binary.data.fileName || '').toLowerCase().split('.').pop() }}",
+                    "rightValue": "xlsm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "XLSX"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "045ba84a-0f74-5ac5-987b-0ec75b704cc2",
+                    "leftValue": "={{ ($binary.data.fileName || '').toLowerCase().split('.').pop() }}",
+                    "rightValue": "xls",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "XLS"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Unsupported"
+        }
+      },
+      "id": "d01766e3-c7cf-5326-82cb-8708836782d1",
+      "name": "File Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "id": "b8782757-bd3d-5c52-8928-c7f5ca687881",
+      "name": "Read CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        680,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "id": "988d2411-bffe-5f4c-a001-c792a1bf0f9a",
+      "name": "Read XLSX",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        680,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xls",
+        "options": {}
+      },
+      "id": "0f0a17b3-e0dd-5101-972e-12790825312c",
+      "name": "Read XLS",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        680,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Report Rows\n// Maps whatever column names the dropped report uses onto the tracker columns.\n// Add your own report headings to ALIASES (any case / punctuation is fine).\nconst ALIASES = {\n  'Item ID': ['item id', 'item no', 'item', 'id', 'job', 'job no', 'job id', 'work order', 'wo', 'wo no', 'order no', 'activity id', 'activity code', 'boq ref', 'tag', 'tag no', 'ref'],\n  'Description': ['description', 'desc', 'activity', 'item description', 'product', 'task', 'scope'],\n  'Category': ['category', 'discipline', 'trade', 'product type', 'type', 'system'],\n  'Location / Line': ['location / line', 'location', 'line', 'area', 'zone', 'floor', 'level', 'work center', 'work centre', 'machine', 'station', 'building'],\n  'Unit': ['unit', 'uom', 'units'],\n  'Planned Qty': ['planned qty', 'planned', 'plan qty', 'target', 'target qty', 'scope qty', 'boq qty', 'total qty', 'order qty', 'qty planned', 'budget qty'],\n  'Actual Qty': ['actual qty', 'actual', 'produced', 'produced qty', 'completed qty', 'qty completed', 'done', 'installed', 'installed qty', 'output', 'qty', 'quantity', 'to date'],\n  'Rejected Qty': ['rejected qty', 'rejected', 'scrap', 'defects', 'ncr qty', 'rework', 'rejects'],\n  'Planned Finish': ['planned finish', 'due', 'due date', 'finish', 'target date', 'planned end', 'end date', 'deadline'],\n  'Remarks': ['remarks', 'comments', 'notes', 'comment', 'note'],\n  'Status': ['status', 'state'],\n};\nconst NUMERIC = new Set(['Planned Qty', 'Actual Qty', 'Rejected Qty']);\n\nconst key = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lookup = new Map();\nfor (const [col, names] of Object.entries(ALIASES)) for (const n of names) lookup.set(key(n), col);\n\nconst toNumber = (v) => {\n  if (typeof v === 'number') return v;\n  const n = parseFloat(String(v ?? '').replace(/[,\\s]/g, ''));\n  return Number.isFinite(n) ? n : undefined;\n};\nconst toDate = (v) => {\n  if (v === '' || v == null) return undefined;\n  // Excel serial dates come through as numbers\n  if (typeof v === 'number' && v > 20000 && v < 80000) {\n    return new Date(Date.UTC(1899, 11, 30) + v * 86400000).toISOString().slice(0, 10);\n  }\n  const d = new Date(v);\n  return isNaN(d) ? String(v) : d.toISOString().slice(0, 10);\n};\n\nconst out = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const raw = $input.all()[i].json;\n  const file = $('New File in Inbox').itemMatching(i).json;\n  const row = { _sourceFile: file.name, _fileId: file.id };\n  for (const [header, value] of Object.entries(raw)) {\n    const col = lookup.get(key(header));\n    if (!col || row[col] !== undefined || value === '' || value == null) continue;\n    if (NUMERIC.has(col)) {\n      const n = toNumber(value);\n      if (n !== undefined) row[col] = n;\n    } else if (col === 'Planned Finish') {\n      row[col] = toDate(value);\n    } else {\n      row[col] = String(value).trim();\n    }\n  }\n  if (!row['Item ID']) row._skip = true;\n  out.push({ json: row, pairedItem: i });\n}\nreturn out;\n"
+      },
+      "id": "7e75f0d3-f6ad-5617-bb3e-d6d2a5764036",
+      "name": "Normalize Report Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tracker",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "261ca966-424d-5feb-821a-49ef7aacf78e",
+      "name": "Read Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        260
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge Into Tracker\n// 'cumulative' = report quantities are totals to date (overwrite).\n// 'incremental' = report quantities are today's output (added to the tracker).\nconst QTY_MODE = 'cumulative';\nconst COLUMNS = ['Item ID', 'Description', 'Category', 'Location / Line', 'Unit', 'Planned Qty', 'Actual Qty', 'Rejected Qty', 'Remaining Qty', '% Complete', 'Planned Finish', 'Status', 'Remarks', 'Last Updated', 'Source File'];\nconst DERIVED = new Set(['Item ID', 'Remaining Qty', '% Complete', 'Status', 'Last Updated', 'Source File']);\nconst MANUAL_STATUSES = ['On Hold', 'Cancelled'];\n\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[,%\\s]/g, ''));\n  return Number.isFinite(n) ? n : 0;\n};\nconst today = new Date().toISOString().slice(0, 10);\n\nconst tracker = new Map();\nfor (const { json } of $('Read Tracker').all()) {\n  const id = String(json['Item ID'] ?? '').trim();\n  if (id) tracker.set(id, json);\n}\n\nconst changed = new Map();\nfor (const { json: r } of $('Normalize Report Rows').all()) {\n  if (r._skip) continue;\n  const id = String(r['Item ID']).trim();\n  const row = { ...(changed.get(id) || tracker.get(id) || {}) };\n  row['Item ID'] = id;\n\n  for (const col of COLUMNS) {\n    if (DERIVED.has(col) || r[col] === undefined) continue;\n    const additive = QTY_MODE === 'incremental' && (col === 'Actual Qty' || col === 'Rejected Qty');\n    row[col] = additive ? num(row[col]) + r[col] : r[col];\n  }\n\n  const planned = num(row['Planned Qty']);\n  const actual = num(row['Actual Qty']);\n  const pct = planned > 0 ? Math.min(actual / planned, 1) : 0;\n  row['Remaining Qty'] = planned > 0 ? Math.max(planned - actual, 0) : '';\n  row['% Complete'] = planned > 0 ? Math.round(pct * 1000) / 1000 : '';\n\n  if (r.Status) {\n    row.Status = r.Status;\n  } else if (!MANUAL_STATUSES.includes(row.Status)) {\n    const finish = row['Planned Finish'] ? new Date(row['Planned Finish']) : null;\n    if (planned > 0 && actual >= planned) row.Status = 'Complete';\n    else if (finish && !isNaN(finish) && finish.toISOString().slice(0, 10) < today) row.Status = 'Behind Schedule';\n    else if (actual > 0) row.Status = 'In Progress';\n    else row.Status = 'Not Started';\n  }\n\n  row['Last Updated'] = new Date().toISOString().replace('T', ' ').slice(0, 16);\n  row['Source File'] = r._sourceFile;\n  changed.set(id, row);\n}\n\n// Always emit at least one item so the log step still runs when nothing matched\nif (!changed.size) return [{ json: {} }];\nreturn [...changed.values()].map((row) => ({\n  json: Object.fromEntries(COLUMNS.map((c) => [c, row[c] ?? ''])),\n}));\n"
+      },
+      "id": "5fe2ef4f-675b-5ab8-a903-5459e5ac3cd9",
+      "name": "Merge Into Tracker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1936284e-98dd-5e77-92a3-ca569c1107b3",
+              "leftValue": "={{ $json['Item ID'] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "02c2686a-2ca8-5bef-909b-3a6f0a28c45f",
+      "name": "Has Changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Tracker",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Item ID"
+          ],
+          "schema": [
+            {
+              "id": "Item ID",
+              "displayName": "Item ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location / Line",
+              "displayName": "Location / Line",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Unit",
+              "displayName": "Unit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Planned Qty",
+              "displayName": "Planned Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Actual Qty",
+              "displayName": "Actual Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rejected Qty",
+              "displayName": "Rejected Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Remaining Qty",
+              "displayName": "Remaining Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "% Complete",
+              "displayName": "% Complete",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Planned Finish",
+              "displayName": "Planned Finish",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Remarks",
+              "displayName": "Remarks",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Updated",
+              "displayName": "Last Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source File",
+              "displayName": "Source File",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c869f883-36c5-5a01-976e-be255e18795e",
+      "name": "Update Tracker",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Log Entry — one row per processed file\nconst before = new Set(\n  $('Read Tracker').all().map((i) => String(i.json['Item ID'] ?? '').trim()).filter(Boolean),\n);\nconst files = {};\nfor (const { json: r } of $('Normalize Report Rows').all()) {\n  const f = (files[r._fileId] ??= { name: r._sourceFile, rows: 0, skipped: 0, ids: new Set() });\n  f.rows++;\n  if (r._skip) f.skipped++;\n  else f.ids.add(String(r['Item ID']).trim());\n}\nconst now = new Date().toISOString().replace('T', ' ').slice(0, 16);\nreturn Object.entries(files).map(([fileId, f]) => {\n  const ids = [...f.ids];\n  const added = ids.filter((id) => !before.has(id)).length;\n  return {\n    json: {\n      Timestamp: now,\n      'Source File': f.name,\n      'File ID': fileId,\n      'Rows Read': f.rows,\n      'Items Updated': ids.length - added,\n      'Items Added': added,\n      'Rows Skipped': f.skipped,\n      Result: f.skipped === f.rows ? 'No rows matched – check column names' : 'Processed',\n    },\n  };\n});\n"
+      },
+      "id": "fd7fe93f-61b8-5a34-9dcb-0760e08c3ccc",
+      "name": "Build Log Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Update Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source File",
+              "displayName": "Source File",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File ID",
+              "displayName": "File ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rows Read",
+              "displayName": "Rows Read",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Items Updated",
+              "displayName": "Items Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Items Added",
+              "displayName": "Items Added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rows Skipped",
+              "displayName": "Rows Skipped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "294b0350-cd25-5533-b203-bbe770d96e50",
+      "name": "Write Update Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Build Log Entry').item.json['File ID'] }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        }
+      },
+      "id": "2619fdf0-b4b2-502f-b5d3-afe5a6b5ccbf",
+      "name": "Move to Processed",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2440,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Rejected Log — files that are not CSV / Excel\nconst now = new Date().toISOString().replace('T', ' ').slice(0, 16);\nreturn $input.all().map((_, i) => {\n  const f = $('New File in Inbox').itemMatching(i).json;\n  return {\n    json: {\n      Timestamp: now,\n      'Source File': f.name,\n      'File ID': f.id,\n      'Rows Read': 0,\n      'Items Updated': 0,\n      'Items Added': 0,\n      'Rows Skipped': 0,\n      Result: 'Rejected – unsupported file type (use .csv, .xlsx or .xls)',\n    },\n  };\n});\n"
+      },
+      "id": "407429ce-7a2b-51cd-9ab1-321233f75c14",
+      "name": "Build Rejected Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Update Log",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Source File",
+              "displayName": "Source File",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File ID",
+              "displayName": "File ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rows Read",
+              "displayName": "Rows Read",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Items Updated",
+              "displayName": "Items Updated",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Items Added",
+              "displayName": "Items Added",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Rows Skipped",
+              "displayName": "Rows Skipped",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dd161e3a-f764-5e5b-a4ba-967a778d6848",
+      "name": "Log Rejected File",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        900,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Build Rejected Log').item.json['File ID'] }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        }
+      },
+      "id": "256428e5-c1a2-5340-bea4-e65b2e1ac55f",
+      "name": "Move to Rejected",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "width": 520,
+        "height": 340,
+        "content": "## Production Tracker – setup\n1. **New File in Inbox** → pick your `Inbox` folder\n2. **Read Tracker / Update Tracker / Write Update Log / Log Rejected File** → pick the *Production Tracker* spreadsheet\n3. **Move to Processed** / **Move to Rejected** → pick those folders\n4. Report column names → add aliases in **Normalize Report Rows**\n5. Daily (not cumulative) quantities → set `QTY_MODE` in **Merge Into Tracker**\n\nDrop .csv / .xlsx / .xls files (header in row 1) into Inbox. Checked every minute."
+      },
+      "id": "aec80d8c-2af1-589e-8236-a9887b217c44",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ]
+    }
+  ],
+  "connections": {
+    "New File in Inbox": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "File Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Type": {
+      "main": [
+        [
+          {
+            "node": "Read CSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read XLSX",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read XLS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Rejected Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV": {
+      "main": [
+        [
+          {
+            "node": "Normalize Report Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read XLSX": {
+      "main": [
+        [
+          {
+            "node": "Normalize Report Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read XLS": {
+      "main": [
+        [
+          {
+            "node": "Normalize Report Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Report Rows": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker": {
+      "main": [
+        [
+          {
+            "node": "Merge Into Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Into Tracker": {
+      "main": [
+        [
+          {
+            "node": "Has Changes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Changes?": {
+      "main": [
+        [
+          {
+            "node": "Update Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Log Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Tracker": {
+      "main": [
+        [
+          {
+            "node": "Build Log Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Log Entry": {
+      "main": [
+        [
+          {
+            "node": "Write Update Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Update Log": {
+      "main": [
+        [
+          {
+            "node": "Move to Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Rejected Log": {
+      "main": [
+        [
+          {
+            "node": "Log Rejected File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Rejected File": {
+      "main": [
+        [
+          {
+            "node": "Move to Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}

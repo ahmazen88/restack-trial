@@ -1,0 +1,466 @@
+{
+  "name": "Production Tracker – Upload to Data Table",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Upload Production Tracker",
+        "formDescription": "Download the latest tracker (File → Create a Copy → Download a Copy) and upload it here. Only new or changed invoices are saved to the Data Table.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Tracker File",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".xlsx,.xlsm",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "path": "production-tracker-upload",
+          "buttonLabel": "Upload"
+        }
+      },
+      "id": "20b1ccbc-4a1f-5f17-bece-fdc7ffa0a2a9",
+      "name": "Upload Tracker",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "Tracker_File",
+        "options": {}
+      },
+      "id": "776120a3-0f3a-5fab-b5d4-3d6292c5a1f5",
+      "name": "Read Tracker Sheet",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean Rows\n// 1. COLUMNS = the exact column names in your n8n Data Table (only these are sent).\n// 2. ALIASES = other headings the SharePoint tracker might use for the same column.\n// 3. TYPES   = 'string' (default), 'number', 'numberText' (plain number stored as text, e.g. 1157.44)\n//             or 'date' – match your Data Table column types\n//             (the Column list in the Data Table node shows each type, e.g. \"Invoice (number)\").\n//             'date' also turns Excel serial dates (e.g. 46118) into 2026-04-06.\n// 4. KEY     = the column that identifies a row (matches existing rows so they are not duplicated).\nconst COLUMNS = ['Invoice', 'Value', 'Customer', 'Company_Code', 'Project_Manager', 'Name_the_PortalEmail_ID',\n  'Received_Date', 'Allocated_Date', 'Invoice_Date',\n  'Status', 'Upload_Date', 'Tracker_TAT', 'Uploaded_By', 'Pending_Category', 'Pending_Reason'];\nconst ALIASES = {\n  Invoice: ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no'],\n  Value: ['value', 'amount', 'invoice value'],\n  Customer: ['customer', 'customer name', 'client'],\n  Company_Code: ['company code', 'coco', 'co code', 'company_code'],\n  Project_Manager: ['project manager', 'pm', 'manager'],\n  Name_the_PortalEmail_ID: ['name the portal email id', 'portal email id', 'portal email', 'portal', 'email id',\n    'submission portal'],\n  Received_Date: ['received date', 'date received', 'received'],\n  Allocated_Date: ['allocated date', 'date allocated', 'allocated'],\n  Invoice_Date: ['invoice date', 'inv date'],\n  Status: ['status', 'invoice status'],\n  Upload_Date: ['invoice upload date', 'upload date', 'uploaded date', 'invoice upload dt', 'date uploaded'],\n  Tracker_TAT: ['tat', 'turn around time', 'turnaround time', 'tat days'],\n  Uploaded_By: ['uploaded by', 'processed by', 'owner', 'done by'],\n  Pending_Category: ['category', 'pending category', 'blocker category'],\n  Pending_Reason: ['reason for pending', 'pending reason', 'reason', 'comments', 'remarks'],\n};\nconst TYPES = { Invoice: 'number', Value: 'numberText', Received_Date: 'date', Allocated_Date: 'date', Invoice_Date: 'date',\n  Upload_Date: 'date', Tracker_TAT: 'numberText' }; // \"NA\" in a date or TAT cell becomes empty\nconst KEY = 'Invoice';\nconst UPPER = ['Customer', 'Company_Code']; // made upper case so spelling variants group together\n// The tracker sometimes holds the sales org instead of the company code. Left = sales org, right = real company code.\nconst COMPANY_CODE_FIX = { G36C: 'G367', GS5C: 'G367' };\n\n// Status in one standard wording (first matching rule wins); anything else is kept as written\nconst STATUS_RULES = [\n  [/hold/i, 'On hold'],\n  [/cancel|do not distribute/i, 'Cancelled'],\n  [/pend|open|progress|query|block|wip/i, 'Pending'],\n  [/complet|done|upload|submit|sent|distribut|closed|invoiced|posted/i, 'Completed'],\n];\nconst standardStatus = (t) => (t ? (STATUS_RULES.find(([re]) => re.test(t)) || [null, t])[1] : null);\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lookup = new Map();\nfor (const col of COLUMNS) {\n  lookup.set(norm(col), col);\n  for (const a of ALIASES[col] || []) lookup.set(norm(a), col);\n}\n// Excel serial day numbers (e.g. 46118 = 2026-04-06); the time of day is ignored\nconst fromSerial = (n) => (n >= 20000 && n <= 80000\n  ? new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000).toISOString().slice(0, 10) : null);\nconst pad = (n) => String(n).padStart(2, '0');\nconst convert = (col, v) => {\n  if (v === '' || v == null) return null;\n  if (TYPES[col] === 'number' || TYPES[col] === 'numberText') {\n    if (typeof v === 'number') return Number.isFinite(v) ? (TYPES[col] === 'number' ? v : String(v)) : null;\n    let t = String(v).trim().replace(/[\\s,$€£]/g, '');\n    const negative = /^\\(.*\\)$/.test(t) || t.startsWith('-'); // (1157.44) and -1157.44 are negative amounts\n    t = t.replace(/^\\((.*)\\)$/, '$1').replace(/^-/, '');\n    if (TYPES[col] === 'number') t = t.replace(/\\.0+$/, '');\n    // whole value must be a plain number: \"7001 / 7002\" or \"INV-12\" are not guessed\n    if (!(TYPES[col] === 'number' ? /^\\d+$/ : /^\\d*\\.?\\d+$/).test(t)) return null;\n    const n = Number(t) * (negative ? -1 : 1);\n    return TYPES[col] === 'number' ? n : String(n);\n  }\n  if (TYPES[col] === 'date') {\n    if (typeof v === 'number') return fromSerial(v);\n    const t = String(v).trim();\n    if (/^\\d{5}(\\.\\d+)?$/.test(t)) return fromSerial(Number(t));\n    const iso = t.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;\n    const d = new Date(t); // e.g. 4/6/2026 (US order) or \"Apr 6, 2026\"\n    return isNaN(d) ? null : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;\n  }\n  const text = String(v).replace(/\\s+/g, ' ').trim();\n  if (col === 'Status') return standardStatus(text);\n  if (col === 'Uploaded_By') return text.toLowerCase().replace(/\\b[a-z]/g, (c) => c.toUpperCase()); // \"TUSHAR\" / \"tushar\" → \"Tushar\"\n  const out = UPPER.includes(col) ? text.toUpperCase() : text;\n  return col === 'Company_Code' && COMPANY_CODE_FIX[out] ? COMPANY_CODE_FIX[out] : out;\n};\n\n// Stop early on the wrong file / wrong tab instead of saving nothing\nconst input = $input.all().filter((i) => Object.keys(i.json || {}).length);\nif (!input.length) throw new Error('The uploaded sheet is empty. Check the file and the Sheet Name option on \"Read Tracker Sheet\". Nothing was changed.');\n// Excel leaves empty cells out of a row, so collect the headings from every row\nconst headings = [...new Set(input.flatMap((i) => Object.keys(i.json)))];\nif (!headings.some((h) => lookup.get(norm(h)) === KEY)) {\n  throw new Error(`No \"${KEY}\" column found. Headings in the sheet: ${headings.join(', ')}. ` +\n    'Check the file, the Sheet Name option on \"Read Tracker Sheet\", or add the heading to ALIASES. Nothing was changed.');\n}\n\nconst rows = new Map();\nfor (const { json: raw } of input) {\n  const row = {};\n  for (const [header, value] of Object.entries(raw)) {\n    const col = lookup.get(norm(header));\n    if (col && row[col] == null) row[col] = convert(col, value);\n  }\n  if (row[KEY] == null || row[KEY] === '') continue; // blank / totals rows\n  for (const col of COLUMNS) if (!(col in row)) row[col] = null;\n  rows.set(String(row[KEY]), row); // a repeated key keeps the last row\n}\nreturn [...rows.values()].map((json) => ({ json }));\n"
+      },
+      "id": "40d52375-fb33-5792-8cd8-372309a522e4",
+      "name": "Clean Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "anyCondition",
+        "filters": {},
+        "returnAll": true
+      },
+      "id": "47739bc3-8efc-5c38-b731-a16222547f99",
+      "name": "Get Table Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        660,
+        300
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compare with Table — keep only invoices that are new or changed, so saving takes seconds, not minutes.\n// If the table is empty, or more than BULK_LIMIT rows changed (e.g. the very first upload), ALL rows are passed on\n// for a fast \"clear table + bulk add\" instead. Keep BULK_LIMIT the same as in the \"Few changes?\" step.\nconst BULK_LIMIT = 300;\n\nconst cleaned = $('Clean Rows').all().map((i) => i.json);\nconst columns = Object.keys(cleaned[0] || {});\nconst existing = new Map();\nfor (const { json: r } of $input.all()) {\n  if (r.Invoice === undefined || r.Invoice === null || r.Invoice === '') continue; // empty table gives one empty item\n  existing.set(String(r.Invoice), r);\n}\nconst same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();\nconst changed = cleaned.filter((r) => {\n  const before = existing.get(String(r.Invoice));\n  return !before || columns.some((c) => !same(r[c], before[c]));\n});\nconst rows = !existing.size || changed.length > BULK_LIMIT ? cleaned : changed;\nreturn rows.map((json) => ({ json }));\n"
+      },
+      "id": "37b65fdf-f69e-5a13-a5d3-d6b7f30e59fa",
+      "name": "Compare with Table",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "53ff6eec-df0a-5d28-b8e8-bd087cd47f97",
+              "leftValue": "={{ $json.Invoice !== undefined && $json.Invoice !== null && $json.Invoice !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d5874fee-af68-5469-8be9-6cf619da239c",
+      "name": "Anything to save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4e5d3ac9-c86d-5479-b614-0e31708841b7",
+              "leftValue": "={{ $('Get Table Rows').all().some(i => i.json.Invoice !== undefined && i.json.Invoice !== null) && $('Compare with Table').all().length <= 300 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bbceb4aa-df7e-5a14-aa5f-440ca4b86ed5",
+      "name": "Few changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "Invoice",
+              "condition": "eq",
+              "keyValue": "={{ $json.Invoice }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "4f93242b-e532-5bab-a68d-c416f7d60be6",
+      "name": "Save Changed Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "clear",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "83dec111-c88c-50fb-afa0-f4ad5c26d2b3",
+      "name": "Clear Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore Rows — after the table is cleared, pass all rows on to the bulk add\nreturn $('Compare with Table').all().map((i) => ({ json: i.json }));\n"
+      },
+      "id": "1e7653fe-b24f-5de8-83a8-ec4c55bc431e",
+      "name": "Restore Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "optimizeBulk": true
+        }
+      },
+      "id": "c13eb8ab-5a73-556b-8534-354a71302ae3",
+      "name": "Bulk Add All Rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise Upload — counts and data quality checks for the confirmation page.\n// Fixed rules only (no clock, no randomness): the same file always gives the same result.\nconst KEY = 'Invoice';\nconst KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows\nconst EARLIEST_DATE = '2020-01-01';\nconst DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];\nconst LIST_LIMIT = 10;\nconst FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';\n\nconst norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));\nconst num = (v) => {\n  const n = parseFloat(String(v ?? '').replace(/[^0-9.\\-]/g, ''));\n  return Number.isFinite(n) ? n : null;\n};\n\n// Raw sheet: blank-key rows and repeated invoices\nconst raw = $('Read Tracker Sheet').all().map((i) => i.json);\nconst seen = new Map();\nconst unreadable = []; // invoice cells that are not a plain number (e.g. \"7001 / 7002\"): skipped, not guessed\nlet blank = 0;\nfor (const r of raw) {\n  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));\n  const id = h == null ? '' : String(r[h] ?? '').trim();\n  if (!/\\d/.test(id)) { blank++; continue; } // empty, or a label such as \"Total\"\n  if (!/^\\d+(\\.0+)?$/.test(id.replace(/[\\s,]/g, ''))) { unreadable.push(id); continue; }\n  seen.set(id, (seen.get(id) || 0) + 1);\n}\nconst duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();\n\n// Cleaned rows: quality checks\nconst rows = $('Clean Rows').all().map((i) => i.json);\nconst isOpen = (r) => /pend|hold|open|progress|query|block/i.test(String(r.Status || ''));\nconst checks = {\n  'missing value': (r) => num(r.Value) === null,\n  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,\n  'missing customer': (r) => !r.Customer,\n  'missing company code': (r) => !r.Company_Code,\n  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),\n  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),\n  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,\n  // status / reason entries still to be filled in (only checked when the tracker has these columns)\n  ...(rows.some((r) => 'Status' in r) ? {\n    'no status': (r) => !r.Status,\n    'pending status but no reason': (r) => isOpen(r) && !r.Pending_Reason && !r.Pending_Category,\n    'pending status but no category': (r) => isOpen(r) && !r.Pending_Category && !!r.Pending_Reason,\n    'pending status but no owner (Uploaded by)': (r) => isOpen(r) && !r.Uploaded_By,\n    'pending status but an upload date': (r) => isOpen(r) && !!r.Upload_Date,\n    'completed status but no upload date or TAT': (r) => r.Status === 'Completed' && !r.Upload_Date && (r.Tracker_TAT === null || r.Tracker_TAT === undefined || r.Tracker_TAT === ''),\n  } : {}),\n};\nconst issues = {};\nfor (const [label, test] of Object.entries(checks)) {\n  const ids = rows.filter(test).map((r) => String(r[KEY]));\n  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };\n}\n\nconst fmt = (n) => n.toLocaleString('en-US');\n// how many rows were actually written (only present when the \"Compare with Table\" step is used)\nconst written = (() => {\n  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }\n  catch (e) { return null; }\n})();\nconst parts = written === null\n  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]\n  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];\nif (blank) parts.push(`${fmt(blank)} blank or total rows skipped`);\nif (unreadable.length) {\n  parts.push(`${fmt(unreadable.length)} rows skipped because the invoice number is not a plain number: ` +\n    unreadable.slice(0, LIST_LIMIT).join(', ') + (unreadable.length > LIST_LIMIT ? ', …' : ''));\n}\nif (duplicates.length) {\n  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +\n    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));\n}\nfor (const [label, { count, examples }] of Object.entries(issues)) {\n  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);\n}\n// SAP customer code / profit centre coverage (only when the \"Add Lookups\" step is used)\ntry {\n  const looked = $('Add Lookups').all().map((i) => i.json);\n  const pcRows = looked;\n  parts.push(`SAP customer code found for ${fmt(looked.filter((r) => r.SAP_Customer_Code).length)} of ${fmt(looked.length)} invoices` +\n    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)}` +\n    ` · product line found for ${fmt(pcRows.filter((r) => r.Product_Line).length)} of ${fmt(pcRows.length)} (G367 = PQP if Tableau has none)` +\n    ` · sales org found for ${fmt(looked.filter((r) => r.Sales_Org).length)} of ${fmt(looked.filter((r) => String(r.Company_Code) === 'G367').length)} G367 invoices`);\n  if (looked[0]?._lookupNotes) parts.push(`Columns used – ${looked[0]._lookupNotes}`);\n} catch (e) { /* step not in this workflow */ }\nif (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');\n\nreturn [{\n  json: {\n    file: FILE_NAME,\n    rowsRead: raw.length,\n    rowsSaved: rows.length,\n    blankRows: blank,\n    unreadableInvoices: unreadable,\n    duplicateInvoices: duplicates,\n    issues,\n    message: parts.join(' · '),\n  },\n}];\n"
+      },
+      "id": "44e16e4b-eef3-5e8e-953a-bfef8dbc2678",
+      "name": "Summarise Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        200
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "Tracker saved ✔",
+        "completionMessage": "={{ $('Summarise Upload').first().json.message }}",
+        "options": {}
+      },
+      "id": "4aa83d7d-a1d2-587b-9f66-7278d6cd878d",
+      "name": "Done Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "width": 640,
+        "height": 320,
+        "content": "## Tracker upload → Data Table\n1. **Data Table:** pick `datatable` in **Get Table Rows**, **Save Changed Rows**, **Clear Table** and **Bulk Add All Rows**. Only new or changed invoices are saved (seconds). If the table is empty or more than 300 rows changed, the table is cleared and all rows are added in one bulk call.\n2. **Clean Rows** → `COLUMNS` must match the Data Table columns; add tracker headings to `ALIASES`\n3. **Read Tracker Sheet** → *Options → Sheet Name* if the data is not on the first tab\n4. Publish, then share the form URL from **Upload Tracker** (Production URL)"
+      },
+      "id": "c90d101c-eada-5953-8f9d-6e29ee2fba0e",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -140
+      ]
+    }
+  ],
+  "connections": {
+    "Upload Tracker": {
+      "main": [
+        [
+          {
+            "node": "Read Tracker Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Tracker Sheet": {
+      "main": [
+        [
+          {
+            "node": "Clean Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Table Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Table Rows": {
+      "main": [
+        [
+          {
+            "node": "Compare with Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare with Table": {
+      "main": [
+        [
+          {
+            "node": "Anything to save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anything to save?": {
+      "main": [
+        [
+          {
+            "node": "Few changes?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Few changes?": {
+      "main": [
+        [
+          {
+            "node": "Save Changed Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Table": {
+      "main": [
+        [
+          {
+            "node": "Restore Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Rows": {
+      "main": [
+        [
+          {
+            "node": "Bulk Add All Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bulk Add All Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Changed Rows": {
+      "main": [
+        [
+          {
+            "node": "Summarise Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise Upload": {
+      "main": [
+        [
+          {
+            "node": "Done Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}

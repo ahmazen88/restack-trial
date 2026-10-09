@@ -1,0 +1,102 @@
+// Summarise Upload — counts and data quality checks for the confirmation page.
+// Fixed rules only (no clock, no randomness): the same file always gives the same result.
+const KEY = 'Invoice';
+const KEY_ALIASES = ['invoice', 'invoice no', 'invoice number', 'invoice #', 'inv no']; // keep in step with Clean Rows
+const EARLIEST_DATE = '2020-01-01';
+const DATE_COLUMNS = ['Received_Date', 'Allocated_Date', 'Invoice_Date'];
+const LIST_LIMIT = 10;
+const FILE_NAME = $('Upload Tracker').first().binary?.Tracker_File?.fileName ?? 'tracker';
+
+const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const keyNames = new Set([KEY, ...KEY_ALIASES].map(norm));
+const num = (v) => {
+  const n = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+// Raw sheet: blank-key rows and repeated invoices
+const raw = $('Read Tracker Sheet').all().map((i) => i.json);
+const seen = new Map();
+const unreadable = []; // invoice cells that are not a plain number (e.g. "7001 / 7002"): skipped, not guessed
+let blank = 0;
+for (const r of raw) {
+  const h = Object.keys(r).find((k) => keyNames.has(norm(k)));
+  const id = h == null ? '' : String(r[h] ?? '').trim();
+  if (!/\d/.test(id)) { blank++; continue; } // empty, or a label such as "Total"
+  if (!/^\d+(\.0+)?$/.test(id.replace(/[\s,]/g, ''))) { unreadable.push(id); continue; }
+  seen.set(id, (seen.get(id) || 0) + 1);
+}
+const duplicates = [...seen].filter(([, n]) => n > 1).map(([id]) => id).sort();
+
+// Cleaned rows: quality checks
+const rows = $('Clean Rows').all().map((i) => i.json);
+const isOpen = (r) => /pend|hold|open|progress|query|block/i.test(String(r.Status || ''));
+const checks = {
+  'missing value': (r) => num(r.Value) === null,
+  'zero or negative value': (r) => num(r.Value) !== null && num(r.Value) <= 0,
+  'missing customer': (r) => !r.Customer,
+  'missing company code': (r) => !r.Company_Code,
+  'no readable date': (r) => DATE_COLUMNS.every((c) => !r[c]),
+  [`date before ${EARLIEST_DATE}`]: (r) => DATE_COLUMNS.some((c) => r[c] && r[c] < EARLIEST_DATE),
+  'allocated before received': (r) => r.Allocated_Date && r.Received_Date && r.Allocated_Date < r.Received_Date,
+  // status / reason entries still to be filled in (only checked when the tracker has these columns)
+  ...(rows.some((r) => 'Status' in r) ? {
+    'no status': (r) => !r.Status,
+    'pending status but no reason': (r) => isOpen(r) && !r.Pending_Reason && !r.Pending_Category,
+    'pending status but no category': (r) => isOpen(r) && !r.Pending_Category && !!r.Pending_Reason,
+    'pending status but no owner (Uploaded by)': (r) => isOpen(r) && !r.Uploaded_By,
+    'pending status but an upload date': (r) => isOpen(r) && !!r.Upload_Date,
+    'completed status but no upload date or TAT': (r) => r.Status === 'Completed' && !r.Upload_Date && (r.Tracker_TAT === null || r.Tracker_TAT === undefined || r.Tracker_TAT === ''),
+  } : {}),
+};
+const issues = {};
+for (const [label, test] of Object.entries(checks)) {
+  const ids = rows.filter(test).map((r) => String(r[KEY]));
+  if (ids.length) issues[label] = { count: ids.length, examples: ids.slice(0, LIST_LIMIT) };
+}
+
+const fmt = (n) => n.toLocaleString('en-US');
+// how many rows were actually written (only present when the "Compare with Table" step is used)
+const written = (() => {
+  try { return $('Compare with Table').all().filter((i) => i.json.Invoice !== undefined && i.json.Invoice !== null && i.json.Invoice !== '').length; }
+  catch (e) { return null; }
+})();
+const parts = written === null
+  ? [`${fmt(rows.length)} invoices saved from ${fmt(raw.length)} rows`]
+  : [`${fmt(rows.length)} invoices in the file (${fmt(raw.length)} rows) · ${fmt(written)} new or changed rows saved, the rest were already up to date`];
+if (blank) parts.push(`${fmt(blank)} blank or total rows skipped`);
+if (unreadable.length) {
+  parts.push(`${fmt(unreadable.length)} rows skipped because the invoice number is not a plain number: ` +
+    unreadable.slice(0, LIST_LIMIT).join(', ') + (unreadable.length > LIST_LIMIT ? ', …' : ''));
+}
+if (duplicates.length) {
+  parts.push(`${fmt(duplicates.length)} invoices appear more than once (last row kept): ` +
+    duplicates.slice(0, LIST_LIMIT).join(', ') + (duplicates.length > LIST_LIMIT ? ', …' : ''));
+}
+for (const [label, { count, examples }] of Object.entries(issues)) {
+  parts.push(`${fmt(count)} with ${label} (e.g. ${examples.slice(0, 3).join(', ')})`);
+}
+// SAP customer code / profit centre coverage (only when the "Add Lookups" step is used)
+try {
+  const looked = $('Add Lookups').all().map((i) => i.json);
+  const pcRows = looked;
+  parts.push(`SAP customer code found for ${fmt(looked.filter((r) => r.SAP_Customer_Code).length)} of ${fmt(looked.length)} invoices` +
+    ` · profit centre found for ${fmt(pcRows.filter((r) => r.Profit_Center).length)} of ${fmt(pcRows.length)}` +
+    ` · product line found for ${fmt(pcRows.filter((r) => r.Product_Line).length)} of ${fmt(pcRows.length)} (G367 = PQP if Tableau has none)` +
+    ` · sales org found for ${fmt(looked.filter((r) => r.Sales_Org).length)} of ${fmt(looked.filter((r) => String(r.Company_Code) === 'G367').length)} G367 invoices`);
+  if (looked[0]?._lookupNotes) parts.push(`Columns used – ${looked[0]._lookupNotes}`);
+} catch (e) { /* step not in this workflow */ }
+if (!duplicates.length && !unreadable.length && !Object.keys(issues).length) parts.push('no data quality issues found');
+
+return [{
+  json: {
+    file: FILE_NAME,
+    rowsRead: raw.length,
+    rowsSaved: rows.length,
+    blankRows: blank,
+    unreadableInvoices: unreadable,
+    duplicateInvoices: duplicates,
+    issues,
+    message: parts.join(' · '),
+  },
+}];

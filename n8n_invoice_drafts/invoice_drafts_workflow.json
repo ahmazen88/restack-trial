@@ -1,0 +1,295 @@
+{
+  "name": "Invoice Drafts – Box to my inbox",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Invoice Drafts",
+        "formDescription": "Enter invoice numbers. Each invoice PDF is found in Box and a draft email with the PDF attached is sent to you to check and forward. Nothing is sent to customers.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Invoice numbers",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "One per line, e.g.\n7001206102\n7001211479"
+            },
+            {
+              "fieldLabel": "Send drafts to (optional)",
+              "fieldType": "email",
+              "placeholder": "your email"
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "path": "invoice-drafts",
+          "buttonLabel": "Prepare drafts"
+        }
+      },
+      "id": "0d309b3d-3e49-55c4-b235-202ceda7e035",
+      "name": "Request Invoices",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split Invoice Numbers — one item per invoice number typed in the form (any separator, spaces inside are fine)\nconst typed = String($input.first().json['Invoice numbers'] ?? '');\nconst numbers = [...new Set(\n  typed.split(/[\\n,;]+/).map((s) => s.replace(/\\D/g, '')).filter((s) => s.length >= 5),\n)];\nif (!numbers.length) throw new Error('Enter at least one invoice number (one per line, or separated by commas).');\nif (numbers.length > 25) throw new Error(`${numbers.length} invoice numbers entered – please request 25 or fewer at a time.`);\nreturn numbers.map((invoice) => ({ json: { invoice } }));\n"
+      },
+      "id": "ffd278dc-f599-5c3d-9d98-2cb26bdd8258",
+      "name": "Split Invoice Numbers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "search",
+        "query": "={{ $json.invoice }}",
+        "returnAll": false,
+        "limit": 20,
+        "additionalFields": {
+          "file_extensions": "pdf"
+        }
+      },
+      "id": "6cffecc0-0273-5d8a-b385-c3bf48cc77fd",
+      "name": "Search Box",
+      "type": "n8n-nodes-base.box",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pick Invoice Files — for each requested number, choose exactly one PDF from the Box search results.\n// 1) a single PDF whose file name contains the number, or 2) the only search result (Box also searches inside PDFs).\n// Anything else (none, or several) is reported and skipped. The number is checked again inside the PDF later.\nconst requested = $('Split Invoice Numbers').all().map((i) => i.json.invoice);\nconst results = requested.map(() => []);\nfor (const item of $input.all()) {\n  const f = item.json;\n  if (!f || !f.id || f.type !== 'file') continue;\n  const idx = item.pairedItem?.item ?? item.pairedItem?.[0]?.item;\n  if (idx !== undefined && results[idx]) results[idx].push(f);\n}\nconst out = [];\nconst problems = [];\nrequested.forEach((invoice, i) => {\n  const exact = new RegExp(`(^|\\\\D)${invoice}(\\\\D|$)`);\n  const pdfs = results[i].filter((f) => /\\.pdf$/i.test(f.name || ''));\n  const byName = pdfs.filter((f) => exact.test(f.name));\n  const pick = byName.length === 1 ? byName[0] : byName.length === 0 && pdfs.length === 1 ? pdfs[0] : null;\n  if (pick) out.push({ json: { invoice, id: pick.id, fileName: pick.name, folder: pick.path_collection?.entries?.map((e) => e.name).join(' / ') || '' } });\n  else if (!pdfs.length) problems.push(`${invoice}: no PDF found in Box`);\n  else problems.push(`${invoice}: ${byName.length || pdfs.length} possible files (${(byName.length ? byName : pdfs).map((f) => f.name).slice(0, 5).join(', ')})`);\n});\nif (!out.length) throw new Error(`No invoice could be prepared. ${problems.join(' · ')}`);\nout[0].json.problems = problems; // reported on the Done page\nreturn out;\n"
+      },
+      "id": "1d3f1d6a-fa8a-58e2-9537-63c047274b1f",
+      "name": "Pick Invoice Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "download",
+        "fileId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "id": "912ac86d-c547-51ea-b380-c0b09e14ba2c",
+      "name": "Download Invoice",
+      "type": "n8n-nodes-base.box",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "keepSource": "both"
+        }
+      },
+      "id": "d3cea887-3cc5-52c4-806f-d605892b0492",
+      "name": "Read Invoice PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Drafts — read each invoice PDF and prepare a draft email for YOU to check and forward.\n// Fixed rules only. Values not found on the PDF are shown as \"not found\" for you to fill in.\nconst SEND_DRAFTS_TO = ''; // your email address, e.g. 'name.surname@company.com' (the form can override)\n\nconst formTo = (() => { try { return String($('Request Invoices').first().json['Send drafts to (optional)'] || '').trim(); } catch (e) { return ''; } })();\nconst to = formTo || SEND_DRAFTS_TO;\nif (!to) throw new Error('Add your email address to SEND_DRAFTS_TO at the top of \"Build Drafts\".');\n\nconst esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));\nconst find = (text, labels, valuePattern) => {\n  for (const label of labels) {\n    const m = text.match(new RegExp(`${label}\\\\s*[:#.]?\\\\s*(${valuePattern})`, 'i'));\n    if (m) return m[1].trim();\n  }\n  return '';\n};\nconst DATE = '\\\\d{1,2}[./-]\\\\d{1,2}[./-]\\\\d{2,4}|\\\\d{4}-\\\\d{2}-\\\\d{2}|\\\\d{1,2}[ -][A-Za-z]{3,9}[ -,]+\\\\d{4}|[A-Za-z]{3,9} \\\\d{1,2},? \\\\d{4}';\nconst MONEY = '(?:[A-Z]{3}\\\\s*)?[$€£]?\\\\s*-?\\\\d{1,3}(?:[,.\\\\s]\\\\d{3})*(?:[.,]\\\\d{2})?';\n\nconst drafts = [];\nfor (let i = 0; i < $input.all().length; i++) {\n  const item = $input.all()[i];\n  const picked = $('Pick Invoice Files').itemMatching(i).json;\n  const text = String(item.json.text || '').replace(/\\r/g, '');\n  const flat = text.replace(/\\s+/g, ' ');\n  const numberOnPdf = text.replace(/\\D/g, '').includes(picked.invoice);\n\n  const lines = text.split('\\n').map((l) => l.trim()).filter(Boolean);\n  const billIdx = lines.findIndex((l) => /^(bill\\s*to|sold\\s*to|customer)\\b/i.test(l));\n  const customer = billIdx >= 0 ? (lines[billIdx].replace(/^(bill\\s*to|sold\\s*to|customer)\\s*[:.]?\\s*/i, '') || lines[billIdx + 1] || '') : '';\n  const facts = {\n    'Invoice date': find(flat, ['invoice date', 'date of invoice', 'document date', 'date'], DATE),\n    'Amount': find(flat, ['total amount due', 'amount due', 'invoice total', 'total due', 'grand total', 'total amount', 'total'], MONEY),\n    'Currency': (flat.match(/\\b(USD|CAD|EUR|GBP|INR|AUD|SAR|AED|QAR)\\b/) || [''])[0],\n    'PO number': find(flat, ['purchase order(?: no\\\\.?| number)?', 'p\\\\.?o\\\\.?(?: no\\\\.?| number)?', 'your order'], '[A-Z0-9][A-Z0-9-/]{3,}'),\n    'Due date': find(flat, ['due date', 'payment due'], DATE),\n    'Customer': customer.slice(0, 80),\n  };\n  const shown = (v) => (v ? esc(v) : '<span style=\"color:#b91c1c\">not found – please check</span>');\n  const check = numberOnPdf\n    ? '<span style=\"color:#047857\">✔ Invoice number found inside the PDF</span>'\n    : '<span style=\"color:#b91c1c\"><b>⚠ Invoice number NOT found inside the PDF – check the attachment before forwarding</b></span>';\n\n  const html = `<div style=\"font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;max-width:720px\">\n<div style=\"border:2px dashed #b45309;background:#fffbeb;padding:10px 14px;margin-bottom:16px;font-size:13px\">\n<b>DRAFT – not sent to the customer.</b> Check it, then forward to the customer's distribution address.<br>\n${check}<br>File: ${esc(picked.fileName)}${picked.folder ? ` (Box: ${esc(picked.folder)})` : ''}<br>\n<table style=\"margin-top:6px;font-size:13px\">${Object.entries(facts).map(([k, v]) => `<tr><td style=\"padding:1px 10px 1px 0;color:#6b7280\">${k}</td><td>${shown(v)}</td></tr>`).join('')}</table></div>\n<p>Dear Accounts Payable team,</p>\n<p>Please find attached invoice <b>${esc(picked.invoice)}</b>${facts['Invoice date'] ? ` dated ${esc(facts['Invoice date'])}` : ''}${facts.Amount ? ` for ${esc([facts.Currency, facts.Amount].filter(Boolean).join(' '))}` : ''}${facts['PO number'] ? `, referencing PO ${esc(facts['PO number'])}` : ''}.</p>\n<p>Please let us know if you need anything further.</p>\n<p>Kind regards,</p>\n</div>`;\n\n  drafts.push({\n    json: {\n      to,\n      subject: `DRAFT – Invoice ${picked.invoice}${facts.Customer ? ` – ${facts.Customer}` : ''}${numberOnPdf ? '' : ' – CHECK ATTACHMENT'}`,\n      html,\n      invoice: picked.invoice,\n      verified: numberOnPdf,\n    },\n    binary: item.binary, // the invoice PDF, attached to the draft\n  });\n}\nreturn drafts;\n"
+      },
+      "id": "e25fb3a2-c9c2-5b7b-8313-091c61b393c1",
+      "name": "Build Drafts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c33f2305-1c8f-5cf5-a786-a6c8ae768eb6",
+      "name": "Send Draft to Me – paste GEV Send Email here",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summary — what happened, for the Done page\nconst drafts = $('Build Drafts').all().map((i) => i.json);\nconst problems = $('Pick Invoice Files').first().json.problems || [];\nconst unverified = drafts.filter((d) => !d.verified).map((d) => d.invoice);\nconst parts = [`${drafts.length} draft email(s) sent to ${drafts[0]?.to}: ${drafts.map((d) => d.invoice).join(', ')}`];\nif (unverified.length) parts.push(`Check the attachment for: ${unverified.join(', ')} (number not found inside the PDF)`);\nif (problems.length) parts.push(`Not prepared: ${problems.join(' · ')}`);\nreturn [{ json: { message: parts.join('. ') + '.' } }];\n"
+      },
+      "id": "78a4c7cf-d987-577c-9933-c4bcad5f7bd4",
+      "name": "Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "Drafts prepared ✔",
+        "completionMessage": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "63ba4f4e-2ad7-5688-82e6-f7574bb59277",
+      "name": "Done Page",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "width": 600,
+        "height": 330,
+        "content": "## Invoice drafts – setup (one time)\n1. **Search Box** & **Download Invoice** → credential *Box account* (the one that already works)\n2. **Build Drafts** → your address in `SEND_DRAFTS_TO`\n3. Replace **Send Draft to Me – paste GEV Send Email here**: copy *Send an Email* from *Report copy*, paste, connect Build Drafts → it → Summary, delete the placeholder. Set To `{{ $json.to }}`, Subject `{{ $json.subject }}`, Email Format HTML, HTML `{{ $json.html }}`, Attachments `data`\n4. Publish, open the form (Request Invoices → Production URL)\n\nSafe by design: drafts go **only to you**; the invoice number is checked inside each PDF."
+      },
+      "id": "3695dd64-3aa4-5025-b18d-560f9c458510",
+      "name": "Setup Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Request Invoices": {
+      "main": [
+        [
+          {
+            "node": "Split Invoice Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Invoice Numbers": {
+      "main": [
+        [
+          {
+            "node": "Search Box",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Box": {
+      "main": [
+        [
+          {
+            "node": "Pick Invoice Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Invoice Files": {
+      "main": [
+        [
+          {
+            "node": "Download Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Invoice": {
+      "main": [
+        [
+          {
+            "node": "Read Invoice PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Invoice PDF": {
+      "main": [
+        [
+          {
+            "node": "Build Drafts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Drafts": {
+      "main": [
+        [
+          {
+            "node": "Send Draft to Me – paste GEV Send Email here",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Draft to Me – paste GEV Send Email here": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "Done Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": []
+}
