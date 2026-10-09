@@ -265,3 +265,16 @@ Sections (email and dashboard.html, same order):
 AI prompts rewritten to match (commentary: Volume and scope of work · 24-hour TAT · Pending and root causes ·
 Company codes and customers · Names and data to fix · Actions for today; chart designer: highlight charts incl. donut
 and percent metrics).
+
+### Tax and exemption (latest)
+- New standard category **Tax or exemption mismatch** (tax / GST / HST / QST / PST charged or not charged against the
+  PO, exemption claimed, certificate missing). It is its own root cause **Tax / exemption**, acted on by the
+  **Customer certificate / GE tax team**. "Amount, tax or freight mismatch" is now **Amount or freight mismatch**.
+- There are no tax amounts or exemption certificates in the data, so **nobody is marked exempt**. Utilities are not
+  automatically exempt: it depends on the state / province, on the buyer type and on the use (e.g. PA: property used
+  directly in the utility service; FL: generation equipment only), and always needs a valid certificate on file.
+- Section 4 › **Tax and exemption**: open tax issues and where they sit; customers that look like a utility or public
+  body by their name (POWER, ELECTRIC, HYDRO, ENERGY, CO-OP, CITY OF, COUNTY, AUTHORITY, DISTRICT, PUD …) are listed
+  per company code as "possibly exempt by type – check certificate". A name without these words (e.g. Salt River
+  Project) is not flagged – the list is a prompt to check, not a decision.
+- When certificate data becomes available (SAP code, state / province, expiry), it can be added as an optional upload.

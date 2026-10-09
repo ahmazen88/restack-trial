@@ -104,10 +104,12 @@ function analyse(all, opts, RULES) {
   const GROUP_OF = { 'PO not available on portal': 'PO issue on portal', 'PO lines not available on portal': 'PO issue on portal',
     'PO cancelled or closed': 'PO issue on portal', 'PO line and invoice line mismatch': 'Invoice vs PO mismatch',
     'Price and quantity mismatch': 'Invoice vs PO mismatch', 'Quantity mismatch': 'Invoice vs PO mismatch', 'Price mismatch': 'Invoice vs PO mismatch',
-    'Amount, tax or freight mismatch': 'Invoice vs PO mismatch', 'No portal access / portal migration': 'Portal access',
+    'Amount or freight mismatch': 'Invoice vs PO mismatch', 'Amount, tax or freight mismatch': 'Invoice vs PO mismatch', // older name
+    'Tax or exemption mismatch': 'Tax / exemption', 'No portal access / portal migration': 'Portal access',
     'Unable to submit invoice on portal': 'Submission issue', Other: 'Other' };
   const BLOCKERS = [
-    ['Invoice vs PO mismatch', /mismatch|variance|quantity|qty|price|amount|tax|tariff|freight/i],
+    ['Tax / exemption', /\btax|\bexempt|exemption|\bgst\b|\bhst\b|\bqst\b|\bpst\b|\bvat\b/i],
+    ['Invoice vs PO mismatch', /mismatch|variance|quantity|qty|price|amount|tariff|freight/i],
     ['Submission issue', /(unable|cannot|can not|not able)\b.*invoice/i],
     ['PO issue on portal', /\bpo\b|purchase order/i],
     ['Portal access', /access|migrat|coupa|oracle|ariba|login|regist|portal/i],
@@ -117,11 +119,12 @@ function analyse(all, opts, RULES) {
     const t = r.cat || r.why || ''; if (!t) return 'No reason given';
     return (BLOCKERS.find(([, re]) => re.test(t)) || ['Other'])[0];
   };
-  const GROUP_ORDER = ['Portal access', 'Submission issue', 'PO issue on portal', 'Invoice vs PO mismatch', 'Other', 'No reason given'];
+  const GROUP_ORDER = ['Portal access', 'Submission issue', 'Tax / exemption', 'PO issue on portal', 'Invoice vs PO mismatch', 'Other', 'No reason given'];
   // who has to act: portal access and submitting are the team's own job; PO problems need the customer or GE order management
   const FIX_OF = { 'Portal access': 'Ours (distribution team)', 'Submission issue': 'Ours (distribution team)',
+    'Tax / exemption': 'Customer certificate / GE tax team',
     'PO issue on portal': 'Customer / GE order team', 'Invoice vs PO mismatch': 'Customer / GE order team', Other: 'To be classified', 'No reason given': 'To be classified' };
-  const FIX_ORDER = ['Ours (distribution team)', 'Customer / GE order team', 'To be classified'];
+  const FIX_ORDER = ['Ours (distribution team)', 'Customer certificate / GE tax team', 'Customer / GE order team', 'To be classified'];
 
   // every row in the selection (whatever its date), with TAT and pending details worked out once
   const scopedAny = all.filter((r) => (!cc || r.cc === cc) && (!cust || r.c.includes(cust) || r.sap === cust)
@@ -252,6 +255,18 @@ function analyse(all, opts, RULES) {
     owners: groupBy(open.filter((r) => r.due), (r) => r.ub || 'Not recorded').sort((x, y) => y.n - x.n).map((g) => ({ key: g.key, n: g.n })),
   };
 
+  // ----- tax and exemption: no certificate data, so nobody is marked exempt; utilities and public bodies are only flagged to check -----
+  const PUBLIC_BODY = /\b(CITY OF|TOWN OF|VILLAGE OF|COUNTY|STATE OF|PROVINCE|DEPARTMENT OF|DEPT OF|GOVERNMENT|MUNICIPAL|MUNICIPALITY|AUTHORITY|DISTRICT|PUD|TVA|BONNEVILLE|CROWN)\b/;
+  const UTILITY = /\b(UTILITY|UTILITIES|POWER|ELECTRIC|ELECTRICAL|ENERGY|HYDRO|COOPERATIVE|CO OP|COOP|EMC|PUBLIC SERVICE|GRID|TRANSMISSION)\b/;
+  const typeOf = (name) => { const t = String(name || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' '); return PUBLIC_BODY.test(t) ? 'Public body' : UTILITY.test(t) ? 'Utility' : ''; };
+  const taxOpen = open.filter((r) => r.blocker === 'Tax / exemption');
+  const taxCheck = splitBy((r) => (typeOf(mainName(r.ck)) ? `${r.cc || '(none)'}|${r.ck}` : null)).map((g) => {
+    const [code, ck] = g.key.split('|');
+    return { cc: code, label: custLabel(ck), type: typeOf(mainName(ck)), received: g.rec.length, open: g.op.length, taxOpen: g.op.filter((r) => r.blocker === 'Tax / exemption').length };
+  }).sort((x, y) => y.taxOpen - x.taxOpen || y.open - x.open || y.received - x.received || x.label.localeCompare(y.label));
+  const tax = { ...pendingStats(taxOpen), where: whereOf(taxOpen), check: taxCheck,
+    taxOpenNotFlagged: groupBy(taxOpen.filter((r) => !typeOf(r.c)), (r) => `${r.cc || '(none)'}|${r.ck}`).length };
+
   // ----- profit centres -----
   const mainCause = (op) => (op.length ? groupBy(op, (r) => r.blocker).sort((x, y) => y.n - x.n || x.key.localeCompare(y.key))[0].key : '');
   const listOf = (rows, f) => [...new Set(rows.map(f).filter(Boolean))].sort();
@@ -347,7 +362,7 @@ function analyse(all, opts, RULES) {
 
   return {
     label, type, from, to, first, latest, cc, cust, pcSel, plSel, today, areas: AREAS,
-    kpis, byArea, volume, tat, pending, profitCentres, companies, identity, wording, quality,
+    kpis, byArea, volume, tat, pending, tax, profitCentres, companies, identity, wording, quality,
   };
 }
 
@@ -364,7 +379,7 @@ function render(a, web) {
   const AREA_COLOR = { 'LA PRAIRIE (CANADA)': '#2b6cb0', CHARLEROI: '#0f766e', CLEARWATER: '#c2410c', OTHER: '#6b7280', 'NO COMPANY CODE': '#9ca3af' };
   const SLA_SERIES = [{ k: 'met', name: 'Within 24 h', color: '#047857' }, { k: 'missed', name: 'Over 24 h', color: '#b91c1c' },
     { k: 'window', name: 'Still within 24 h (open)', color: '#93c5fd' }, { k: 'unknown', name: 'TAT unknown', color: '#d1d5db' }];
-  const FIX_COLOR = { 'Ours (distribution team)': '#7c3aed', 'Customer / GE order team': '#0f766e', 'To be classified': '#9ca3af' };
+  const FIX_COLOR = { 'Ours (distribution team)': '#7c3aed', 'Customer certificate / GE tax team': '#b45309', 'Customer / GE order team': '#0f766e', 'To be classified': '#9ca3af' };
   const CH_COLOR = ['#2b6cb0', '#0f766e', '#d1d5db'];
   const areaSeries = a.areas.map((ar) => ({ name: ar, color: AREA_COLOR[ar] || '#6b7280' }));
   const hex2 = (x) => Math.round(x).toString(16).padStart(2, '0');
@@ -579,6 +594,16 @@ ${kpi('This period', int(K.received), `previous ${int(K.prevReceived)}`)}
     `<tr>${td(`<b>${esc(g.key)}</b>`)}${td(`<span style="font-size:11px">${esc(g.fix)}</span>`)}${td(int(g.n), 1)}${td(money0(g.v), 1)}${td(int(g.due), 1, g.due ? C.warn : '')}${td(d1(g.avgAge), 1)}${ageCell(g.oldest)}${td(`<span style="font-size:11px">${where(g.where)}</span>`)}</tr>` +
     (g.categories.length > 1 || (g.categories[0] && g.categories[0].key && g.categories[0].key !== g.key) ? g.categories.filter((c) => c.key).map((c) =>
       `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;&nbsp;&nbsp;↳ ${esc(c.key)}</span>`)}${td('')}${td(int(c.n), 1)}${td(money0(c.v), 1)}${td(int(c.due), 1, c.due ? C.warn : '')}${td(d1(c.avgAge), 1)}${ageCell(c.oldest)}${td(`<span style="font-size:11px;color:${C.mute}">${where(c.where)}</span>`)}</tr>`).join('') : ''))));
+  const X = a.tax;
+  out.push(h('Tax and exemption', 'Tax charged or not charged against the PO, or an exemption the customer claims – fixed with a valid exemption certificate or by the GE tax team'));
+  out.push(`<div style="font-size:12px;margin:2px 0 6px">Open with a tax / exemption issue: <b>${int(X.n)}</b> (${money0(X.v)})${X.n ? ` · follow-up due <b>${int(X.due)}</b> · oldest <b>${X.oldest === null ? '–' : int(X.oldest)}</b> days · ${esc(X.where.slice(0, 5).join(' · '))}` : ''}</div>`);
+  out.push(note('No tax amounts or exemption certificates are in the data, so no customer is marked exempt. Utilities and public bodies are often exempt only for some uses (e.g. equipment used directly in the utility service), only in some states / provinces, and only with a valid certificate on file. The customers below are flagged by their name so the certificate can be checked with GE tax.'));
+  const taxMax = web ? 1e9 : 30;
+  out.push(table(['Co. code', 'Customer (SAP code)', 'Type by name', 'Received', 'Open', 'Open – tax issue', 'Check'], X.check.slice(0, taxMax).map((x) =>
+    `<tr>${td(esc(x.cc))}${td(esc(x.label))}${td(esc(x.type))}${td(int(x.received), 1)}${td(int(x.open), 1)}${td(int(x.taxOpen), 1, x.taxOpen ? C.warn : '')}` +
+    `${td(`<span style="font-size:11px;color:${x.taxOpen ? C.warn : C.mute}">${x.taxOpen ? 'Tax issue open – confirm certificate status with GE tax' : 'Possibly exempt by type – check certificate'}</span>`)}</tr>`)));
+  if (X.check.length > taxMax) out.push(note(`${int(X.check.length - taxMax)} more – dashboard.html lists them.`));
+  if (X.taxOpenNotFlagged) out.push(note(`${int(X.taxOpenNotFlagged)} other customer(s) have an open tax issue but are not a utility or public body by name – see the full list below.`));
   if (P.pareto.length > 1) {
     out.push(h('Pareto – which categories hold most open invoices', 'Biggest first; the running share shows how few categories explain most of the backlog'));
     out.push(web ? svgPareto(P.pareto.slice(0, 14)) : hbars(P.pareto.slice(0, 12).map((x) => ({ label: x.key, n: x.n, color: FIX_COLOR[x.fix], note: `${(100 * x.cumPct).toFixed(0)}% cumulative` }))));
@@ -741,6 +766,8 @@ const facts = a.empty ? { empty: true } : (() => {
         value: r2(nv(r.v)), daysPending: r.age, rootCause: r.blocker, category: r.category || null, lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, owner: r.ub || null })),
       followUpDueByOwner: P.owners.map((x) => ({ owner: x.key, followUpDue: x.n })),
     },
+    taxAndExemption: { note: 'no tax amounts or exemption certificates in the data – nobody is marked exempt', openWithTaxIssue: a.tax.n, value: r2(a.tax.v), followUpDue: a.tax.due, where: a.tax.where.slice(0, 5),
+      possiblyExemptByType: a.tax.check.length, toCheck: a.tax.check.slice(0, 6).map((x) => ({ companyCode: x.cc, customer: x.label, type: x.type, open: x.open, openTaxIssue: x.taxOpen })) },
     profitCentres: a.profitCentres.slice(0, 12).map((x) => ({ profitCentre: x.key, companyCodes: x.codes, received: x.received, sharePercent: p1(x.share), within24hPercent: p1(x.slaPct), open: x.open, openValue: r2(x.openV), mainRootCause: x.cause || null })),
     companyCodes: a.companies.map((x) => ({ companyCode: x.key, area: x.area, ...st(x), rootCauses: x.causes.slice(0, 3),
       topCustomers: x.customers.slice(0, 4).map((c) => ({ customer: c.label, received: c.received, sharePercent: p1(c.share), within24hPercent: p1(c.slaPct), open: c.open })) })),

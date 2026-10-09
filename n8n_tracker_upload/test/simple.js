@@ -383,6 +383,29 @@ assert(/1 with no status \(e\.g\. 7009000005\)/.test(dm) && /1 with pending stat
 const oq = JSON.parse(O['Build Report'][0].json.facts).dataGaps.map((x) => x.issue + ':' + x.count).join(', ');
 assert(/No status:1/.test(oq) && /Pending without a reason:1/.test(oq) && /Pending but has an upload date:1/.test(oq) && /To fill in|Pending without a reason/.test(O['Build Report'][0].json.html), 'report data quality lists what to fill in: ' + oq);
 
+// ---------- 5f. tax and exemption: its own root cause; nobody is assumed exempt ----------
+const taxSheet = [
+  ['7004000001', 'CITY OF TALLAHASSEE UTILITIES', 'G367', 'Tax issue', 'Tax charged on invoice but customer says they are tax exempt. Certificate requested 2 Oct'],
+  ['7004000002', 'IDAHO POWER COMPANY', 'G367', 'Tax amount not available on the Portal', ''],
+  ['7004000003', 'HYDRO ONE', '3060', 'Unable to create invoice', 'Portal rejects: HST not on PO'],
+  ['7004000004', 'ACME STEEL', '3485', 'Freight charges missing on PO', ''],
+  ['7004000005', 'ACME STEEL', '3485', 'Unit Price Variance', ''],
+  ['7004000006', 'SALT RIVER PROJECT', 'G367', 'Quantity Mismatch', ''],
+].map(([inv, c, cc, cat, why]) => ({ json: { 'Invoice#': +inv, '$ Value': '100', 'Company Code': cc, Status: 'Pending', 'Uploaded by': 'Abdul', Category: cat, 'Reason for Pending': why, Received_Date: '2026-09-20', Customer: c } }));
+const TX = fullRun(taxSheet, TABLE_ROW, [{ json: {} }]);
+const txs = Object.fromEntries(TX['Rows to Save'].map((i) => [i.json.Invoice, i.json.Standard_Category]));
+assert(txs[7004000001] === 'Tax or exemption mismatch' && txs[7004000002] === 'Tax or exemption mismatch' && txs[7004000003] === 'Tax or exemption mismatch'
+  && txs[7004000004] === 'Amount or freight mismatch' && txs[7004000005] === 'Price mismatch', 'tax / exemption is its own standard category (incl. HST, "unable to create" with a tax reason); freight and price stay separate: ' + JSON.stringify(txs));
+const txf = JSON.parse(TX['Build Report'][0].json.facts);
+const txWho = Object.fromEntries(txf.pending.whoActs.map((x) => [x.who, x.open]));
+assert(txWho['Customer certificate / GE tax team'] === 3 && txf.pending.rootCauses.find((r) => r.rootCause === 'Tax / exemption').whoActs === 'Customer certificate / GE tax team' && txf.taxAndExemption.openWithTaxIssue === 3,
+  'tax issues: own root cause, acted on by the customer certificate / GE tax team: ' + JSON.stringify(txWho));
+const txh = sectionOf(TX['Build Report'][0].json.html, 4);
+if (process.env.TAX_OUT) fs.writeFileSync(process.env.TAX_OUT, '<html><body style="margin:0;padding:16px">' + TX['Build Report'][0].json.html.replace('<!--charts-->', '') + '</body></html>');
+assert(/Tax and exemption/.test(txh) && /no customer is marked exempt/.test(txh) && /CITY OF TALLAHASSEE UTILITIES \(no SAP code\)<\/td><td[^>]*>Public body/.test(txh) && /IDAHO POWER COMPANY \(no SAP code\)<\/td><td[^>]*>Utility/.test(txh)
+  && /HYDRO ONE/.test(txh) && !/ACME STEEL \(no SAP code\)<\/td><td[^>]*>(Utility|Public body)/.test(txh) && !/\bExempt\b/.test(txh.replace(/exempt by type|exemption/gi, '')),
+  'utilities and public bodies are flagged by name to check their certificate – never marked exempt');
+
 // ---------- 5e. customer names and SAP codes ----------
 const idRows = [
   ['ACME POWER INC', '111', '3060'], ['ACME POWER INC.', '111', '3060'], ['Acme Power, Inc', '111', '3060'],
