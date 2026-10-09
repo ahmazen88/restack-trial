@@ -61,7 +61,7 @@ const makeSheet = (count) => {
 const TABLE_ROW = { id: 1, Invoice: 1, Value: '1', Customer: 'X', Company_Code: '1', Project_Manager: 'X',
   Name_the_PortalEmail_ID: 'X', Received_Date: '2026-01-01', Allocated_Date: null, Invoice_Date: null,
   Sales_Org: null, SAP_Customer_Code: null, Profit_Center: null, Product_Line: null,
-  Status: null, Upload_Date: null, Tracker_TAT: null, Uploaded_By: null, Pending_Category: null, Pending_Reason: null, Standard_Category: null };
+  Status: null, Upload_Date: null, Tracker_TAT: null, Uploaded_By: null, Pending_Category: null, Pending_Reason: null, Standard_Category: null, Business_Type: null };
 const withMail = code('Build Report').replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['me@example.com'];")
   .replace('const TODAY = new Date().toISOString().slice(0, 10);', "const TODAY = '2026-10-08';");
 const NOFILE = [{ json: { error: 'This operation expects the node\'s input data to contain a binary file' } }];
@@ -129,27 +129,31 @@ const aiPart = jh.slice(jh.indexOf('Check before acting.</div>') + 26, jh.indexO
 assert(aiPart === '<h3>Summary</h3><p>Fifty invoices arrived, all within normal range for the period.</p>\n', 'AI answer: code fences, scripts and attributes removed');
 
 // 3e. AI chart designer
-const chartAi = [{ json: { text: '```json\n[{"title":"Value by customer","dataset":"topCustomers","metric":"value","chart":"bar","why":"One customer carries most of the value"},' +
-  '{"title":"Profit centres","dataset":"profitCentres","metric":"value","chart":"bar"},' +
-  '{"title":"Monthly trend","dataset":"monthly","metric":"invoices","chart":"line","why":"Volume rose 25% in the last month"},' +
+const chartAi = [{ json: { text: '```json\n[{"title":"Weekly incoming","dataset":"weeklyIncoming","metric":"invoices","chart":"line","why":"Volume rose 25% in the last week"},' +
+  '{"title":"Work by area","dataset":"distributedByArea","metric":"invoices","chart":"bar","why":"La Prairie distributes most of the invoices"},' +
+  '{"title":"Open by area","dataset":"openByArea","metric":"invoices","chart":"bar"},' +
   '{"title":"Made up","dataset":"secretNumbers","metric":"value","chart":"bar"},' +
-  '{"title":"Line on a split","dataset":"companyCodes","metric":"invoices","chart":"line"}]\n```' } }];
-const C1 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }], { chartsAi: chartAi });
+  '{"title":"Line on a split","dataset":"distributedByArea","metric":"invoices","chart":"line"}]\n```' } }];
+const chartSheet = makeSheet(400).map((x, i) => ({ json: { ...x.json, Status: i % 5 ? 'Completed' : 'Pending', 'Invoice upload Date': i % 5 ? x.json.Invoice_Date : '',
+  Category: i % 2 ? 'Quantity Mismatch' : 'PO unavailable on portal', 'Reason for Pending': i % 5 ? '' : 'Email sent on 1 Oct' } }));
+const C1 = fullRun(chartSheet, TABLE_ROW, [{ json: {} }], { chartsAi: chartAi });
 const c1 = C1['Add AI Charts'][0];
-assert(c1.json.aiCharts === true && c1.json.chartsUsed.join() === 'topCustomers/value/bar,monthly/invoices/line,companyCodes/invoices/bar',
-  'AI chart choices used; unknown dataset and a split with only one entry dropped; "line" on a split drawn as bar: ' + c1.json.chartsUsed.join(', '));
-assert(/One customer carries most of the value/.test(c1.json.html) && !/25%/.test(c1.json.html), 'AI "why" shown, but a "why" containing numbers is dropped');
+assert(c1.json.aiCharts === true && c1.json.chartsUsed.join() === 'weeklyIncoming/invoices/line,distributedByArea/invoices/bar,openByArea/invoices/bar,distributedByArea/invoices/bar',
+  'AI chart choices used (max 4); unknown dataset dropped; "line" on a split drawn as bar: ' + c1.json.chartsUsed.join(', '));
+assert(/La Prairie distributes most of the invoices/.test(c1.json.html) && !/25%/.test(c1.json.html), 'AI "why" shown, but a "why" containing numbers is dropped');
 const facts1 = JSON.parse(C1['Build Report'][0].json.facts);
-const m0 = facts1.monthly.at(-1);
-assert(c1.json.html.includes(m0.invoices.toLocaleString('en-US')), 'chart figures come from the report facts');
+const m0 = facts1.charts.weeklyIncoming.at(-2);
+assert(c1.json.html.includes(m0.received.toLocaleString('en-US')), 'chart figures come from the report facts');
 const dash1 = Buffer.from(c1.binary.dashboard.data, 'base64').toString();
 assert(!c1.json.html.includes('<!--charts-->') && !dash1.includes('<!--charts-->') && /<svg/.test(dash1) && /<polyline/.test(dash1),
   'charts placed in the email (tables) and in dashboard.html (SVG, line chart for the trend)');
 assert(c1.json.to === 'me@example.com' && c1.json.subject && c1.binary.dashboard.fileName === 'dashboard.html', 'email item still has to, subject and attachment');
-const C2 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }], { chartsAi: [{ json: { text: 'Sure! Here are some ideas for charts.' } }] });
+const C0 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }], { chartsAi: [{ json: { text: '[{"title":"Open by area","dataset":"openByArea","metric":"invoices","chart":"bar"}]' } }] });
+assert(C0['Add AI Charts'][0].json.aiCharts === false, 'a chart with only zeros (nothing open) is not drawn');
+const C2 = fullRun(chartSheet, TABLE_ROW, [{ json: {} }], { chartsAi: [{ json: { text: 'Sure! Here are some ideas for charts.' } }] });
 assert(C2['Add AI Charts'][0].json.aiCharts === false && C2['Add AI Charts'][0].json.chartsUsed.length >= 2 && /Standard charts/.test(C2['Add AI Charts'][0].json.html),
   'unusable AI answer → standard charts: ' + C2['Add AI Charts'][0].json.chartsUsed.join(', '));
-const C3 = fullRun(makeSheet(400), TABLE_ROW, [{ json: {} }]);
+const C3 = fullRun(chartSheet, TABLE_ROW, [{ json: {} }]);
 assert(C3['Add AI Charts'][0].json.aiCharts === false && /Standard charts/.test(C3['Add AI Charts'][0].json.html), 'AI chart step failed → standard charts, email still goes out');
 if (process.env.CHART_OUT) { fs.writeFileSync(process.env.CHART_OUT + '_email.html', c1.json.html); fs.writeFileSync(process.env.CHART_OUT + '_dash.html', dash1); }
 
@@ -216,8 +220,9 @@ assert(by[9001400002].Profit_Center === 'GPJ777' && by[9001400003].SAP_Customer_
   'cleaned before matching: leading zeros, spaces, commas, "9001400003.0"; profit centre tidied to GPJ777; empty stays empty');
 assert(by[9001400004].SAP_Customer_Code === '45454' && by[9001400004].Profit_Center === 'GPJ123' && by[9001400004].Product_Line === 'GIS', 'invoice no longer in the Tableau file keeps the codes found on an earlier upload');
 assert(/SAP customer code found for 6 of 6 invoices · profit centre found for 4 of 6/.test(L['Summarise Upload'][0].json.message), 'Done page: ' + L['Summarise Upload'][0].json.message.match(/SAP customer code.*?\)/)[0]);
-assert(by[9001400001].Product_Line === 'PTI' && by[9001400002].Product_Line === 'AIS' && !('Business_Type' in by[9001400001]),
-  'product line ("Product Line" chosen over "Product") from Tableau; no business type');
+assert(by[9001400001].Product_Line === 'PTI' && by[9001400002].Product_Line === 'AIS' && by[9001400001].Business_Type === 'MANUFACTURING' && by[9001400002].Business_Type === null,
+  'product line ("Product Line" chosen over "Product") and activity ("Nature of Activities PL") from Tableau');
+assert(by[7001300001].Business_Type === 'MANUFACTURING' && by[7001300002].Business_Type === 'MANUFACTURING', 'Clearwater (G367): activity Manufacturing');
 assert(L['Rows to Save'].every((i) => !('_lookupNotes' in i.json)), 'helper notes are not saved to the Data Table');
 const doneMsg = L['Summarise Upload'][0].json.message;
 assert(/Columns used – Read ZSD Log: 1 matching rows \(invoice column "Billing Doc\.", customer code "Customer"\)/.test(doneMsg) && /product line "Product Line"/.test(doneMsg),
@@ -228,7 +233,7 @@ assert(/Breakdown: Entity → Company code → Sales org → Profit centre → P
   'one breakdown tree: entity → company code → sales org → profit centre → product line, single groups merged on one line');
 assert(!/Profit centre split|Product line split|Business type|Company code split/.test(lh), 'no separate, repeated split tables any more');
 const lf = JSON.parse(L['Build Report'][0].json.facts);
-assert(lf.profitCentres.some((p) => p.profitCentre === 'GPJ908') && lf.productLines.some((p) => p.productLine === 'PQP'), 'AI facts include profit centres and product lines');
+assert(/GPJ908/.test(JSON.stringify(lf.breakdown)) && /PQP/.test(JSON.stringify(lf.breakdown)) && lf.focus === 'invoice distribution', 'AI facts: distribution focus, breakdown includes profit centres and product lines');
 const dash = Buffer.from(L['Build Report'][0].binary.dashboard.data, 'base64').toString();
 if (process.env.DASH_OUT) fs.writeFileSync(process.env.DASH_OUT, dash);
 assert(/id="pc"/.test(dash) && /<option>GPJ908<\/option>/.test(dash) && /id="pl"/.test(dash), 'dashboard has profit centre and product line filters');
@@ -282,14 +287,16 @@ const P = fullRun(pend, TABLE_ROW, [{ json: {} }]);
 const saved = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json]));
 assert(saved[7001238182].Status === 'Pending' && saved[7001238182].Upload_Date === null && saved[7001238182].Tracker_TAT === null && saved[7001238182].Uploaded_By === 'Tushar'
   && saved[7001238182].Pending_Category === 'PO Lines not available on Portal' && /Romero Walter/.test(saved[7001238182].Pending_Reason), 'tracker Status / upload date / TAT / uploaded by / category / reason saved ("NA" → empty)');
-const pf = JSON.parse(P['Build Report'][0].json.facts).pending;
+const pendOf = (f) => ({ open: f.totals.open, countedTo: f.daysCountedTo, actNow: f.oldestOpen, followUpDue: f.totals.followUpDue,
+  blockers: f.rootCauses.map((b) => ({ blocker: b.rootCause, invoices: b.open })), completedAvgTatDays: f.totals.avgTurnaroundDaysCompleted, pastDue: f.totals.pastDue });
+const pf = pendOf(JSON.parse(P['Build Report'][0].json.facts));
 assert(pf.open === 5 && pf.countedTo === '2026-10-08', '5 open items (Completed / Uploaded are not pending), counted to today');
 const act = Object.fromEntries(pf.actNow.map((x) => [x.invoice, x]));
 assert(act['7001238182'].daysPending === 110 && act['7001238182'].lastAction === '2026-07-03' && act['7001238182'].followUps === 2 && act['7001238182'].daysSinceLastAction === 97,
   'dates read from the reason: 23 June + 3 July → 2 follow-ups, last action 3 July, 97 days ago; 110 days pending');
 assert(act['7001265146'].followUps === 3 && act['7001265146'].lastAction === '2026-10-06' && act['7001265146'].daysSinceLastAction === 2, '"10 Sep", "19th september", "6 Oct" all read; followed up 2 days ago');
 assert(act['7001247206'].lastAction === null && act['7001247206'].followUps === 0, 'no date in the reason → no follow-up logged');
-assert(!('pastDue' in pf) && pf.followUpDue === 5, 'no "past due" yet (needs payment terms); follow-up due (nothing logged for 2+ days): 5');
+assert(pf.pastDue === undefined && pf.followUpDue === 5, 'no "past due" yet (needs payment terms); follow-up due (nothing logged for 2+ days): 5');
 const bl = Object.fromEntries(pf.blockers.map((b) => [b.blocker, b.invoices]));
 assert(bl['PO issue on portal'] === 3 && bl['Invoice vs PO mismatch'] === 1 && bl['Portal access'] === 1, 'blocker groups: ' + JSON.stringify(bl));
 const sc = Object.fromEntries(P['Rows to Save'].map((i) => [i.json.Invoice, i.json.Standard_Category]));
@@ -300,8 +307,14 @@ assert(sc[7001247206] === 'PO lines not available on portal', '"Unable to create
 assert(pf.actNow.map((x) => x.invoice).join() === '7001238182,7001247206,7001156057,7001264821,7001265146', 'act-now: follow-up due first, then oldest: ' + pf.actNow.map((x) => x.invoice).join(', '));
 assert(pf.completedAvgTatDays === 3.5, 'completed TAT: 4 days (received → uploaded) and 3 days (tracker TAT) → average 3.5');
 const ph = P['Build Report'][0].json.html;
-assert(!/Past due/.test(ph) && /Pending invoices &amp; follow-ups \(5 open\)/.test(ph) && /Act now/.test(ph) && /Over 90 days/.test(ph) && /Owner \(uploaded by\)/.test(ph) && /Romero Walter/.test(ph),
-  'report has the pending section: KPIs, ageing, blockers, owners, act-now list with reasons');
+assert(!/Past due/.test(ph) && /Pending invoices – full list \(5\)/.test(ph) && /Root causes holding invoices/.test(ph) && /Distribution status by area and company code/.test(ph)
+  && /Ageing of open invoices by area/.test(ph) && /Over 90 days/.test(ph) && /Romero Walter/.test(ph) && !/Act now|Customers to look out for|Customer details/.test(ph),
+  'report: distribution status, root causes, ageing by area, full pending list with reasons; no top-15 or customer tables');
+const listPart = ph.slice(ph.indexOf('Pending invoices – full list'), ph.indexOf('Weekly incoming by area'));
+const listOrder = ['7001238182', '7001247206', '7001265146', '7001264821', '7001156057'].map((x) => listPart.indexOf(x));
+assert(listOrder.every((x, i) => x > 0 && (i === 0 || x > listOrder[i - 1])), 'full list sorted by root cause (PO issue › PO lines, PO missing; mismatch; portal access), oldest first within a category');
+assert(/CLEARWATER \/ G367/.test(listPart) && /Days since last action/.test(listPart) && /Follow-ups/.test(listPart) && /Profit centre/.test(listPart) && /Activity/.test(listPart),
+  'each pending invoice shows area / company code, profit centre, product line, activity, days pending, root cause, last action, days since, follow-ups, owner');
 assert(P['Rows to Save'].every((i) => i.json.Invoice !== 7001100001 || i.json.Status === 'Completed'), 'completed rows saved too');
 const yr = fullRun([
   { json: { 'Invoice#': 7002000001, '$ Value': '10', 'Company Code': '3060', Status: 'Pending', 'Uploaded by': 'Abdul', Category: 'Quantity Mismatch', Customer: 'OLD',
@@ -310,7 +323,7 @@ const yr = fullRun([
     'Reason for Pending': 'Email sent on 5 Oct' } },
   { json: { 'Invoice#': 7002000003, '$ Value': '30', 'Company Code': '3060', Status: 'Completed', Customer: 'X', Received_Date: '2026-10-01', 'Invoice upload Date': '2026-10-02' } },
 ], TABLE_ROW, [{ json: {} }]);
-const yp = JSON.parse(yr['Build Report'][0].json.facts).pending;
+const yp = pendOf(JSON.parse(yr['Build Report'][0].json.facts));
 const y1 = yp.actNow.find((x) => x.invoice === '7002000001');
 assert(y1 && y1.followUps === 4 && y1.lastAction === '2026-06-20' && y1.daysPending === 494,
   'an item open since 2025: 23 June / 3 July read as 2025, 3 Feb and 20 June as 2026 (dates read in order)');
@@ -349,7 +362,7 @@ if (process.env.STD_OUT) fs.writeFileSync(process.env.STD_OUT, fullRun(pend.conc
 assert(/1 with no status \(e\.g\. 7009000005\)/.test(dm) && /1 with pending status but no reason \(e\.g\. 7009000004\)/.test(dm) && /1 with pending status but no owner/.test(dm)
   && /1 with pending status but an upload date \(e\.g\. 7009000007\)/.test(dm) && /1 with completed status but no upload date or TAT \(e\.g\. 7009000006\)/.test(dm),
   'Done page flags blanks and contradictions: ' + dm.match(/\d+ with no status.*TAT[^·]*/)[0]);
-const oq = JSON.parse(O['Build Report'][0].json.facts).dataQuality.toFillIn.map((x) => x.issue + ':' + x.count).join(', ');
+const oq = JSON.parse(O['Build Report'][0].json.facts).dataGaps.map((x) => x.issue + ':' + x.count).join(', ');
 assert(/No status:1/.test(oq) && /Pending without a reason:1/.test(oq) && /Pending but has an upload date:1/.test(oq) && /To fill in|Pending without a reason/.test(O['Build Report'][0].json.html), 'report data quality lists what to fill in: ' + oq);
 
 // ---------- 5. Stops BEFORE emptying the table when something is wrong ----------

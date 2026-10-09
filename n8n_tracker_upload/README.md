@@ -219,3 +219,20 @@ New tracker columns read: Status, Invoice upload Date, TAT, Uploaded by, Categor
   no answer → Other). Each new wording is asked once and then remembered.
 - **Fill-in flags** (Done page and report): no status; pending without a reason; pending without a category; pending
   without an owner; pending but has an upload date; completed without upload date or TAT.
+
+### Report focus: invoice distribution (latest)
+The report is about distributing invoices, not about customers' business. Sections:
+1. KPIs: received, distributed, distribution rate, open now (value), follow-up due, avg days pending, avg TAT.
+2. Distribution status by area (La Prairie 3060/3487, Charleroi 3485, Clearwater G367) › company code.
+3. Root causes holding invoices: root cause group › standard category, with where they sit (area / company code).
+4. Ageing of open invoices by area.
+5. Pending invoices – full list (all open, up to 300 in the email; grouped by root cause, oldest first) with area /
+   company code, profit centre, product line, activity, customer, value, days pending, category, last action,
+   days since last action, follow-ups, owner, and the tracker reason.
+6. Weekly incoming by area (last 8 weeks of data) and workload heatmap by area.
+7. Breakdown company code → sales org → profit centre → product line; data quality / fill-in flags; upload result.
+Removed: customers to look out for, customer details, channels / project managers, forecast, weekdays, monthly table.
+Activity (`Business_Type`) is back: Tableau "Nature of Activities PL"; Clearwater = Manufacturing.
+Both AI prompts are rewritten for distribution (commentary: Distribution status · What is holding invoices ·
+Oldest and stalled items · Actions for today; charts: open by area / company code / profit centre / product line,
+root causes, ageing, weekly incoming, distributed by area).

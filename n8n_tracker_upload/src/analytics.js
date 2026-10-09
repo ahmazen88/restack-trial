@@ -308,8 +308,48 @@ function analyse(all, opts, RULES) {
     allocatedBeforeReceived: cur.filter((r) => r.rd && r.ad && r.ad < r.rd).length,
   };
 
+  // ----- invoice distribution view: by area (La Prairie / Charleroi / Clearwater) and company code -----
+  const areaOf = (r) => ENTITY[r.cc] || (r.cc ? 'OTHER' : 'NO COMPANY CODE');
+  const AREAS = [...new Set([...Object.values(ENTITY), ...scopedAny.map(areaOf)])].filter((x) => scopedAny.some((r) => areaOf(r) === x));
+  const isDone = (r) => r.st === 'Completed';
+  const doneInPeriod = scopedAny.filter((r) => isDone(r) && (r.ud || r.d) >= from && (r.ud || r.d) <= to);
+  const distRow = (key, keep) => {
+    const rec = cur.filter(keep); const op = open.filter(keep); const dn = doneInPeriod.filter(keep);
+    return { key, received: rec.length, receivedV: sum(rec, (r) => num(r.v)), distributed: dn.length, receivedDone: rec.filter(isDone).length,
+      open: op.length, openV: sum(op, (r) => num(r.v)), due: op.filter((r) => r.due).length, avgAge: avgOf(op, (r) => r.age), oldest: Math.max(0, ...op.map((r) => r.age || 0)) };
+  };
+  const byArea = AREAS.map((ar) => ({ ...distRow(ar, (r) => areaOf(r) === ar),
+    codes: [...new Set(scopedAny.filter((r) => areaOf(r) === ar).map((r) => r.cc || ''))].sort().map((c) => distRow(c || '(none)', (r) => areaOf(r) === ar && (r.cc || '') === c)) }));
+  const kpis = { ...distRow('All', () => true), avgTatDone: pending.completed.avg };
+  const whereOf = (rows) => groupBy(rows, (r) => `${areaOf(r)} ${r.cc || ''}`.trim()).sort((x, y) => y.n - x.n).map((g) => `${g.key}: ${g.n}`);
+  const rootCauses = pending.blockers.map((b) => {
+    const rows = open.filter((r) => r.blocker === b.key);
+    return { ...b, where: whereOf(rows),
+      categories: groupBy(rows, (r) => r.category || '').sort((x, y) => y.n - x.n).map((g) => ({ key: g.key, n: g.n, v: g.v, due: g.rows.filter((r) => r.due).length,
+        avgAge: avgOf(g.rows, (r) => r.age), oldest: Math.max(0, ...g.rows.map((r) => r.age || 0)), where: whereOf(g.rows) })) };
+  });
+  const ageingByArea = pending.ageing.map((b, i) => {
+    const [lo, hi] = [[0, 7], [8, 15], [16, 30], [31, 60], [61, 90], [91, 1e9]][i];
+    const inB = (r) => r.age !== null && r.age >= lo && r.age <= hi;
+    return { key: b.key, n: b.n, v: b.v, areas: AREAS.map((ar) => open.filter((r) => inB(r) && areaOf(r) === ar).length) };
+  });
+  const noAge = open.filter((r) => r.age === null).length;
+  // the last 8 weeks up to the latest data (never empty future weeks)
+  const lastWeek = weekStart(to < latest ? to : latest);
+  const weeks8 = Array.from({ length: 8 }, (_, k) => addDays(lastWeek, -7 * (7 - k)));
+  const weeklyByArea = weeks8.map((w) => { const rows = scoped.filter((r) => r.d >= w && r.d <= addDays(w, 6));
+    return { key: w, n: rows.length, v: sum(rows, (r) => num(r.v)), areas: AREAS.map((ar) => rows.filter((r) => areaOf(r) === ar).length) }; });
+  const heatByArea = AREAS.filter((ar) => ar !== 'NO COMPANY CODE').map((ar) => ({ area: ar, months: monthsBack.slice(-6).map((m) => ({ key: m.slice(0, 7),
+    cells: Array.from({ length: 31 }, (_, i) => scoped.filter((r) => areaOf(r) === ar && r.d.slice(0, 7) === m.slice(0, 7) && +r.d.slice(8, 10) === i + 1).length) })) }));
+  const GROUP_ORDER = ['PO issue on portal', 'Invoice vs PO mismatch', 'Portal access', 'Submission issue', 'Other', 'No reason given'];
+  const pendingList = [...open].map((r) => ({ ...r, area: areaOf(r) })).sort((x, y) => {
+    const gx = GROUP_ORDER.indexOf(x.blocker); const gy = GROUP_ORDER.indexOf(y.blocker);
+    return ((gx < 0 ? 99 : gx) - (gy < 0 ? 99 : gy)) || String(x.category).localeCompare(String(y.category)) || ((y.age ?? -1) - (x.age ?? -1)) || (num(y.v) - num(x.v));
+  });
+  const distribution = { areas: AREAS, kpis, byArea, rootCauses, ageingByArea, noAge, weeklyByArea, heatByArea, pendingList };
+
   return {
-    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, tree, structure, pending, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
+    label, type, from, to, first, latest, cc, cust, pcSel, plSel, profitCentres, productLines, tree, structure, pending, distribution, total, prevTotal, avgTat: avgTat(cur), baseN: base.length,
     nChange: change(total.n, prevTotal.n), vChange: change(total.v, prevTotal.v),
     watch, monthly, weekly, heat, weekday, forecast, companies, customers, channels, managers, quality,
   };
@@ -352,59 +392,57 @@ function render(a) {
   });
 
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:${C.ink};max-width:900px">
-<h2 style="margin:0;color:${C.head}">Production Tracker – ${esc(a.type)} report</h2>
+<h2 style="margin:0;color:${C.head}">Invoice distribution – ${esc(a.type)} report</h2>
 <div style="color:${C.mute};font-size:12px">${esc(a.label)} · ${esc(a.from)} to ${esc(a.to)} · ${esc(scope)} · data from ${esc(a.first)} to ${esc(a.latest)}</div>
-<table cellspacing="0" style="border-collapse:collapse;margin:14px 0"><tr>
-${kpi('Incoming invoices', int(a.total.n), `${pct(a.nChange)} vs previous period`)}${kpi('Value', money(a.total.v), `${pct(a.vChange)} vs previous period`)}
-${kpi('Avg received → allocated', a.avgTat === null ? '–' : `${a.avgTat.toFixed(1)} days`, '')}${kpi('Next week (forecast)', int(f.weekN.avg), `range ${int(f.weekN.lo)}–${int(f.weekN.hi)}`)}
-</tr></table>
-${h(`Customers to look out for (${a.watch.length})`, `Fixed rules: spike / fall vs the previous ${a.baseN} period(s) with full data, value share, turnaround, portal use, data issues`)}
-${table(['Customer', 'Invoices', 'Value', 'Why'], a.watch.slice(0, 20).map((w) => `<tr>${td(esc(w.customer))}${td(int(w.n), 1)}${td(money(w.v), 1)}${td(w.reasons.map(([k, d]) => `<b style="color:${flagColor[k] || C.ink}">${esc(k)}</b> – ${esc(d)}`).join('<br>'))}</tr>`))}
-${(() => { const P = a.pending; const T = P.total; if (!T.n && !P.completed.n) return '';
+${(() => {
+  const D = a.distribution; const K = D.kpis; const P = a.pending;
+  const d1 = (x) => (x === null || x === undefined ? '–' : x.toFixed(1));
   const nv = (v) => parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0;
-  const maxA = Math.max(1, ...P.ageing.map((b) => b.n)); const d1 = (x) => (x === null || x === undefined ? '–' : x.toFixed(1));
-  const statRow = (k, x) => `<tr>${td(`<b>${esc(k)}</b>`)}${td(int(x.n), 1)}${td(money(x.v), 1)}${td(int(x.due), 1, x.due ? C.warn : '')}${td(d1(x.avgAge), 1)}${td(int(x.oldest), 1)}</tr>`;
-  const heads = ['Invoices', 'Value', 'Follow-up due', 'Avg days', 'Oldest'];
-  return `${h(`Pending invoices & follow-ups (${int(T.n)} open)`, `All open items in this selection; days pending = received date to ${P.today}; follow-up due = nothing logged for ${P.rules.followUpDays}+ days (dates in "Reason for Pending")`)}
-<table cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px"><tr>
-${kpi('Open', int(T.n), money(T.v))}${kpi('Follow-up due', int(T.due), 'nothing logged recently')}${kpi('Avg days pending', d1(T.avgAge), `oldest ${int(T.oldest)} days`)}${kpi('Completed: avg TAT', P.completed.n ? `${d1(P.completed.avg)} days` : '–', P.completed.n ? `median ${d1(P.completed.median)} · ${int(P.completed.n)} invoices` : '')}
+  const rate = (x) => (x.received ? `${(100 * x.receivedDone / x.received).toFixed(0)}%` : '–');
+  const ageCell = (n) => td(n === null || n === undefined ? '–' : int(n), 1, n > 60 ? C.bad : n > 30 ? C.warn : '');
+  const distHead = ['Received', 'Distributed', 'Distribution rate', 'Open now', 'Open value', 'Follow-up due', 'Avg days pending', 'Oldest'];
+  const distRow = (label, x, sub) => `<tr>${td(sub ? `<span style="color:${C.mute}">&nbsp;&nbsp;&nbsp;&nbsp;↳ ${esc(label)}</span>` : `<b>${esc(label)}</b>`)}${td(int(x.received), 1)}${td(int(x.distributed), 1)}${td(rate(x), 1)}` +
+    `${td(int(x.open), 1)}${td(money(x.openV), 1)}${td(int(x.due), 1, x.due ? C.warn : '')}${td(d1(x.avgAge), 1)}${ageCell(x.oldest)}</tr>`;
+  const cleanWhere = (w) => esc(w.slice(0, 4).join(' · ') + (w.length > 4 ? ' …' : ''));
+  const listMax = 300;
+  const nw = (t) => `<span style="white-space:nowrap">${esc(t)}</span>`; // keeps dates, values and codes on one line
+  const wide = (t) => t.replace('max-width:860px', 'max-width:1180px'); // the full list gets more room
+  return `<table cellspacing="0" style="border-collapse:collapse;margin:14px 0"><tr>
+${kpi('Received', int(K.received), money(K.receivedV))}${kpi('Distributed', int(K.distributed), 'uploaded / sent in this period')}${kpi('Distribution rate', rate(K), 'of invoices received this period')}
+${kpi('Open now', int(K.open), money(K.openV))}${kpi('Follow-up due', int(K.due), `nothing logged ${P.rules.followUpDays}+ days`)}${kpi('Avg days pending', d1(K.avgAge), `oldest ${int(K.oldest)} days`)}${kpi('Avg TAT (completed)', K.avgTatDone === null ? '–' : `${d1(K.avgTatDone)} days`, 'received → uploaded')}
 </tr></table>
-${table(['Ageing', 'Invoices', 'Value', ''], P.ageing.map((b, i) => `<tr>${td(esc(b.key))}${td(int(b.n), 1)}${td(money(b.v), 1)}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:40%">${bar(b.n, maxA, i >= 4 ? C.bad : i >= 3 ? C.warn : C.bar)}</td></tr>`))}
-<div style="height:10px"></div>
-${table(['Blocker group › category', ...heads], P.blockers.map((x) => statRow(x.key, x) + (x.categories.length > 1 || (x.categories[0] && x.categories[0].key !== x.key)
-  ? x.categories.map((c) => `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;&nbsp;&nbsp;↳ ${esc(c.key)}</span>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td('')}${td('')}${td('')}</tr>`).join('') : '')))}
-<div style="height:10px"></div>
-${table(['Owner (uploaded by)', ...heads], P.owners.map((x) => statRow(x.key, x)))}
-<div style="height:10px"></div>
-${table(['Company code', ...heads], P.companies.map((x) => statRow(x.key, x)))}
-${h('Act now (top 15)', 'Follow-up due first, then the oldest, then the highest value')}
-${table(['Invoice', 'Customer', 'Co. code', 'Value', 'Days', 'Category', 'Last action', 'Since', 'F-ups'], P.actNow.map((r) => `<tr>${td(esc(r.i))}${td(esc(r.c))}${td(esc(r.cc))}${td(money(nv(r.v)), 1)}${td(r.age === null ? '–' : int(r.age), 1, r.age > 60 ? C.bad : r.age > 30 ? C.warn : '')}${td(esc(r.category || r.blocker))}${td(esc(r.last || 'none logged'))}${td(r.sinceLast === null ? '–' : int(r.sinceLast), 1, r.due ? C.warn : '')}${td(int(r.followUps), 1)}</tr>` +
-  (r.why ? `<tr><td colspan="9" style="padding:0 10px 6px;border-bottom:1px solid ${C.line};font-size:11px;color:${C.mute}">${esc(String(r.why).slice(0, 220))}${String(r.why).length > 220 ? ' …' : ''}</td></tr>` : '')))}
-${P.noDateInReason ? `<div style="font-size:11px;color:${C.mute};margin-top:4px">${int(P.noDateInReason)} open item(s) have no date in "Reason for Pending", so their follow-up timing is counted from the received date.</div>` : ''}
-${P.completed.owners.length ? `<div style="height:10px"></div>${table(['Completed in period – owner', 'Invoices', 'Avg TAT (days)'], P.completed.owners.map((o) => `<tr>${td(esc(o.key))}${td(int(o.n), 1)}${td(d1(o.avg), 1)}</tr>`))}` : ''}`; })()}
-${h('Incoming volume by month', 'Invoices received per month, with change from the month before')}
-${table(['Month', 'Invoices', 'Value', 'Change', ''], a.monthly.map((m, i) => { const c = i ? (a.monthly[i - 1].n ? (m.n - a.monthly[i - 1].n) / a.monthly[i - 1].n : null) : null; return `<tr>${td(m.key)}${td(int(m.n), 1)}${td(money(m.v), 1)}${td(pct(c), 1, changeColor(c))}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:35%">${bar(m.n, maxM)}</td></tr>`; }))}
-${h('Weekly details (last 8 weeks)', 'Weeks start on Monday')}
-${table(['Week starting', 'Invoices', 'Value', ''], a.weekly.map((w) => `<tr>${td(w.key)}${td(int(w.n), 1)}${td(money(w.v), 1)}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:40%">${bar(w.n, maxW)}</td></tr>`))}
-${h('Workload heatmap – day of month', 'Darker = more invoices received that day (last 6 months)')}
-<table cellspacing="1" cellpadding="0" style="font-size:10px"><tr><td style="padding:2px 6px"></td>${Array.from({ length: 31 }, (_, i) => `<td style="text-align:center;color:${C.mute};width:20px">${i + 1}</td>`).join('')}</tr>
-${a.heat.map((r) => `<tr><td style="padding:2px 6px;color:${C.mute};white-space:nowrap">${r.key}</td>${r.cells.map((n) => `<td bgcolor="${shade(n)}" style="text-align:center;height:20px;color:${n / maxH > 0.55 ? '#fff' : C.ink}">${n || ''}</td>`).join('')}</tr>`).join('')}</table>
-${h('Busiest weekdays', 'Average invoices received per weekday (last 12 weeks)')}
-${table(['Weekday', 'Avg invoices', ''], a.weekday.map((w) => `<tr>${td(w.key)}${td(w.n.toFixed(1), 1)}<td style="padding:5px 10px;border-bottom:1px solid ${C.line};width:50%">${bar(w.n, maxWd)}</td></tr>`))}
-${h('Forecast', 'Average of recent complete periods; range = lowest–highest of those periods')}
-${table(['Period', 'Expected invoices', 'Range', 'Expected value'], [
-    ...f.nextWeeks.map((w) => `<tr>${td(`Week of ${w}`)}${td(int(f.weekN.avg), 1)}${td(`${int(f.weekN.lo)}–${int(f.weekN.hi)}`, 1)}${td(money(f.weekV.avg), 1)}</tr>`),
-    `<tr>${td(`<b>${f.nextMonth}</b>`)}${td(`<b>${int(f.monthN.avg)}</b>`, 1)}${td(`${int(f.monthN.lo)}–${int(f.monthN.hi)}`, 1)}${td(`<b>${money(f.monthV.avg)}</b>`, 1)}</tr>`])}
+${h('Distribution status by area and company code', `Received and distributed in ${a.label}; open now = all open invoices in this selection, days counted to ${P.today}`)}
+${table(['Area › company code', ...distHead], D.byArea.map((x) => distRow(x.key, x) + (x.codes.length > 1 || (x.codes[0] && x.codes[0].key !== x.key) ? x.codes.map((c) => distRow(c.key, c, true)).join('') : '')))}
+${h('Root causes holding invoices', 'Root cause group › standard category, and where the invoices sit (area and company code)')}
+${table(['Root cause › category', 'Open', 'Value', 'Follow-up due', 'Avg days', 'Oldest', 'Where'], D.rootCauses.map((g) =>
+    `<tr>${td(`<b>${esc(g.key)}</b>`)}${td(int(g.n), 1)}${td(money(g.v), 1)}${td(int(g.due), 1, g.due ? C.warn : '')}${td(d1(g.avgAge), 1)}${ageCell(g.oldest)}${td(`<span style="font-size:11px">${cleanWhere(g.where)}</span>`)}</tr>` +
+    (g.categories.length > 1 || (g.categories[0] && g.categories[0].key && g.categories[0].key !== g.key) ? g.categories.filter((c) => c.key).map((c) =>
+      `<tr>${td(`<span style="color:${C.mute}">&nbsp;&nbsp;&nbsp;&nbsp;↳ ${esc(c.key)}</span>`)}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(int(c.due), 1, c.due ? C.warn : '')}${td(d1(c.avgAge), 1)}${ageCell(c.oldest)}${td(`<span style="font-size:11px;color:${C.mute}">${cleanWhere(c.where)}</span>`)}</tr>`).join('') : '')))}
+${h('Ageing of open invoices by area', 'Days pending = received date (else allocated date) to today')}
+${table(['Days pending', 'Open', 'Value', ...D.areas], D.ageingByArea.map((b, i) => `<tr>${td(esc(b.key), 0, i >= 4 ? C.bad : i >= 3 ? C.warn : '')}${td(int(b.n), 1)}${td(money(b.v), 1)}${b.areas.map((n) => td(n ? int(n) : '', 1)).join('')}</tr>`))}
+${D.noAge ? `<div style="font-size:11px;color:${C.mute};margin-top:4px">${int(D.noAge)} open invoice(s) have no received or allocated date, so their days pending are unknown.</div>` : ''}
+${h(`Pending invoices – full list (${int(D.pendingList.length)})`, 'Sorted by root cause, then the oldest first; the reason from the tracker is shown under each invoice')}
+${wide(table(['Invoice', 'Area / co. code', 'Profit centre', 'Product line', 'Activity', 'Customer', 'Value', 'Days pending', 'Category', 'Last action', 'Days since last action', 'Follow-ups', 'Owner'],
+    D.pendingList.slice(0, listMax).map((r, i, list) => {
+      const g = D.rootCauses.find((x) => x.key === r.blocker);
+      const header = i === 0 || list[i - 1].blocker !== r.blocker
+        ? `<tr><td colspan="13" bgcolor="#eef2f7" style="padding:6px 10px;font-weight:700;color:${C.head};font-size:12px">${esc(r.blocker)}${g ? ` – ${int(g.n)} invoice(s) · ${money(g.v)} · ${int(g.due)} follow-up due` : ''}</td></tr>` : '';
+      return header + `<tr>${td(esc(r.i))}${td(nw(`${r.area} / ${r.cc || '–'}`))}${td(esc(r.pc || '–'))}${td(esc(r.pl || '–'))}${td(esc(r.bt || '–'))}${td(esc(r.c))}${td(nw(money(nv(r.v))), 1)}${ageCell(r.age)}` +
+        `${td(esc(r.category || '–'))}${td(nw(r.last || 'none logged'))}${td(r.sinceLast === null ? '–' : int(r.sinceLast), 1, r.due ? C.warn : '')}${td(int(r.followUps), 1)}${td(esc(r.ub || '–'))}</tr>` +
+        (r.why ? `<tr><td colspan="13" style="padding:0 10px 6px;border-bottom:1px solid ${C.line};font-size:11px;color:${C.mute}">${esc(String(r.why).slice(0, 300))}${String(r.why).length > 300 ? ' …' : ''}</td></tr>` : '');
+    })))}
+${D.pendingList.length > listMax ? `<div style="font-size:11px;color:${C.mute};margin-top:4px">The first ${listMax} are shown; use the filters in dashboard.html to see the rest.</div>` : ''}
+${h('Weekly incoming by area (last 8 weeks)', 'Invoices received per week (weeks start on Monday)')}
+${table(['Week starting', 'Received', 'Value', ...D.areas], D.weeklyByArea.map((w) => `<tr>${td(w.key)}${td(int(w.n), 1)}${td(money(w.v), 1)}${w.areas.map((n) => td(n ? int(n) : '', 1)).join('')}</tr>`))}
+${h('Workload heatmap by area – day of month', 'Darker = more invoices received that day (last 6 months)')}
+${D.heatByArea.map((A) => { const mx = Math.max(1, ...A.months.flatMap((m) => m.cells)); const sh = (n) => { if (!n) return '#f9fafb'; const t = n / mx; const mix = (x, y) => x + (y - x) * t; return `#${hex2(mix(219, 30))}${hex2(mix(234, 64))}${hex2(mix(254, 175))}`; };
+    return `<div style="font-weight:600;font-size:12px;color:${C.head};margin:8px 0 2px">${esc(A.area)}</div><table cellspacing="1" cellpadding="0" style="font-size:10px"><tr><td style="padding:2px 6px"></td>${Array.from({ length: 31 }, (_, i) => `<td style="text-align:center;color:${C.mute};width:20px">${i + 1}</td>`).join('')}</tr>` +
+      A.months.map((m) => `<tr><td style="padding:2px 6px;color:${C.mute};white-space:nowrap">${m.key}</td>${m.cells.map((n) => `<td bgcolor="${sh(n)}" style="text-align:center;height:18px;color:${n / mx > 0.55 ? '#fff' : C.ink}">${n || ''}</td>`).join('')}</tr>`).join('') + '</table>'; }).join('')}
+`; })()}
 ${h('Breakdown: ' + a.structure.order.join(' → '), 'One line per group; a level is skipped where it does not apply (e.g. sales org outside G367), and repeated single groups are shown on one line')}
 ${table(['Group', 'Level', 'Invoices', 'Value', 'Share', 'vs previous', 'Avg days'], treeRows(a.tree, 0))}
 ${a.structure.problems.length ? `<div style="font-size:11px;color:${C.warn};margin-top:4px">Check the data: ${a.structure.problems.map((e) =>
     `${e.values.length} ${esc(e.child.toLowerCase())}(s) appear under more than one ${esc(e.parent.toLowerCase())} (${esc(e.values.slice(0, 5).join(', '))}${e.values.length > 5 ? ' …' : ''})`).join('; ')}</div>` : ''}
-${h('Customer details (top 15 by value)', 'Trend = invoices per month, last 6 months')}
-${table(['Customer', 'SAP code', 'Profit centre', 'Product line', 'Invoices', 'Value', 'Share', 'Avg days', 'Trend'], a.customers.map((c) => `<tr>${td(esc(c.key))}${td(esc(c.sap || '–'))}${td(esc(c.pc || '–'))}${td(esc(c.pl || '–'))}${td(int(c.n), 1)}${td(money(c.v), 1)}${td(share(c.v, a.total.v), 1)}${td(c.tat === null ? '–' : c.tat.toFixed(1), 1)}${td(c.trend.join(' · '), 1)}</tr>`))}
-${h('Channels & project managers')}
-${table(['Channel', 'Invoices', 'Share'], a.channels.map((c) => `<tr>${td(esc(c.key))}${td(int(c.n), 1)}${td(share(c.n, a.total.n), 1)}</tr>`))}
-<div style="height:10px"></div>
-${table(['Project manager', 'Invoices', 'Value'], a.managers.map((m) => `<tr>${td(esc(m.key))}${td(int(m.n), 1)}${td(money(m.v), 1)}</tr>`))}
 ${h('Data quality')}
 <ul style="font-size:12px;margin:0;padding-left:18px">
 ${a.quality.fillIn.map((x) => `<li style="color:${C.warn}"><b>${int(x.n)} – ${esc(x.label)}</b> (e.g. ${esc(x.examples.join(', '))})</li>`).join('')}
@@ -426,7 +464,7 @@ for (const { json: r } of $('Get All Rows').all()) {
     pm: String(r.Project_Manager || '').trim(), p: String(r.Name_the_PortalEmail_ID || '').trim(), v: r.Value,
     sap: String(r.SAP_Customer_Code || '').trim(), pc: String(r.Profit_Center || '').trim().toUpperCase(),
     so: String(r.Sales_Org || '').trim().toUpperCase(),
-    pl: String(r.Product_Line || '').trim().toUpperCase(),
+    pl: String(r.Product_Line || '').trim().toUpperCase(), bt: String(r.Business_Type || '').trim().toUpperCase(),
     st: String(r.Status || '').trim(), ud: String(r.Upload_Date || '').slice(0, 10), tt: r.Tracker_TAT ?? '', ub: String(r.Uploaded_By || '').trim(),
     cat: String(r.Pending_Category || '').trim(), sc: String(r.Standard_Category || '').trim(),
     // the reason text is only kept for open items (keeps the dashboard small)
@@ -478,55 +516,53 @@ const quality = (() => { try { return $('Summarise Upload').first().json.message
 // Compact facts for the AI commentary step (the AI may only use these figures)
 const r2 = (x) => Math.round(x * 100) / 100;
 const p1 = (x) => (x === null || x === undefined ? null : Math.round(x * 1000) / 10);
-const facts = a.empty ? { empty: true } : {
-  report: a.type, period: `${a.from} to ${a.to}`, scope: { companyCode: a.cc || 'all', profitCentre: a.pcSel || 'all', productLine: a.plSel || 'all', customer: a.cust || 'all' },
-  invoices: a.total.n, value: r2(a.total.v),
-  previousPeriod: { invoices: a.prevTotal.n, value: r2(a.prevTotal.v) },
-  changePercent: { invoices: p1(a.nChange), value: p1(a.vChange) },
-  avgDaysReceivedToAllocated: a.avgTat === null ? null : r2(a.avgTat),
-  watchlist: a.watch.slice(0, 10).map((w) => ({ customer: w.customer, invoices: w.n, value: r2(w.v), flags: w.reasons.map(([k, d]) => `${k}: ${d}`) })),
-  monthly: a.monthly.slice(-6).map((m) => ({ month: m.key, invoices: m.n, value: r2(m.v),
-    ...(m.key === a.latest.slice(0, 7) && a.latest.slice(8, 10) !== String(new Date(Date.UTC(+m.key.slice(0, 4), +m.key.slice(5, 7), 0)).getUTCDate())
-      ? { monthToDate: true } : {}) })),
-  weekly: a.weekly.map((w) => ({ weekStarting: w.key, invoices: w.n, value: r2(w.v) })),
-  busiestDaysOfMonth: Array.from({ length: 31 }, (_, d) => ({ day: d + 1, avgInvoices: r2(a.heat.reduce((s, m) => s + m.cells[d], 0) / Math.max(1, a.heat.length)) }))
-    .sort((x, y) => y.avgInvoices - x.avgInvoices || x.day - y.day).slice(0, 5),
-  busiestWeekdays: [...a.weekday].sort((x, y) => y.n - x.n).slice(0, 3).map((w) => ({ weekday: w.key, avgInvoices: r2(w.n) })),
-  forecast: {
-    nextWeekInvoices: { expected: Math.round(a.forecast.weekN.avg), low: a.forecast.weekN.lo, high: a.forecast.weekN.hi },
-    nextMonth: { month: a.forecast.nextMonth, expectedInvoices: Math.round(a.forecast.monthN.avg), low: a.forecast.monthN.lo, high: a.forecast.monthN.hi, expectedValue: r2(a.forecast.monthV.avg) },
-  },
-  companyCodes: a.companies.map((c) => ({ code: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
-  structure: { order: a.structure.order, exceptions: a.structure.exceptions.map((e) => `${e.values.length} ${e.child} values under more than one ${e.parent}`) },
-  breakdown: (function flat(nodes, depth, path) { return nodes.flatMap((nd) => [{ group: [...path, nd.label].join(' / '), level: nd.level, invoices: nd.n, value: r2(nd.v), previousPeriodInvoices: nd.prevN },
-    ...(depth < 2 ? flat(nd.children, depth + 1, [...path, nd.label]) : [])]); })(a.tree, 0, []).slice(0, 40),
-  profitCentres: a.profitCentres.slice(0, 12).map((c) => ({ profitCentre: c.key, invoices: c.n, value: r2(c.v), valueSharePercent: a.total.v ? p1(c.v / a.total.v) : null, previousPeriodInvoices: c.prevN, avgDays: c.tat === null ? null : r2(c.tat), topCustomers: c.top.slice(0, 3).map((t) => t.key) })),
-  productLines: a.productLines.map((c) => ({ productLine: c.key, invoices: c.n, value: r2(c.v), previousPeriodInvoices: c.prevN })),
-  topCustomers: a.customers.slice(0, 8).map((c) => ({ customer: c.key, sapCode: c.sap || null, profitCentre: c.pc || null, invoices: c.n, value: r2(c.v), avgDays: c.tat === null ? null : r2(c.tat), invoicesLast6Months: c.trend })),
-  channels: a.channels.map((c) => ({ channel: c.key, invoices: c.n })),
-  pending: a.empty ? null : {
-    countedTo: a.pending.today, followUpAfterDays: a.pending.rules.followUpDays,
-    open: a.pending.total.n, openValue: r2(a.pending.total.v), 
-    followUpDue: a.pending.total.due, avgDaysPending: a.pending.total.avgAge === null ? null : r2(a.pending.total.avgAge), oldestDays: a.pending.total.oldest,
-    ageing: a.pending.ageing.map((b) => ({ bucket: b.key, invoices: b.n, value: r2(b.v) })),
-    blockers: a.pending.blockers.map((x) => ({ blocker: x.key, invoices: x.n, value: r2(x.v), followUpDue: x.due, avgDays: x.avgAge === null ? null : r2(x.avgAge), categories: x.categories.map((c) => ({ category: c.key, invoices: c.n })) })),
-    owners: a.pending.owners.map((x) => ({ owner: x.key, open: x.n, followUpDue: x.due })),
-    actNow: a.pending.actNow.slice(0, 8).map((r) => ({ invoice: String(r.i), customer: r.c, companyCode: r.cc, value: r2(parseFloat(String(r.v ?? '').replace(/[^0-9.\-]/g, '')) || 0), daysPending: r.age, blocker: r.blocker,
-      category: r.category, lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, reason: String(r.why || '').slice(0, 160) })),
-    completedAvgTatDays: a.pending.completed.avg === null ? null : r2(a.pending.completed.avg),
-  },
-  dataQuality: { toFillIn: a.quality.fillIn.map((x) => ({ issue: x.label, count: x.n, examples: x.examples.slice(0, 3) })), withoutValue: a.quality.noValue, allocatedBeforeReceived: a.quality.allocatedBeforeReceived, repeatedInvoiceNumbers: a.quality.repeated.length },
-};
+const facts = a.empty ? { empty: true } : (() => {
+  const D = a.distribution; const P = a.pending; const nv = (v) => parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0;
+  const groupBy = (rows, key) => { const m = new Map(); for (const r of rows) { const k = key(r); const g = m.get(k) || { key: k, n: 0, v: 0, rows: [] }; g.n++; g.v += nv(r.v); g.rows.push(r); m.set(k, g); } return [...m.values()].sort((x, y) => y.v - x.v); };
+  const rateOf = (x) => (x.received ? p1(x.receivedDone / x.received) : null);
+  const dist = (x) => ({ received: x.received, distributed: x.distributed, distributionRatePercent: rateOf(x), open: x.open, openValue: r2(x.openV),
+    followUpDue: x.due, avgDaysPending: x.avgAge === null ? null : r2(x.avgAge), oldestDaysPending: x.oldest });
+  return {
+    focus: 'invoice distribution',
+    period: `${a.from} to ${a.to}`, daysCountedTo: P.today, followUpDueAfterDays: P.rules.followUpDays,
+    scope: { companyCode: a.cc || 'all', profitCentre: a.pcSel || 'all', productLine: a.plSel || 'all', customer: a.cust || 'all' },
+    totals: { ...dist(D.kpis), avgTurnaroundDaysCompleted: D.kpis.avgTatDone === null ? null : r2(D.kpis.avgTatDone) },
+    byArea: D.byArea.map((x) => ({ area: x.key, ...dist(x), companyCodes: x.codes.map((c) => ({ companyCode: c.key, ...dist(c) })) })),
+    rootCauses: D.rootCauses.map((g) => ({ rootCause: g.key, open: g.n, value: r2(g.v), followUpDue: g.due, avgDaysPending: g.avgAge === null ? null : r2(g.avgAge), oldest: g.oldest,
+      where: g.where.slice(0, 6), categories: g.categories.filter((c) => c.key).map((c) => ({ category: c.key, open: c.n, value: r2(c.v), followUpDue: c.due, where: c.where.slice(0, 4) })) })),
+    ageing: D.ageingByArea.map((b) => ({ bucket: b.key, open: b.n, value: r2(b.v), byArea: Object.fromEntries(D.areas.map((ar, i) => [ar, b.areas[i]])) })),
+    oldestOpen: [...D.pendingList].sort((x, y) => (y.age ?? -1) - (x.age ?? -1)).slice(0, 10).map((r) => ({ invoice: String(r.i), area: r.area, companyCode: r.cc,
+      profitCentre: r.pc || null, productLine: r.pl || null, value: r2(nv(r.v)), daysPending: r.age, rootCause: r.blocker, category: r.category || null,
+      lastAction: r.last, daysSinceLastAction: r.sinceLast, followUps: r.followUps, owner: r.ub || null, reason: String(r.why || '').slice(0, 160) })),
+    followUpDueByOwner: groupBy(D.pendingList.filter((r) => r.due), (r) => r.ub || 'Not recorded').sort((x, y) => y.n - x.n).map((g) => ({ owner: g.key, followUpDue: g.n })),
+    weeklyIncoming: D.weeklyByArea.map((w) => ({ weekStarting: w.key, received: w.n, byArea: Object.fromEntries(D.areas.map((ar, i) => [ar, w.areas[i]])) })),
+    structure: { order: a.structure.order, problems: a.structure.problems.map((e) => `${e.values.length} ${e.child} values under more than one ${e.parent}`) },
+    breakdown: (function flat(nodes, depth, path) { return nodes.flatMap((nd) => [{ group: [...path, nd.label].join(' / '), level: nd.level, received: nd.n, value: r2(nd.v) },
+      ...(depth < 2 ? flat(nd.children, depth + 1, [...path, nd.label]) : [])]); })(a.tree, 0, []).slice(0, 40),
+    dataGaps: a.quality.fillIn.map((x) => ({ issue: x.label, count: x.n, examples: x.examples.slice(0, 3) })),
+    // datasets for the chart designer
+    charts: {
+      openByArea: D.byArea.map((x) => ({ area: x.key, open: x.open, value: r2(x.openV) })),
+      openByCompanyCode: D.byArea.flatMap((x) => x.codes.map((c) => ({ companyCode: c.key, open: c.open, value: r2(c.openV) }))),
+      openByProfitCentre: groupBy(D.pendingList, (r) => r.pc || 'NOT FOUND').map((g) => ({ profitCentre: g.key, open: g.n, value: r2(g.v) })),
+      openByProductLine: groupBy(D.pendingList, (r) => r.pl || 'NOT FOUND').map((g) => ({ productLine: g.key, open: g.n, value: r2(g.v) })),
+      rootCauses: D.rootCauses.map((g) => ({ rootCause: g.key, open: g.n, value: r2(g.v) })),
+      ageing: D.ageingByArea.map((b) => ({ bucket: b.key, open: b.n, value: r2(b.v) })),
+      weeklyIncoming: D.weeklyByArea.map((w) => ({ weekStarting: w.key, received: w.n, value: r2(w.v) })),
+      distributedByArea: D.byArea.map((x) => ({ area: x.key, received: x.received, distributed: x.distributed })),
+    },
+  };
+})();
 const uploadNote = quality
   ? `<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#374151;background:#f3f4f6;padding:8px 12px;max-width:860px"><b>Upload result:</b> ${quality.replace(/[&<>]/g, '')}</p>`
   : '';
-const subject = `Production Tracker ${a.type || ''} report – ${a.label || ''} – ${Math.round(a.total?.n ?? 0)} invoices, ${a.watch?.length ?? 0} customers to watch`;
+const subject = `Invoice distribution – ${a.label || ''} – ${a.distribution?.kpis.received ?? 0} received, ${a.distribution?.kpis.distributed ?? 0} distributed, ${a.distribution?.kpis.open ?? 0} open (${a.distribution?.kpis.due ?? 0} follow-up due)`;
 return [{
   json: {
     to: recipients,
     subject,
     facts: JSON.stringify(facts),
-    html: '<!--charts-->' + uploadNote + html + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code, profit centre, product line and customer. Open it in your browser.</p>',
+    html: '<!--charts-->' + html + uploadNote + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#6b7280">The attached dashboard.html lets you change the period, company code, profit centre, product line and customer. Open it in your browser.</p>',
     doneMessage: (quality ? quality + '. ' : '') + `Report "${a.label || ''}" sent to ${recipients}.`,
   },
   binary: {

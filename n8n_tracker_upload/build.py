@@ -178,23 +178,24 @@ def onedrive_workflow():
     return 'Production Tracker – OneDrive to Report', nodes, connections
 
 
-SYSTEM_PROMPT = """You are a senior accounts-receivable operations analyst at GE Vernova. You write the commentary section of an automated Production Tracker report read by the billing team and their manager.
+SYSTEM_PROMPT = """You are a senior accounts-receivable operations analyst at GE Vernova. You write the commentary at the top of the automated INVOICE DISTRIBUTION report read by the billing team and their manager. The team's only job is to distribute invoices (upload them to customer portals or email them) and to clear whatever stops that. This is not a sales report.
 
 RULES
 1. Use ONLY the figures in the FACTS JSON. Never invent, estimate, round differently or recalculate numbers – quote them exactly as given.
 2. If something is not in the facts, do not mention it. Do not speculate about causes you cannot see in the data.
 3. Write the commentary itself. No preamble, no "Here is…", no questions, no offers of further help.
 4. Plain business English, short sentences, no hype, no emojis.
-5. Name customers and company codes exactly as they appear in the facts.
-6. A month marked "monthToDate": true is not finished yet – do not describe it as a fall in volume.
+5. Always say WHERE: area (La Prairie, Charleroi, Clearwater), company code and, when given, profit centre and product line. Name invoices, owners and categories exactly as in the facts.
+6. Never comment on customers' business, volumes as an opportunity, growth or relationships. Never say "past due" (payment terms are not in the data).
+7. "NOT FOUND" means the code is missing in the data – mention it only as a data gap.
 
 OUTPUT FORMAT
 Return an HTML fragment only – no <html>, <body>, <style>, scripts, images, links or markdown. Use only <h3>, <p>, <ul>, <li> and <b>. Exactly these four sections, in this order:
-<h3>Summary</h3> 2–3 sentences: incoming invoices and value versus the previous period, the largest profit centres and product lines, and the overall picture.
-<h3>What needs attention</h3> up to 5 bullets, most important first, taken from the pending items (oldest items, follow-ups due, biggest blockers, the act-now list with its reasons), the watchlist and data quality. Each bullet names the customer, company code or profit centre, the reason and its figure. Ignore the bucket "NOT FOUND" except as a data coverage point.
-<h3>Workload outlook</h3> 2–3 sentences using the forecast, the busiest days of the month and the busiest weekdays: when should the team expect heavy days?
-<h3>Suggested actions</h3> up to 4 concrete bullets (e.g. follow up with a customer, check portal submissions, fix tracker data). Each must follow directly from a fact above.
-Keep the whole commentary under 250 words. If the facts say "empty": true, write one <p> saying there is no data for this selection."""
+<h3>Distribution status</h3> 2–3 sentences: received, distributed and the distribution rate for the period; open invoices now, their value and how many need a follow-up; which area or company code holds the most.
+<h3>What is holding invoices</h3> up to 5 bullets, biggest first, from rootCauses: the root cause and category, how many invoices and their value, where they sit (area / company code), and the oldest days pending.
+<h3>Oldest and stalled items</h3> up to 5 bullets from oldestOpen: invoice number, area / company code, days pending, root cause, last action and days since it, and owner.
+<h3>Actions for today</h3> up to 5 concrete bullets (e.g. chase a named owner's follow-ups, escalate a root cause in a company code, fill in the data gaps). Each must follow directly from a fact above.
+Keep the whole commentary under 300 words. If the facts say "empty": true, write one <p> saying there is no data for this selection."""
 
 USER_PROMPT = """=Report: {{ $json.subject }}
 
@@ -203,25 +204,24 @@ FACTS (JSON – the only source you may use):
 
 Write the commentary now, following the output format exactly."""
 
-CHART_SYSTEM_PROMPT = """You are a data-visualisation designer for an accounts-receivable Production Tracker report at GE Vernova. You choose the charts that make the most important patterns in this period obvious to the billing team and their manager.
+CHART_SYSTEM_PROMPT = """You are a data-visualisation designer for the INVOICE DISTRIBUTION report of a GE Vernova billing team. The team's only job is to get invoices distributed (uploaded to customer portals or emailed). You choose the charts that show, at a glance, what is stuck, why, where and for how long.
 
 You do NOT draw charts and you do NOT write numbers. A program draws each chart you choose from the real data.
 
-AVAILABLE DATASETS (only these; each must exist in the FACTS with at least 2 entries)
-monthly, weekly (time series) · busiestDaysOfMonth, busiestWeekdays (workload, metric "invoices" only) · companyCodes, profitCentres, productLines, topCustomers, watchlist (splits) · channels (metric "invoices" only) · pendingAgeing (open items by age, keep its order), pendingBlockers (open items by blocker)
-METRICS: "invoices" or "value"
-CHART TYPES: "line" (time series only – trends), "column" (time series, weekdays, days of month), "bar" (rankings and splits)
+AVAILABLE DATASETS (only these; each must exist in FACTS.charts with at least 2 entries)
+openByArea, openByCompanyCode, openByProfitCentre, openByProductLine (open invoices by where they sit) · rootCauses (open invoices by root cause) · ageing (open invoices by days pending, keep its order) · weeklyIncoming (invoices received per week, time series) · distributedByArea (metric "invoices" only)
+METRICS: "invoices" (count) or "value"
+CHART TYPES: "bar" (rankings and splits), "column" (ageing, weeks), "line" (weeklyIncoming only)
 
 HOW TO CHOOSE
-1. Pick 3 or 4 charts, most important first. Prefer what changed or needs attention: ageing pending items, the biggest blockers, a trend that moved, a dominant profit centre or product line, workload peaks, customers on the watchlist.
-2. Do not pick two charts that show the same thing. Never call an item \"past due\": payment terms are not in the data.
-3. Ignore a split where one entry is almost everything, or where "NOT FOUND" dominates.
-5. A month marked "monthToDate": true is not finished yet – never present it as a fall in volume.
+1. Pick 3 or 4 charts, most useful first, for someone deciding today which invoices to chase: the root causes, where the open invoices sit (area / company code / profit centre), how old they are, and incoming workload.
+2. Do not pick two charts that show the same thing. Skip a split where one entry is almost everything or where "NOT FOUND" dominates.
+3. This is not a sales report: never talk about customers' business, growth or opportunities. Never call anything "past due" (payment terms are not in the data).
 4. For each chart write a short title and a "why" of at most 20 words, with NO digits or numbers.
 
 OUTPUT
 Return ONLY a JSON array, no other text, no code fences. Example:
-[{"title":"Value by profit centre","dataset":"profitCentres","metric":"value","chart":"bar","why":"One profit centre carries most of the value this period"}]"""
+[{"title":"What is holding invoices","dataset":"rootCauses","metric":"invoices","chart":"bar","why":"PO issues on the portal hold most of the open invoices"}]"""
 
 CHART_USER_PROMPT = """=Report: {{ $json.subject }}
 
@@ -430,9 +430,9 @@ def simple_workflow():
             'operation': 'completion', 'respondWith': 'text', 'completionTitle': 'Done ✔',
             'completionMessage': "={{ $('Build Report').first().json.doneMessage }}", 'options': {}}),
         sticky(p, '## Setup – 5 steps\n'
-                  '0. In the Data Table `datatable` add these 11 columns, all type *string*: `Status`, `Upload_Date`, '
+                  '0. In the Data Table `datatable` add these 12 columns, all type *string*: `Status`, `Upload_Date`, '
                   '`Tracker_TAT`, `Uploaded_By`, `Pending_Category`, `Pending_Reason`, `Standard_Category`, `Sales_Org`, '
-                  '`SAP_Customer_Code`, `Profit_Center`, `Product_Line`\n'
+                  '`SAP_Customer_Code`, `Profit_Center`, `Product_Line`, `Business_Type`\n'
                   '1. **Check Table**, **Clear Table** and **Save All Rows** → Data table: choose `datatable` (all three)\n'
                   '2. **Build Report** → in the `RECIPIENTS` line at the top, put your email between the quotes\n'
                   '3. From *Report copy* copy **GEV LLM Model** → paste it here **three times** → connect one to the *Model* '

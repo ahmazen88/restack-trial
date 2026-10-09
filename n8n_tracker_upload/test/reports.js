@@ -48,16 +48,10 @@ assert(req.from === '2026-06-01' && req.companyCode === '3485' && req.sendTo ===
 
 const monthly = build(settingsFor(['1st of Month 7am']));
 assert(monthly.json.to === 'a@example.com', 'default recipients');
-assert(/Customers to look out for/.test(monthly.json.html) && /Workload heatmap/.test(monthly.json.html) && /Forecast/.test(monthly.json.html), 'sections present');
-assert(/Volume spike/.test(monthly.json.html) && /SALT RIVER/.test(monthly.json.html), 'spike flagged for SALT RIVER');
-assert(/Gone quiet/.test(monthly.json.html) && /BONNEVILLE/.test(monthly.json.html), 'gone-quiet customer flagged');
-assert(/New customer/.test(monthly.json.html) && /NEW CO LLC/.test(monthly.json.html), 'new customer flagged');
-assert(/Slow turnaround/.test(monthly.json.html) && /EXELON/.test(monthly.json.html), 'slow turnaround flagged');
-assert(/Portal submissions/.test(monthly.json.html), 'portal customer flagged');
+assert(/Distribution status by area/.test(monthly.json.html) && /Workload heatmap by area/.test(monthly.json.html) && /Pending invoices – full list/.test(monthly.json.html) && !/Customers to look out for|Customer details|Forecast/.test(monthly.json.html), 'distribution sections present, sales sections gone');
 assert(JSON.stringify(build(settingsFor(['1st of Month 7am']))) === JSON.stringify(monthly), 'deterministic');
 const custom = build(req);
 assert(custom.json.to === 'boss@example.com' && /company code 3485/.test(custom.json.html) && /2026-06-01 to 2026-08-31/.test(custom.json.html), 'custom period + company code + recipient');
-assert(!/Volume spike/.test(custom.json.html.split('Incoming volume')[0]) || !/POWER LINE SUPPLY/.test(custom.json.html.split('Incoming volume')[0]), 'no fake spike from periods before the data starts');
 assert(!/rgb\(/.test(monthly.json.html), 'email-safe hex colours');
 const weekly = build(settingsFor(['Every Monday 7am']));
 assert(/Week of 2026-09-28/.test(weekly.json.subject), 'weekly report = latest week in data');

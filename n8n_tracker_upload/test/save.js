@@ -59,6 +59,6 @@ assert(/<p>Summary: volume steady/.test(plain.json.html), 'plain-text AI answer 
 const build = wf.nodes.find((n) => n.name === 'Build Report').parameters.jsCode.replace("const RECIPIENTS = [''];", "const RECIPIENTS = ['a@x'];");
 const rep = new Function('$', build)((n) => ({ all: () => (n === 'Get All Rows' ? table : []), first: () => (n === 'Report Settings' ? { json: { type: 'Overview' } } : { json: { message: 'Upload ok' } }) }))[0];
 const facts = JSON.parse(rep.json.facts);
-assert(facts.invoices > 0 && facts.forecast && Array.isArray(facts.watchlist) && facts.busiestDaysOfMonth.length === 5, 'facts for AI built');
+assert(facts.focus === 'invoice distribution' && facts.totals.received > 0 && Array.isArray(facts.rootCauses) && Array.isArray(facts.byArea) && !('watchlist' in facts), 'facts for AI built (distribution focus, no customer watchlist)');
 assert(/Upload result:/.test(rep.json.html), 'upload result shown in the email');
 assert(JSON.stringify(facts).length < 12000, `facts are compact (${JSON.stringify(facts).length} chars)`);

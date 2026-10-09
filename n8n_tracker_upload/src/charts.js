@@ -3,34 +3,30 @@
 // If the AI step failed or its answer is not usable, a standard set of charts is drawn instead.
 const MAX_CHARTS = 4;
 const DEFAULT_CHARTS = [
-  { title: 'Incoming invoices by month', dataset: 'monthly', metric: 'invoices', chart: 'column' },
-  { title: 'Value by profit centre', dataset: 'profitCentres', metric: 'value', chart: 'bar' },
-  { title: 'Invoices by product line', dataset: 'productLines', metric: 'invoices', chart: 'bar' },
-  { title: 'Busiest weekdays', dataset: 'busiestWeekdays', metric: 'invoices', chart: 'column' },
+  { title: 'Open invoices by area', dataset: 'openByArea', metric: 'invoices', chart: 'bar' },
+  { title: 'What is holding invoices', dataset: 'rootCauses', metric: 'invoices', chart: 'bar' },
+  { title: 'How long invoices have been open', dataset: 'ageing', metric: 'invoices', chart: 'column' },
+  { title: 'Invoices received per week', dataset: 'weeklyIncoming', metric: 'invoices', chart: 'column' },
 ];
-// dataset → which fact field is the label and which fields hold each metric
+// dataset (in facts.charts) → which field is the label and which fields hold each metric ("invoices" = count)
 const DATASETS = {
-  monthly: { label: 'month', invoices: 'invoices', value: 'value' },
-  weekly: { label: 'weekStarting', invoices: 'invoices', value: 'value' },
-  busiestDaysOfMonth: { label: 'day', invoices: 'avgInvoices' },
-  busiestWeekdays: { label: 'weekday', invoices: 'avgInvoices' },
-  companyCodes: { label: 'code', invoices: 'invoices', value: 'value' },
-  profitCentres: { label: 'profitCentre', invoices: 'invoices', value: 'value' },
-  productLines: { label: 'productLine', invoices: 'invoices', value: 'value' },
-  topCustomers: { label: 'customer', invoices: 'invoices', value: 'value' },
-  channels: { label: 'channel', invoices: 'invoices' },
-  watchlist: { label: 'customer', invoices: 'invoices', value: 'value' },
-  pendingAgeing: { label: 'bucket', invoices: 'invoices', value: 'value' },
-  pendingBlockers: { label: 'blocker', invoices: 'invoices', value: 'value' },
+  openByArea: { label: 'area', invoices: 'open', value: 'value' },
+  openByCompanyCode: { label: 'companyCode', invoices: 'open', value: 'value' },
+  openByProfitCentre: { label: 'profitCentre', invoices: 'open', value: 'value' },
+  openByProductLine: { label: 'productLine', invoices: 'open', value: 'value' },
+  rootCauses: { label: 'rootCause', invoices: 'open', value: 'value' },
+  ageing: { label: 'bucket', invoices: 'open', value: 'value' },
+  weeklyIncoming: { label: 'weekStarting', invoices: 'received', value: 'value' },
+  distributedByArea: { label: 'area', invoices: 'distributed' },
 };
-const TIME_SERIES = ['monthly', 'weekly'];
+const TIME_SERIES = ['weeklyIncoming'];
+const KEEP_ORDER = ['ageing']; // shown in their own order, not sorted by size
 const COLORS = { bar: '#2b6cb0', part: '#9dbbe0', line: '#1f3a5f', grid: '#e5e7eb', ink: '#111827', mute: '#6b7280' };
 
 const base = $('Add AI Commentary').first();
 const facts = JSON.parse($('Build Report').first().json.facts || '{}');
-// pending datasets live inside facts.pending
-facts.pendingAgeing = facts.pending?.ageing || [];
-facts.pendingBlockers = facts.pending?.blockers || [];
+// the chart datasets live in facts.charts
+Object.assign(facts, facts.charts || {});
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (n, metric) => (metric === 'value'
   ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
@@ -44,7 +40,7 @@ try {
   picked = m ? JSON.parse(m[0]) : [];
 } catch (e) { picked = []; }
 const valid = (c) => c && DATASETS[c.dataset] && DATASETS[c.dataset][c.metric] && ['bar', 'column', 'line'].includes(c.chart)
-  && Array.isArray(facts[c.dataset]) && facts[c.dataset].length >= 2;
+  && Array.isArray(facts[c.dataset]) && facts[c.dataset].filter((x) => Number(x[DATASETS[c.dataset][c.metric]]) > 0).length >= 2; // at least 2 non-zero values
 let charts = (Array.isArray(picked) ? picked : []).filter(valid).slice(0, MAX_CHARTS).map((c) => ({
   title: String(c.title || '').replace(/[<>]/g, '').slice(0, 80) || `${c.metric} by ${c.dataset}`,
   dataset: c.dataset, metric: c.metric, chart: c.chart === 'line' && !TIME_SERIES.includes(c.dataset) ? 'bar' : c.chart,
@@ -58,7 +54,7 @@ const points = (c) => {
   const d = DATASETS[c.dataset];
   // a month that is not finished yet is marked with * and drawn lighter, so it is not read as a fall in volume
   let list = facts[c.dataset].map((x) => ({ label: String(x[d.label]) + (x.monthToDate ? '*' : ''), y: Number(x[d[c.metric]]) || 0, part: !!x.monthToDate }));
-  if (!TIME_SERIES.includes(c.dataset) && !['busiestWeekdays', 'busiestDaysOfMonth', 'pendingAgeing'].includes(c.dataset)) {
+  if (!TIME_SERIES.includes(c.dataset) && !KEEP_ORDER.includes(c.dataset)) {
     list = list.sort((a, b) => b.y - a.y).slice(0, 10); // biggest first, top 10
   }
   return list;
