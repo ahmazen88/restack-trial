@@ -3,24 +3,32 @@
 // If the AI step failed or its answer is not usable, a standard set of charts is drawn instead.
 const MAX_CHARTS = 4;
 const DEFAULT_CHARTS = [
-  { title: 'Open invoices by area', dataset: 'openByArea', metric: 'invoices', chart: 'bar' },
+  { title: 'Who has to act on open invoices', dataset: 'whoActs', metric: 'invoices', chart: 'donut' },
   { title: 'What is holding invoices', dataset: 'rootCauses', metric: 'invoices', chart: 'bar' },
-  { title: 'How long invoices have been open', dataset: 'ageing', metric: 'invoices', chart: 'column' },
-  { title: 'Invoices received per week', dataset: 'weeklyIncoming', metric: 'invoices', chart: 'column' },
+  { title: 'Within 24 hours by company code', dataset: 'within24hByCompanyCode', metric: 'percent', chart: 'bar' },
+  { title: 'Invoices received per month', dataset: 'monthlyIncoming', metric: 'invoices', chart: 'column' },
 ];
 // dataset (in facts.charts) → which field is the label and which fields hold each metric ("invoices" = count)
 const DATASETS = {
+  receivedByArea: { label: 'area', invoices: 'received', value: 'value' },
+  receivedByCompanyCode: { label: 'companyCode', invoices: 'received', value: 'value' },
+  receivedByProfitCentre: { label: 'profitCentre', invoices: 'received', value: 'value' },
+  monthlyIncoming: { label: 'month', invoices: 'received', value: 'value' },
+  weeklyIncoming: { label: 'weekStarting', invoices: 'received', value: 'value' },
+  weeklyWithin24h: { label: 'weekStarting', percent: 'percent' },
+  within24hByCompanyCode: { label: 'companyCode', percent: 'percent' },
+  tatBuckets: { label: 'bucket', invoices: 'invoices' },
   openByArea: { label: 'area', invoices: 'open', value: 'value' },
   openByCompanyCode: { label: 'companyCode', invoices: 'open', value: 'value' },
   openByProfitCentre: { label: 'profitCentre', invoices: 'open', value: 'value' },
-  openByProductLine: { label: 'productLine', invoices: 'open', value: 'value' },
+  whoActs: { label: 'who', invoices: 'open', value: 'value' },
   rootCauses: { label: 'rootCause', invoices: 'open', value: 'value' },
   ageing: { label: 'bucket', invoices: 'open', value: 'value' },
-  weeklyIncoming: { label: 'weekStarting', invoices: 'received', value: 'value' },
-  distributedByArea: { label: 'area', invoices: 'distributed' },
+  channels: { label: 'channel', invoices: 'received' },
 };
-const TIME_SERIES = ['weeklyIncoming'];
-const KEEP_ORDER = ['ageing']; // shown in their own order, not sorted by size
+const TIME_SERIES = ['monthlyIncoming', 'weeklyIncoming', 'weeklyWithin24h'];
+const KEEP_ORDER = ['ageing', 'tatBuckets']; // shown in their own order, not sorted by size
+const PALETTE = ['#2b6cb0', '#0f766e', '#c2410c', '#7c3aed', '#b91c1c', '#6b7280'];
 const COLORS = { bar: '#2b6cb0', part: '#9dbbe0', line: '#1f3a5f', grid: '#e5e7eb', ink: '#111827', mute: '#6b7280' };
 
 const base = $('Add AI Commentary').first();
@@ -28,9 +36,9 @@ const facts = JSON.parse($('Build Report').first().json.facts || '{}');
 // the chart datasets live in facts.charts
 Object.assign(facts, facts.charts || {});
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const fmt = (n, metric) => (metric === 'value'
-  ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  : n.toLocaleString('en-US', { maximumFractionDigits: 1 }));
+const fmt = (n, metric) => (metric === 'percent' ? `${n.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`
+  : metric === 'value' ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : n.toLocaleString('en-US', { maximumFractionDigits: 1 }));
 
 // ---------- read the AI's choice (JSON list), keep only valid entries ----------
 const raw = String($input.first().json.text ?? $input.first().json.output ?? '');
@@ -39,11 +47,14 @@ try {
   const m = raw.replace(/```[a-z]*\n?/gi, '').match(/\[[\s\S]*\]/);
   picked = m ? JSON.parse(m[0]) : [];
 } catch (e) { picked = []; }
-const valid = (c) => c && DATASETS[c.dataset] && DATASETS[c.dataset][c.metric] && ['bar', 'column', 'line'].includes(c.chart)
+const valid = (c) => c && DATASETS[c.dataset] && DATASETS[c.dataset][c.metric] && ['bar', 'column', 'line', 'donut'].includes(c.chart)
   && Array.isArray(facts[c.dataset]) && facts[c.dataset].filter((x) => Number(x[DATASETS[c.dataset][c.metric]]) > 0).length >= 2; // at least 2 non-zero values
 let charts = (Array.isArray(picked) ? picked : []).filter(valid).slice(0, MAX_CHARTS).map((c) => ({
   title: String(c.title || '').replace(/[<>]/g, '').slice(0, 80) || `${c.metric} by ${c.dataset}`,
-  dataset: c.dataset, metric: c.metric, chart: c.chart === 'line' && !TIME_SERIES.includes(c.dataset) ? 'bar' : c.chart,
+  dataset: c.dataset, metric: c.metric,
+  // a line only for a time series; a donut only for a few parts of a whole (not for percentages)
+  chart: c.chart === 'line' && !TIME_SERIES.includes(c.dataset) ? 'bar'
+    : c.chart === 'donut' && (c.metric === 'percent' || TIME_SERIES.includes(c.dataset) || facts[c.dataset].length > 6) ? 'bar' : c.chart,
   // a short "why", only kept if it contains no numbers (figures must come from the data, not the AI)
   why: /\d/.test(String(c.why || '')) ? '' : String(c.why || '').replace(/[<>]/g, '').slice(0, 160),
 }));
@@ -68,6 +79,12 @@ const emailChart = (c) => {
   const max = Math.max(1, ...pts.map((p) => p.y));
   const head = `<div style="font-weight:600;color:${COLORS.line};font-size:14px;margin:14px 0 2px">${esc(c.title)}</div>` +
     (c.why ? `<div style="color:${COLORS.mute};font-size:12px;margin-bottom:6px">${esc(c.why)}</div>` : '');
+  if (c.chart === 'donut') { // email: one bar split into its parts
+    const tot = pts.reduce((s, p) => s + p.y, 0) || 1;
+    return head + '<table cellspacing="0" cellpadding="0" width="100%" style="max-width:860px"><tr>' +
+      pts.filter((p) => p.y > 0).map((p, i) => `<td bgcolor="${PALETTE[i % PALETTE.length]}" width="${Math.max(1, Math.round((100 * p.y) / tot))}%" height="18" style="font-size:0;line-height:0">&nbsp;</td>`).join('') + '</tr></table>' +
+      `<div style="font-size:11px;color:${COLORS.mute};margin-top:3px">${pts.filter((p) => p.y > 0).map((p, i) => `<span style="white-space:nowrap;margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:${PALETTE[i % PALETTE.length]}"></span> ${esc(p.label)}: ${fmt(p.y, c.metric)} (${((100 * p.y) / tot).toFixed(0)}%)</span>`).join('')}</div>`;
+  }
   if (c.chart === 'bar') {
     return head + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;max-width:860px;font-size:12px">' +
       pts.map((p) => `<tr><td style="padding:3px 8px 3px 0;white-space:nowrap;width:28%">${esc(p.label)}</td>` +
@@ -90,6 +107,18 @@ const svgChart = (c) => {
   const max = Math.max(1, ...pts.map((p) => p.y));
   const W = 840; const head = `<h3 style="margin:22px 0 2px;color:${COLORS.line};font-size:15px">${esc(c.title)}</h3>` +
     (c.why ? `<div style="color:${COLORS.mute};font-size:12px;margin-bottom:6px">${esc(c.why)}</div>` : '');
+  if (c.chart === 'donut') {
+    const live = pts.filter((p) => p.y > 0); const tot = live.reduce((s, p) => s + p.y, 0) || 1;
+    const S = 170; const R = 80; const r = 48; const cx = S / 2; let a0 = -Math.PI / 2;
+    const pt = (rad, ang) => `${(cx + rad * Math.cos(ang)).toFixed(2)},${(cx + rad * Math.sin(ang)).toFixed(2)}`;
+    const paths = live.map((p, i) => {
+      const a1 = a0 + Math.min(2 * Math.PI * 0.9999, (2 * Math.PI * p.y) / tot); const big = a1 - a0 > Math.PI ? 1 : 0;
+      const d = `M ${pt(R, a0)} A ${R} ${R} 0 ${big} 1 ${pt(R, a1)} L ${pt(r, a1)} A ${r} ${r} 0 ${big} 0 ${pt(r, a0)} Z`; a0 = a1;
+      return `<path d="${d}" fill="${PALETTE[i % PALETTE.length]}"><title>${esc(p.label)}: ${fmt(p.y, c.metric)}</title></path>`;
+    }).join('');
+    return head + `<table cellspacing="0" cellpadding="0"><tr><td><svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${paths}</svg></td><td style="padding-left:14px;font-size:12px;font-family:Segoe UI,Arial,sans-serif">` +
+      live.map((p, i) => `<div style="margin:3px 0"><span style="display:inline-block;width:10px;height:10px;background:${PALETTE[i % PALETTE.length]}"></span> ${esc(p.label)} – <b>${fmt(p.y, c.metric)}</b> (${((100 * p.y) / tot).toFixed(0)}%)</div>`).join('') + '</td></tr></table>';
+  }
   if (c.chart === 'bar') {
     const rowH = 24; const left = 200; const H = pts.length * rowH + 10;
     return head + `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:Segoe UI,Arial,sans-serif;font-size:12px">` +
@@ -114,7 +143,7 @@ const svgChart = (c) => {
   return head + `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="font-family:Segoe UI,Arial,sans-serif">${grid}${marks}${labels}</svg>` + partNote(pts);
 };
 
-const note = aiUsed ? 'Charts chosen by the AI chart designer; all figures come from the report data.' : 'Standard charts.';
+const note = aiUsed ? 'Highlights chosen by the AI chart designer; all figures come from the report data. The full set of charts is in each section below.' : 'Standard highlight charts. The full set of charts is in each section below.';
 const emailBlock = charts.length
   ? `<div style="font-family:Segoe UI,Arial,sans-serif;max-width:860px;margin:0 0 18px;padding:6px 16px 12px;border:1px solid ${COLORS.grid}">` +
     `<div style="font-size:11px;color:${COLORS.mute};margin-top:6px">${note}</div>${charts.map(emailChart).join('')}</div>`

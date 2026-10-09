@@ -48,7 +48,7 @@ assert(req.from === '2026-06-01' && req.companyCode === '3485' && req.sendTo ===
 
 const monthly = build(settingsFor(['1st of Month 7am']));
 assert(monthly.json.to === 'a@example.com', 'default recipients');
-assert(/Distribution status by area/.test(monthly.json.html) && /Workload heatmap by area/.test(monthly.json.html) && /Pending invoices – full list/.test(monthly.json.html) && !/Customers to look out for|Customer details|Forecast/.test(monthly.json.html), 'distribution sections present, sales sections gone');
+assert(/Status by area and company code/.test(monthly.json.html) && /Volume and scope of work/.test(monthly.json.html) && /24-hour TAT/.test(monthly.json.html) && /Workload heatmap by area/.test(monthly.json.html) && /Pending invoices – full list/.test(monthly.json.html) && /Company code analysis/.test(monthly.json.html) && !/Customers to look out for|Forecast/.test(monthly.json.html), 'distribution sections present, sales sections gone');
 assert(JSON.stringify(build(settingsFor(['1st of Month 7am']))) === JSON.stringify(monthly), 'deterministic');
 const custom = build(req);
 assert(custom.json.to === 'boss@example.com' && /company code 3485/.test(custom.json.html) && /2026-06-01 to 2026-08-31/.test(custom.json.html), 'custom period + company code + recipient');

@@ -236,3 +236,32 @@ Activity (`Business_Type`) is back: Tableau "Nature of Activities PL"; Clearwate
 Both AI prompts are rewritten for distribution (commentary: Distribution status · What is holding invoices ·
 Oldest and stalled items · Actions for today; charts: open by area / company code / profit centre / product line,
 root causes, ageing, weekly incoming, distributed by area).
+
+### Report v3: volume, 24-hour TAT, pending, profit centre, company code › customer (latest – replaces the above)
+**TAT – one rule everywhere:** Received date → submission (Invoice upload) date. An invoice not submitted yet counts to
+today. The tracker's own TAT column is no longer used. **Within 24 hours** = submitted on the received date or the next
+day (`RULES.slaDays = 1`; the tracker has dates, not times). Days pending uses the same rule.
+Sections (email and dashboard.html, same order):
+1. **Headline** – received (value, vs previous), per working day, submitted in period, % within 24 h, avg / median TAT,
+   open now, ours to act on (incl. portal access), follow-up due; 24-hour split bar; status by area › company code.
+2. **Volume and scope of work** – 12-month total / monthly average / busiest month; stacked columns per month and per
+   week by area; company code × month volume heatmap; portal vs email (donut in the dashboard); busiest portals;
+   day-of-month workload heatmap by area.
+3. **24-hour TAT** – within / over / still within / unknown by company code (100% bars); TAT distribution
+   (same day … over 30 days, not submitted yet); weekly 24-hour trend (line in the dashboard).
+4. **Pending invoices** – who has to act: **Ours** (portal access, submission issue) vs **Customer / GE order team**
+   (PO issues, invoice vs PO mismatch) vs to be classified; root causes with where; Pareto; root cause × company code
+   heatmap; **swim lanes** (lane = root cause, position = days pending; dashboard: one dot per invoice, colour = area,
+   size = value, red ring = follow-up due); ageing by area; full list (customer shown with SAP code).
+5. **Profit centre analysis** – volume, share, 24-hour %, TAT, open, main root cause per profit centre
+   (G367 without one = "N/A – CLEARWATER", others without one = NOT FOUND).
+6. **Company code analysis** – one block per company code with **its own customers** (never out of context):
+   customer = SAP customer code; name shown as "NAME (SAP 12345)" or "NAME (no SAP code)".
+7. **Customer names and SAP codes** – same name with different SAP codes (kept apart); one SAP code written several
+   ways (counted once, every spelling listed; a very different name is flagged as a possible wrong code); look-alike
+   names in the same company code (typos) listed for checking, never joined.
+8. **Pending reasons** – tracker wording → standard category, with counts.
+9. **Data quality** – incl. completed without upload date, no received date, upload before received.
+AI prompts rewritten to match (commentary: Volume and scope of work · 24-hour TAT · Pending and root causes ·
+Company codes and customers · Names and data to fix · Actions for today; chart designer: highlight charts incl. donut
+and percent metrics).
