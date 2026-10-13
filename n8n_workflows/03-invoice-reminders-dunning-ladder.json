@@ -1,0 +1,359 @@
+{
+  "name": "03 · Invoice Reminders & Dunning Ladder",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Get paid without awkward emails\nDaily 08:40 reads **Invoices** and sends exactly one email per stage:\n\n| stage | when |\n|---|---|\n| pre_due | 3 days before |\n| due | due date |\n| overdue_7 | +7 days |\n| overdue_14 | +14 days |\n| final_30 | +30 days (you get alerted too) |\n\nDeterministic templates (no AI on money). Mark `status` = `paid` to stop. Sends you a daily summary.",
+        "width": 480,
+        "height": 380,
+        "color": 5
+      },
+      "id": "8e7640d7-ef5f-45a5-bde8-3dbdf91369cb",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "58b798e0-d644-450d-ba92-a711f908d23c",
+      "name": "Daily 08:40",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ba1e2d99-cc0c-45d8-bc20-33f540698f3e",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "a531a2f2-5edd-4f92-9d49-cff298519bcb",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "da5f2aba-81f4-4463-aa76-48f493fead2a",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "886d3690-b436-460f-a26c-55adb1cd16a6",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "d57b71b3-f93f-4b3a-bd5c-ceb38249f037",
+              "name": "paymentDetails",
+              "value": "Bank transfer: IBAN XX00 0000 0000 / or pay online via the link below.",
+              "type": "string"
+            },
+            {
+              "id": "cda7900d-421f-4417-9bcf-7613c112b0b6",
+              "name": "lateFeeNote",
+              "value": "Per our terms, a late fee may apply after 30 days.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "c34b213f-c09e-46bd-b823-978c292c0e58",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "df831a6b-e9b7-4f4c-a504-047d19f5e2ef",
+      "name": "Read Invoices",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst DAY = 864e5;\nconst today = new Date(new Date().toISOString().slice(0, 10));\nconst stageFor = d => d >= 30 ? 'final_30' : d >= 14 ? 'overdue_14' : d >= 7 ? 'overdue_7' : d >= 0 ? 'due' : d >= -3 ? 'pre_due' : null;\nconst rank = { pre_due: 1, due: 2, overdue_7: 3, overdue_14: 4, final_30: 5 };\nconst money = (a, c) => { try { return new Intl.NumberFormat('en', { style: 'currency', currency: c || 'USD' }).format(Number(a)); } catch { return `${a} ${c || ''}`; } };\nconst out = [];\nfor (const { json: r } of $input.all()) {\n  if (!r.invoice_id || !r.client_email || !r.due_date) continue;\n  if (['paid', 'void', 'disputed', 'paused'].includes(String(r.status || '').toLowerCase())) continue;\n  const days = Math.round((today - new Date(String(r.due_date).slice(0, 10))) / DAY);\n  const stage = stageFor(days);\n  if (!stage) continue;\n  if ((rank[r.last_reminder_stage] || 0) >= rank[stage]) continue; // never repeat or go backwards\n  const amt = money(r.amount, r.currency);\n  const first = String(r.client_name || '').split(' ')[0] || 'there';\n  const link = r.pay_link ? `\\nPay online: ${r.pay_link}\\n` : '';\n  const sig = `\\n\\nThanks,\\n${cfg.ownerName}\\n${cfg.businessName}`;\n  const T = {\n    pre_due: [`Upcoming: invoice ${r.invoice_id} due ${r.due_date}`,\n      `Hi ${first},\\n\\nFriendly heads-up that invoice ${r.invoice_id} for ${amt} is due on ${r.due_date}.\\n${link}\\n${cfg.paymentDetails}\\n\\nIf it's already scheduled, please ignore this.`],\n    due: [days === 0 ? `Invoice ${r.invoice_id} is due today` : `Reminder: invoice ${r.invoice_id} was due ${r.due_date}`,\n      `Hi ${first},\\n\\nJust a reminder that invoice ${r.invoice_id} (${amt}) ${days === 0 ? 'is due today' : 'was due on ' + r.due_date}.\\n${link}\\n${cfg.paymentDetails}`],\n    overdue_7: [`Invoice ${r.invoice_id} — 1 week overdue`,\n      `Hi ${first},\\n\\nI couldn't see payment for invoice ${r.invoice_id} (${amt}), which was due on ${r.due_date}. Could you check on it, or let me know if anything is holding it up?\\n${link}\\n${cfg.paymentDetails}`],\n    overdue_14: [`Second notice: invoice ${r.invoice_id} (${amt}) overdue`,\n      `Hi ${first},\\n\\nInvoice ${r.invoice_id} for ${amt} is now ${days} days overdue. Please arrange payment this week, or reply with an expected payment date so I can update our records.\\n${link}\\n${cfg.paymentDetails}`],\n    final_30: [`Final notice: invoice ${r.invoice_id} — ${days} days overdue`,\n      `Hi ${first},\\n\\nThis is a final reminder that invoice ${r.invoice_id} for ${amt} is ${days} days overdue. Please settle it within 7 days. ${cfg.lateFeeNote}\\n${link}\\n${cfg.paymentDetails}\\n\\nIf there's an issue with the invoice, reply and I'll sort it out right away.`],\n  }[stage];\n  out.push({ json: { ...r, days_overdue: days, stage, amount_fmt: amt, subject: T[0], body: T[1] + sig } });\n}\nreturn out;"
+      },
+      "id": "59f31814-4835-44c9-8b0f-5c8453e9eef0",
+      "name": "Pick Reminder Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.client_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "af35f68a-d4b3-40cc-b767-b88ebfee4e73",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        0
+      ],
+      "webhookId": "e8c70393-ba28-4014-8a57-a69619e754d7"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c0ed51ba-28d5-4159-b86b-7c75f35ce63d",
+              "name": "invoice_id",
+              "value": "={{ $('Pick Reminder Stage').item.json.invoice_id }}",
+              "type": "string"
+            },
+            {
+              "id": "4b40b92c-9cb5-4109-ba82-24e5fae7a840",
+              "name": "last_reminder_stage",
+              "value": "={{ $('Pick Reminder Stage').item.json.stage }}",
+              "type": "string"
+            },
+            {
+              "id": "1d2988ec-ca84-48f5-b5e8-2f273cf056ea",
+              "name": "last_reminder_at",
+              "value": "={{ $now.toISODate() }}",
+              "type": "string"
+            },
+            {
+              "id": "68b8eb10-4c48-406e-a0d2-3465c4a8aad2",
+              "name": "status",
+              "value": "={{ $('Pick Reminder Stage').item.json.days_overdue > 0 ? 'overdue' : 'sent' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "38c01af6-f730-4175-88cf-27a1d86a6f8e",
+      "name": "Record Stage",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "cdf78a56-4bf0-4374-8f13-168ad0692b76",
+      "name": "Update Invoices",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Pick Reminder Stage').all().map(i => i.json);\nconst finals = rows.filter(r => r.stage === 'final_30');\nconst lines = rows.map(r => `• ${r.invoice_id}  ${r.client_name}  ${r.amount_fmt}  → ${r.stage} (${r.days_overdue}d)`);\nreturn [{ json: {\n  subject: `💸 ${rows.length} payment reminder(s) sent${finals.length ? ` — ${finals.length} FINAL notice(s), call them` : ''}`,\n  body: `Reminders sent today:\\n\\n${lines.join('\\n')}\\n\\n${finals.length ? 'Final notices went to: ' + finals.map(f => f.client_name + ' <' + f.client_email + '>').join(', ') + '\\nA phone call usually works better than another email now.' : ''}`,\n}}];"
+      },
+      "id": "9b58e610-02e8-4ffd-b975-cadb8aa202de",
+      "name": "Owner Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "727b9e9e-499a-4ae6-b748-6847943aad56",
+      "name": "Email Owner",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        0
+      ],
+      "webhookId": "1ae45c99-fc5c-49bf-9f1c-dd60c0c50f79"
+    }
+  ],
+  "connections": {
+    "Daily 08:40": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Invoices": {
+      "main": [
+        [
+          {
+            "node": "Pick Reminder Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Reminder Stage": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Record Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Stage": {
+      "main": [
+        [
+          {
+            "node": "Update Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Invoices": {
+      "main": [
+        [
+          {
+            "node": "Owner Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner Summary": {
+      "main": [
+        [
+          {
+            "node": "Email Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

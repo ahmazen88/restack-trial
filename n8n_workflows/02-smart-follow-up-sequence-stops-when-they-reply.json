@@ -1,0 +1,531 @@
+{
+  "name": "02 · Smart Follow-Up Sequence (stops when they reply)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Never let a lead go cold\nWeekdays 09:10 it reads **Leads**, picks rows where `next_follow_up` ≤ today and stage is open.\n\n- Checks Gmail first: anyone who replied is moved to `replied` and **not** emailed\n- Claude writes touch #2, #3, #4 with a different angle each time (value → proof → break-up)\n- Updates touches, dates, stage. After `maxTouches` → `nurture`",
+        "width": 480,
+        "height": 300,
+        "color": 5
+      },
+      "id": "3bb0cdb5-d383-4952-89df-e3696894a15b",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "f65ba355-8429-4148-818e-2efa6d9b58bb",
+      "name": "Weekdays 09:10",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b9c5007e-2b8b-48ea-aec4-ed7f76f292fd",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "8ae22c05-c37b-47cf-a3ce-f66b4b386543",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "847a219f-aa73-4e7a-a04a-aa70d34bf7dd",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "0bbd744b-00f4-4d55-abaf-1c392fa82c7a",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "b3c109fc-afe2-4cac-aa31-8508011acd61",
+              "name": "maxTouches",
+              "value": 4,
+              "type": "number"
+            },
+            {
+              "id": "631bfbd0-40b5-4b2c-a17a-d9a337b1ad64",
+              "name": "cadenceDays",
+              "value": "3,5,7",
+              "type": "string"
+            },
+            {
+              "id": "a70ff9b2-bf9d-4058-97b6-7f9c5bd6bcc4",
+              "name": "bookingLink",
+              "value": "https://cal.com/you/intro",
+              "type": "string"
+            },
+            {
+              "id": "7a155e1d-6ae6-441d-ab6e-5c0a20e837d5",
+              "name": "offerSummary",
+              "value": "One paragraph on what you sell and the outcome you deliver.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "89f4b1e1-d802-4db3-af79-4f3bc116cf5d",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "1446ee65-63e7-4db2-93ed-fe1109aeca5f",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst today = new Date().toISOString().slice(0, 10);\nconst open = ['new', 'contacted', 'proposal_sent', 'meeting_booked_no_show'];\nconst due = $input.all().map(i => i.json).filter(r =>\n  r.email && open.includes(String(r.stage || 'new')) &&\n  String(r.next_follow_up || '') !== '' && String(r.next_follow_up).slice(0, 10) <= today &&\n  Number(r.touches || 0) < Number(cfg.maxTouches));\nreturn due.map(r => ({ json: r }));"
+      },
+      "id": "04d87894-0009-43c3-afa4-cb6c1042423d",
+      "name": "Select Due Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": true,
+        "simple": false,
+        "filters": {
+          "q": "=newer_than:30d -in:sent from:({{ $('Select Due Leads').all().map(i => i.json.email).join(' OR ') }})"
+        },
+        "options": {}
+      },
+      "id": "8af619c6-90aa-4e7a-b3b1-9b1186bf1753",
+      "name": "Check For Replies",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        0
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Anyone who emailed us after our last touch has replied → stop the sequence for them.\nconst lastByEmail = {};\nfor (const m of $('Check For Replies').all()) {\n  const from = m.json.from?.value?.[0]?.address?.toLowerCase();\n  if (!from) continue;\n  const d = new Date(m.json.date || 0).toISOString().slice(0, 10);\n  if (!lastByEmail[from] || d > lastByEmail[from]) lastByEmail[from] = d;\n}\nreturn $('Select Due Leads').all().map(i => {\n  const r = i.json; const got = lastByEmail[String(r.email).toLowerCase()];\n  return { json: { ...r, replied: !!got && got >= String(r.last_contacted || '').slice(0, 10) } };\n});"
+      },
+      "id": "97abeca4-1dfb-4a85-b290-5836d7408292",
+      "name": "Split Replied / Pending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bd6192c3-76d4-4dc9-986d-1a6d4164ea1e",
+              "leftValue": "={{ $json.replied }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b40a4951-d4d6-489a-ba5d-5904b7b15860",
+      "name": "Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6954b41c-79a0-43a4-830b-5595809ac58b",
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "b33c07fb-b681-45ce-b7c5-7bd49d0bcc51",
+              "name": "stage",
+              "value": "replied",
+              "type": "string"
+            },
+            {
+              "id": "15d86348-502f-4d9d-b88c-78e5e6744e15",
+              "name": "next_follow_up",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "4d0e1d53-9a56-4f3c-b089-e02f85d76823",
+      "name": "Mark Replied",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Business: {{ $('Config').first().json.businessName }} — {{ $('Config').first().json.offerSummary }}\nSender: {{ $('Config').first().json.ownerName }}\nBooking link: {{ $('Config').first().json.bookingLink }}\nThis is follow-up touch #{{ Number($json.touches || 0) + 1 }} of max {{ $('Config').first().json.maxTouches }}.\n\nLEAD RECORD\n{{ JSON.stringify($json, null, 2) }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Write a short follow-up email (50-90 words, plain text). Angle by touch number: 2 = add value (an insight or quick idea specific to their situation); 3 = social proof / a relevant result with a soft call to action; 4+ = polite break-up ('should I close your file?'), which gets the most replies. Do not repeat earlier wording, never guilt-trip, one clear question at the end. Subject: short, lowercase-friendly, may start with 'Re: ' to keep the thread feel."
+            }
+          ]
+        }
+      },
+      "id": "7ed192cc-0a24-4d19-ba5a-a44a7b7b2928",
+      "name": "AI Write Follow-Up",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1560,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "5450242f-d6e8-485d-a760-451596b69a01",
+      "name": "Claude (AI Write Follow-Up)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1500,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"subject\": {\n      \"type\": \"string\"\n    },\n    \"body\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"subject\",\n    \"body\"\n  ]\n}"
+      },
+      "id": "408d8a61-9f03-4bff-a305-63efbc396d5c",
+      "name": "Parser (AI Write Follow-Up)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1680,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Split Replied / Pending').item.json.email }}",
+        "subject": "={{ $json.output.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.output.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "89e21c99-a146-47be-a793-3bd2fc3dd62d",
+      "name": "Send Follow-Up",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1880,
+        120
+      ],
+      "webhookId": "23338298-1661-41b1-a3eb-4ee6df31bb17"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst r = $('Split Replied / Pending').item.json;\nconst touches = Number(r.touches || 0) + 1;\nconst cadence = String(cfg.cadenceDays).split(',').map(Number);\nconst gap = cadence[Math.min(touches - 1, cadence.length - 1)] || 7;\nconst done = touches >= Number(cfg.maxTouches);\nreturn { json: {\n  email: r.email, touches,\n  last_contacted: new Date().toISOString().slice(0, 10),\n  next_follow_up: done ? '' : new Date(Date.now() + gap * 864e5).toISOString().slice(0, 10),\n  stage: done ? 'nurture' : (r.stage || 'contacted'),\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "d61d125e-1a36-4cef-8937-21712ecff2c0",
+      "name": "Next Touch Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "ee87e2fa-874a-4ae6-a9bf-b630449bf257",
+      "name": "Update Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2340,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Claude (AI Write Follow-Up)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Write Follow-Up",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Write Follow-Up)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Write Follow-Up",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekdays 09:10": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Select Due Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Due Leads": {
+      "main": [
+        [
+          {
+            "node": "Check For Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check For Replies": {
+      "main": [
+        [
+          {
+            "node": "Split Replied / Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Replied / Pending": {
+      "main": [
+        [
+          {
+            "node": "Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied?": {
+      "main": [
+        [
+          {
+            "node": "Mark Replied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Write Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Write Follow-Up": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-Up": {
+      "main": [
+        [
+          {
+            "node": "Next Touch Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Touch Dates": {
+      "main": [
+        [
+          {
+            "node": "Update Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Replied": {
+      "main": [
+        [
+          {
+            "node": "Update Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

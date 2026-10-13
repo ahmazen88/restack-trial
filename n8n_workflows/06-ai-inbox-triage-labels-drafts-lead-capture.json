@@ -1,0 +1,928 @@
+{
+  "name": "06 · AI Inbox Triage → Labels, Drafts, Lead Capture",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Inbox zero on autopilot\nEvery new unread email:\n- Claude classifies category + urgency + summary\n- Applies your Gmail labels (put label IDs in Config)\n- **Needs reply** → a reply draft sits in the thread, ready to edit & send\n- **New lead** → forwarded to workflow 01 (scored, replied, CRM'd)\n- **Known lead replying** → Leads stage = `replied` (stops workflow 02)\n- Newsletters/notifications → marked read\n- Urgent → alert email\n- Everything logged to **InboxLog**\n\nFind label IDs: run a Gmail node → *Label → Get Many*.",
+        "width": 520,
+        "height": 430,
+        "color": 5
+      },
+      "id": "4abb0f08-2417-4e84-99ce-8ff7b83f9308",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -470
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "in:inbox -category:promotions -category:social -from:me",
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "868faf75-c997-4231-8d97-c6a8ec747a73",
+      "name": "New Email",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "dbb43b8c-dec4-415b-8e0b-66ff8585eb59",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "6a7cd6a4-de0a-4ea8-bb4d-a9693b88bb8a",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "ef92ffbb-b400-4623-bb4e-51c588b7a781",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "b28b5048-8be9-448a-8690-2c14adc21616",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "b5899eee-c5ba-4ad4-896e-afad41ac2bef",
+              "name": "leadIntakeUrl",
+              "value": "https://YOUR-N8N/webhook/lead-intake",
+              "type": "string"
+            },
+            {
+              "id": "73d4f5d8-33c2-4fd5-b5d2-a7d4397c7599",
+              "name": "alertEmail",
+              "value": "you+urgent@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "628f3d55-3ede-409d-9aef-0c23b4c8b785",
+              "name": "aboutMe",
+              "value": "Who you are, what you sell, tone of voice, things you never promise, typical answers (prices, availability, process).",
+              "type": "string"
+            },
+            {
+              "id": "e28fcd43-3888-4a72-8fa4-a29af1e88ee5",
+              "name": "label_lead",
+              "value": "Label_LEAD_ID",
+              "type": "string"
+            },
+            {
+              "id": "081de32a-66f2-495a-a00b-a8e3544553ac",
+              "name": "label_client",
+              "value": "Label_CLIENT_ID",
+              "type": "string"
+            },
+            {
+              "id": "fa825af0-9852-4096-8abc-b960784148db",
+              "name": "label_billing",
+              "value": "Label_BILLING_ID",
+              "type": "string"
+            },
+            {
+              "id": "bbcbc2b0-4ea3-479a-8c78-0bcc30ccd825",
+              "name": "label_support",
+              "value": "Label_SUPPORT_ID",
+              "type": "string"
+            },
+            {
+              "id": "ee7538a4-e8dd-4155-b42d-6b7bee66bc6b",
+              "name": "label_scheduling",
+              "value": "Label_SCHEDULING_ID",
+              "type": "string"
+            },
+            {
+              "id": "7fa57ecc-ef27-46f6-ae89-631f8072b8c1",
+              "name": "label_fyi",
+              "value": "Label_FYI_ID",
+              "type": "string"
+            },
+            {
+              "id": "d2055a82-a150-439c-9116-0e570294c769",
+              "name": "label_needs_reply",
+              "value": "Label_NEEDS_REPLY_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "05fb2dd1-36ed-4185-b899-e4837970ed90",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten a Gmail message (simple=false) into what the model needs.\nconst m = $('New Email').item.json;\nconst from = m.from?.value?.[0] || {};\nconst body = String(m.text || m.textAsHtml || m.snippet || '').replace(/\\n{3,}/g, '\\n\\n');\n// Drop quoted history so we classify the new part only\nconst fresh = body.split(/\\n(?:On .{5,80} wrote:|-{2,} ?Original Message|From: .+\\nSent: )/)[0];\nreturn { json: {\n  messageId: m.id, threadId: m.threadId,\n  fromEmail: String(from.address || '').toLowerCase(), fromName: from.name || '',\n  to: m.to?.text || '', subject: m.subject || '(no subject)', date: m.date,\n  body: fresh.slice(0, 6000),\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "70bb4243-f291-4568-9233-8ca0f507b136",
+      "name": "Prep Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "0a986fc0-1193-4009-aa5e-1320ca709ef4",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        660,
+        0
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// One sheet read for the whole batch, then match each email's sender against it.\nconst leads = {};\nfor (const { json: l } of $('Read Leads').all()) if (l.email) leads[String(l.email).toLowerCase()] = l;\nreturn $('Prep Email').all().map(({ json: e }) => {\n  const l = leads[e.fromEmail];\n  return { json: { ...e, knownLead: !!l, leadStage: l?.stage || '', leadSummary: l?.intent || '' } };\n});"
+      },
+      "id": "9b8e5ef9-1469-48fd-b00a-413ddeba180f",
+      "name": "Add CRM Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=About me / my business: {{ $('Config').first().json.aboutMe }}\n\nSender is {{ $json.knownLead ? 'an EXISTING lead in my CRM (stage: ' + $json.leadStage + ')' : 'not in my CRM' }}.\n\nFROM: {{ $json.fromName }} <{{ $json.fromEmail }}>\nSUBJECT: {{ $json.subject }}\n\n{{ $json.body }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You triage a busy founder's inbox. Categories: lead (new potential customer asking about buying), client (existing customer about ongoing work), billing (invoices, payments, receipts), support (problem/help request), scheduling (meeting times), vendor (sales pitches, partnerships, cold outreach TO us), newsletter, notification (automated), personal, spam. urgency high only if money, a deadline within 48h, an angry client, or legal. needs_reply = a human is waiting for an answer from us. If needs_reply, write the reply in my voice using only facts from 'About me'; where info is missing write [[placeholder]]. Keep replies under 120 words, plain text, no signature."
+            }
+          ]
+        }
+      },
+      "id": "870b3123-d1db-49f2-ba98-f523ef0d2091",
+      "name": "AI Classify",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "9b1db7b5-4155-4b88-9e51-627d271931db",
+      "name": "Claude (AI Classify)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"category\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"lead\",\n        \"client\",\n        \"billing\",\n        \"support\",\n        \"scheduling\",\n        \"vendor\",\n        \"newsletter\",\n        \"notification\",\n        \"personal\",\n        \"spam\"\n      ]\n    },\n    \"urgency\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"high\",\n        \"normal\",\n        \"low\"\n      ]\n    },\n    \"summary\": {\n      \"type\": \"string\",\n      \"description\": \"<= 20 words\"\n    },\n    \"needs_reply\": {\n      \"type\": \"boolean\"\n    },\n    \"reply\": {\n      \"type\": \"string\"\n    },\n    \"deadline\": {\n      \"type\": \"string\",\n      \"description\": \"ISO date if one is mentioned, else empty\"\n    },\n    \"amount\": {\n      \"type\": \"string\",\n      \"description\": \"money amount if mentioned, else empty\"\n    }\n  },\n  \"required\": [\n    \"category\",\n    \"urgency\",\n    \"summary\",\n    \"needs_reply\"\n  ]\n}"
+      },
+      "id": "0e9d6d8f-6e58-4423-bf97-9eb97da07164",
+      "name": "Parser (AI Classify)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst e = $('Add CRM Context').item.json;\nconst ai = $json.output;\nconst map = { lead: cfg.label_lead, client: cfg.label_client, billing: cfg.label_billing, support: cfg.label_support,\n  scheduling: cfg.label_scheduling, newsletter: cfg.label_fyi, notification: cfg.label_fyi, vendor: cfg.label_fyi };\nconst labelIds = [map[ai.category], ai.needs_reply ? cfg.label_needs_reply : null].filter(l => l && !/_ID$/.test(l));\nreturn { json: { ...e, ...ai, reply: ai.reply || '', labelIds,\n  isNewLead: ai.category === 'lead' && !e.knownLead,\n  knownLeadReplied: e.knownLead,\n  autoArchive: ['newsletter', 'notification', 'spam'].includes(ai.category) && ai.urgency !== 'high',\n  urgent: ai.urgency === 'high',\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "066bb5e3-1f38-4b6a-918c-046f66b8a6f4",
+      "name": "Decide Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0b750188-a915-41a1-8c1d-c303570e758f",
+                    "leftValue": "={{ $json.isNewLead }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "new_lead"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "138a3b99-2e19-4000-8c67-9461d42ebe96",
+                    "leftValue": "={{ $json.needs_reply }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "650a55b1-fd3b-4af9-b670-693ad3d26862",
+                    "leftValue": "={{ $json.reply }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "needs_reply"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3d7b4e81-21fb-4e15-b986-f9b6e6083fd3",
+                    "leftValue": "={{ $json.knownLeadReplied }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "lead_replied"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "616060c0-94bd-42aa-bfb3-9ba6933cefa7",
+                    "leftValue": "={{ $json.autoArchive }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "auto_archive"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d03bcb3e-73e3-4231-ac9a-802f43804729",
+                    "leftValue": "={{ $json.urgent }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "urgent"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "34527950-5dd8-402c-97f7-25f97b184b56",
+                    "leftValue": "={{ $json.labelIds.length }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "gt"
+                    },
+                    "rightValue": 0
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "labels"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "795e2e0c-a700-42ae-9fdc-ac7ea73e04fd",
+                    "leftValue": "={{ $json.messageId }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "log"
+            }
+          ]
+        },
+        "options": {
+          "allMatchingOutputs": true
+        }
+      },
+      "id": "3f4d06f2-3ada-4e46-b8cf-b94870139c0f",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.leadIntakeUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.fromName, email: $json.fromEmail, message: $json.subject + '\\n\\n' + $json.body, source: 'inbox' }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "a82a942a-89e8-4271-965d-7303a550302c",
+      "name": "Send To Lead Intake (01)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        -420
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $json.subject.replace(/^re:\\s*/i, '') }}",
+        "emailType": "text",
+        "message": "={{ $json.reply }}",
+        "options": {
+          "threadId": "={{ $json.threadId }}",
+          "sendTo": "={{ $json.fromEmail }}"
+        }
+      },
+      "id": "28a15421-0a76-4e39-bc81-ae67c7ff5979",
+      "name": "Draft Reply In Thread",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "de4802f4-9e1b-4909-8944-3b1e8af0e3a2",
+              "name": "email",
+              "value": "={{ $json.fromEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "95d48228-625a-44ea-a02c-99b87b533695",
+              "name": "stage",
+              "value": "replied",
+              "type": "string"
+            },
+            {
+              "id": "e2fa7986-ce7b-480c-8528-eab0db22e5f4",
+              "name": "next_follow_up",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "fa8c7f12-5eef-4bb4-a397-2aca373ab6c3",
+              "name": "last_contacted",
+              "value": "={{ $now.toISODate() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "76cb556e-15cf-4c0e-a935-7b99840e1394",
+      "name": "Lead Replied",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2000,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9b3b4c05-ea15-4666-af60-f18cd7212362",
+      "name": "Update Lead Stage",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        -100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $json.messageId }}"
+      },
+      "id": "469ae0d0-8d29-4507-8652-c9b0a9d288df",
+      "name": "Mark Read",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.alertEmail }}",
+        "subject": "=🚨 {{ $json.category }}: {{ $json.summary }}",
+        "emailType": "text",
+        "message": "=From: {{ $json.fromName }} <{{ $json.fromEmail }}>\nSubject: {{ $json.subject }}\nDeadline: {{ $json.deadline || '-' }}  Amount: {{ $json.amount || '-' }}\n\n{{ $json.needs_reply ? 'A reply draft is ready in the thread.' : '' }}\n\nhttps://mail.google.com/mail/u/0/#all/{{ $json.threadId }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "10b43a38-6a31-473a-bce1-5cbf0d5a04ee",
+      "name": "Urgent Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        220
+      ],
+      "webhookId": "ea67d10f-eea4-4034-affe-d66cbd64636a"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json.messageId }}",
+        "labelIds": "={{ $json.labelIds }}"
+      },
+      "id": "263c0bcf-d04b-4e3e-8a81-2cfc0915728c",
+      "name": "Apply Labels",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        380
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7eef2cc5-3b98-4114-8ddd-67c0f19e5de7",
+              "name": "received",
+              "value": "={{ $json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "0ff761ae-c9df-4d24-b484-c14833123289",
+              "name": "from",
+              "value": "={{ $json.fromEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "c7b39d9e-0bad-42a3-8565-0020e48dc2ca",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            },
+            {
+              "id": "16a5348d-d339-4244-9f1c-ae889ac27986",
+              "name": "category",
+              "value": "={{ $json.category }}",
+              "type": "string"
+            },
+            {
+              "id": "b6a051f3-7306-4110-b6ba-e060f48b5669",
+              "name": "urgency",
+              "value": "={{ $json.urgency }}",
+              "type": "string"
+            },
+            {
+              "id": "d0db01dc-c755-44ab-8a40-7db6019ac252",
+              "name": "summary",
+              "value": "={{ $json.summary }}",
+              "type": "string"
+            },
+            {
+              "id": "ca2f3480-4dba-4538-96a2-de7d5de05c60",
+              "name": "needs_reply",
+              "value": "={{ $json.needs_reply }}",
+              "type": "string"
+            },
+            {
+              "id": "8a2640ae-d2cf-42c9-99fd-f654fdf32783",
+              "name": "known_lead",
+              "value": "={{ $json.knownLead }}",
+              "type": "string"
+            },
+            {
+              "id": "d3af9d44-24c3-4d80-aba1-a800473e7f63",
+              "name": "thread",
+              "value": "=https://mail.google.com/mail/u/0/#all/{{ $json.threadId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "c58961ef-5898-40d2-863d-131263e340d2",
+      "name": "Log Row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2000,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "InboxLog",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "031edb77-ab5f-4332-86a2-da2fc7cc3cbb",
+      "name": "Append InboxLog",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        540
+      ]
+    }
+  ],
+  "connections": {
+    "Claude (AI Classify)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Classify",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Classify)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Classify",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Email": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Prep Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Email": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Add CRM Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add CRM Context": {
+      "main": [
+        [
+          {
+            "node": "AI Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Classify": {
+      "main": [
+        [
+          {
+            "node": "Decide Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Actions": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Send To Lead Intake (01)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Reply In Thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lead Replied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Read",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apply Labels",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Replied": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Row": {
+      "main": [
+        [
+          {
+            "node": "Append InboxLog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

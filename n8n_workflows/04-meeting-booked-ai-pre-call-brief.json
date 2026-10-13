@@ -1,0 +1,467 @@
+{
+  "name": "04 · Meeting Booked → AI Pre-Call Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Walk into every call prepared\nPoint a **Calendly** (`invitee.created`) or **Cal.com** (`BOOKING_CREATED`) webhook here, or POST plain JSON:\n```json\n{\"name\":\"Jane\",\"email\":\"jane@acme.com\",\n \"start_time\":\"2026-10-20T15:00:00Z\",\"notes\":\"pricing\"}\n```\nReads their site + your CRM row → Claude writes a 1-page brief with questions to ask → emailed to you. Lead stage becomes `meeting_booked`.",
+        "width": 500,
+        "height": 340,
+        "color": 5
+      },
+      "id": "d7b20a0a-9e85-4791-98c6-e4c2ab4f9216",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meeting-booked",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "Accepted"
+        }
+      },
+      "id": "c510d69d-b1f1-4ce6-b074-ed58034a74e9",
+      "name": "Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7439a3a3-edda-45a9-9d94-84045e79680d"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "43e0acb0-b7d4-464f-8720-19774ae5f5b0",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "08e2e9ce-de23-42ba-a745-013a6bb845d3",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "b2c5177b-f025-4bdb-884a-0a610f419e51",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "8f837c1d-ee7a-4fc1-b4ba-46e3ba3ba3e9",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "58dae6a0-8ea8-48db-9342-8e223a501e40",
+              "name": "offerSummary",
+              "value": "What you sell, packages and prices, typical outcomes.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "5ec84680-2f82-4a7a-97d1-01d9d28a8778",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body && typeof $json.body === 'object' ? $json.body : $json;\nconst p = b.payload || {};\nlet name = '', email = '', start = '', title = '', notes = '';\nif (b.event && String(b.event).startsWith('invitee')) {            // Calendly\n  name = p.name; email = p.email; start = p.scheduled_event?.start_time; title = p.scheduled_event?.name;\n  notes = (p.questions_and_answers || []).map(q => `${q.question}: ${q.answer}`).join('\\n');\n} else if (b.triggerEvent) {                                        // Cal.com\n  const a = (p.attendees || [])[0] || {};\n  name = a.name; email = a.email; start = p.startTime; title = p.title;\n  notes = [p.description, ...Object.entries(p.responses || {}).map(([k, v]) => `${k}: ${typeof v === 'object' ? (v.value ?? JSON.stringify(v)) : v}`)].filter(Boolean).join('\\n');\n} else {                                                            // plain JSON\n  name = b.name; email = b.email; start = b.start_time || b.startTime; title = b.title || 'Call'; notes = b.notes || '';\n}\nemail = String(email || '').toLowerCase();\nconst freeMail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|proton|protonmail|live|me)\\./i.test(email);\nconst website = b.website || (email && !freeMail ? 'https://' + email.split('@')[1] : '');\nreturn { json: { name, email, start_time: start, title, notes, website, company: b.company || (freeMail ? '' : (email.split('@')[1] || '').split('.')[0]) } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "fff64523-27aa-4fdd-b652-353b0c9304db",
+      "name": "Normalize Booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website || 'https://example.invalid' }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 5
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "html"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "768fc819-1fc2-45f2-8422-2b83ab1e9c99",
+      "name": "Fetch Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn raw HTML into compact readable text for the model (max ~5k chars).\nconst html = String($json.html || '');\nconst text = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .slice(0, 5000);\nreturn { json: { websiteText: text || '(website unavailable)' } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "e8c7e989-a8b9-4389-baf3-062fb96db5bd",
+      "name": "Website → Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {},
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ $('Normalize Booking').item.json.email }}"
+            }
+          ]
+        }
+      },
+      "id": "9cd3bcb7-59ae-4d69-9ef8-b8376cb5d206",
+      "name": "Lookup In CRM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        0
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Our business: {{ $('Config').first().json.businessName }}. Offer: {{ $('Config').first().json.offerSummary }}\n\nBOOKING\n{{ JSON.stringify($('Normalize Booking').first().json, null, 2) }}\n\nCRM RECORD (may be empty)\n{{ JSON.stringify($json, null, 2) }}\n\nWEBSITE TEXT\n{{ $('Website → Text').first().json.websiteText }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You prepare sales call briefs. Be concrete and skimmable. Only use facts in the input; label guesses as guesses. Return a brief as clean HTML (h3, ul, p, b only)."
+            }
+          ]
+        }
+      },
+      "id": "3c5c6647-f060-4aee-a8a2-8ea609c4ae6f",
+      "name": "AI Pre-Call Brief",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "c4a309f1-f378-44e5-84e9-3ffb30137914",
+      "name": "Claude (AI Pre-Call Brief)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"headline\": {\n      \"type\": \"string\",\n      \"description\": \"one line: who + what they likely want\"\n    },\n    \"brief_html\": {\n      \"type\": \"string\",\n      \"description\": \"Sections: Snapshot, Why they booked, Likely pains, 5 sharp discovery questions, Best-fit offer & price anchor, Objections to expect, Red flags, Goal for this call\"\n    }\n  },\n  \"required\": [\n    \"headline\",\n    \"brief_html\"\n  ]\n}"
+      },
+      "id": "efeae643-1069-40d6-a749-a904f3aa4cf2",
+      "name": "Parser (AI Pre-Call Brief)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=📋 Brief: {{ $('Normalize Booking').first().json.name }} · {{ $('Normalize Booking').first().json.start_time ? new Date($('Normalize Booking').first().json.start_time).toUTCString().slice(0, 22) : '' }}",
+        "emailType": "html",
+        "message": "=<p><b>{{ $json.output.headline }}</b></p>{{ $json.output.brief_html }}<hr><p style=\"color:#888\">{{ $('Normalize Booking').first().json.email }} · {{ $('Normalize Booking').first().json.title }}</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8f83ca15-d149-4387-8a5d-fddad0371521",
+      "name": "Email Brief To Me",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1640,
+        0
+      ],
+      "webhookId": "88dfe322-2e09-4fe6-9830-528108327347"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "80b84616-10d3-44d0-bc27-9b61ef5a07cf",
+              "name": "email",
+              "value": "={{ $('Normalize Booking').first().json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "22e0cac6-85ba-49a3-9526-afc954621831",
+              "name": "name",
+              "value": "={{ $('Normalize Booking').first().json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "4668921e-b696-4f88-9a87-a6556f9c0875",
+              "name": "stage",
+              "value": "meeting_booked",
+              "type": "string"
+            },
+            {
+              "id": "f2c8b1d4-372f-44d3-9e45-2b44cc32c34f",
+              "name": "next_follow_up",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "ff6fa161-ce0a-49b9-86a6-8be015ffbfe0",
+              "name": "next_step",
+              "value": "=Call {{ $('Normalize Booking').first().json.start_time }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "8efd88d7-2fde-48d2-891f-7f207f1644ff",
+      "name": "CRM Update",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "1dde83e0-385a-4eb6-843d-91d70130a00d",
+      "name": "Upsert Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2080,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Claude (AI Pre-Call Brief)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Pre-Call Brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Pre-Call Brief)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Pre-Call Brief",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Booking": {
+      "main": [
+        [
+          {
+            "node": "Fetch Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Website": {
+      "main": [
+        [
+          {
+            "node": "Website → Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website → Text": {
+      "main": [
+        [
+          {
+            "node": "Lookup In CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup In CRM": {
+      "main": [
+        [
+          {
+            "node": "AI Pre-Call Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Pre-Call Brief": {
+      "main": [
+        [
+          {
+            "node": "Email Brief To Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Brief To Me": {
+      "main": [
+        [
+          {
+            "node": "CRM Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Update": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

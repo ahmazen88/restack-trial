@@ -1,0 +1,562 @@
+{
+  "name": "01 · Lead Intake → AI Qualify → Instant Reply → CRM",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Lead intake & speed-to-lead\nPOST JSON to the webhook from any form (Typeform, Tally, Webflow, your site, or workflow 09/06).\n\n```json\n{\"name\":\"Jane Doe\",\"email\":\"jane@acme.com\",\"company\":\"Acme\",\n \"website\":\"acme.com\",\"message\":\"Need help with...\",\n \"budget\":\"10-25k\",\"source\":\"website\"}\n```\n1. Reads their website\n2. Claude scores fit 0–100 → hot / warm / cold\n3. Personalised reply in < 1 min (send or draft — see Config)\n4. Upserts the **Leads** sheet with next follow-up date\n5. Hot leads ping you",
+        "width": 520,
+        "height": 330,
+        "color": 5
+      },
+      "id": "9d55ec1d-a52c-467c-b542-7255e1237577",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "Accepted"
+        }
+      },
+      "id": "a50f6b73-8a2d-47d9-af59-5ab5fa03ee68",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d8f5ec87-25d3-4aa3-8fab-c9a74f238b88"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a11e4ab8-af3e-475a-9c43-03c298de767a",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "47d06663-3e87-4336-8a1e-14055de042b9",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "c6249379-55d0-44b1-8598-2f9a9b8ff80d",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "72d81ee0-89d5-4477-8400-33f92091342b",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "4de949d0-bfdf-4c9e-b5e8-08bc68fb993c",
+              "name": "replyMode",
+              "value": "send",
+              "type": "string"
+            },
+            {
+              "id": "e468e866-f7d5-4e11-9174-33a3917945f7",
+              "name": "bookingLink",
+              "value": "https://cal.com/you/intro",
+              "type": "string"
+            },
+            {
+              "id": "65f76085-e7fa-432b-b0aa-2c43e24cdc42",
+              "name": "offerSummary",
+              "value": "Describe what you sell, who it's for, typical price range and ideal customer.",
+              "type": "string"
+            },
+            {
+              "id": "52fe2fe7-1a39-42c4-b257-103626e58e37",
+              "name": "hotThreshold",
+              "value": 70,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "67a11dd4-d336-406c-b82f-14fa149970c9",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Accept flat JSON or {body:{...}} and common form-builder field names.\nconst src = $json.body && typeof $json.body === 'object' ? $json.body : $json;\nconst pick = (...keys) => { for (const k of keys) { if (src[k]) return String(src[k]).trim(); } return ''; };\nconst email = pick('email', 'Email', 'email_address', 'contact_email').toLowerCase();\nif (!email || !email.includes('@')) throw new Error('Lead has no valid email: ' + JSON.stringify(src).slice(0, 300));\nconst freeMail = /@(gmail|yahoo|hotmail|outlook|icloud|aol|proton|protonmail|live|me)\\./i.test(email);\nlet website = pick('website', 'url', 'company_website', 'site');\nif (!website && !freeMail) website = email.split('@')[1];\nif (website && !/^https?:\\/\\//.test(website)) website = 'https://' + website;\nreturn { json: {\n  name: pick('name', 'full_name', 'Name', 'first_name') || email.split('@')[0],\n  email,\n  company: pick('company', 'Company', 'organization', 'business') || (freeMail ? '' : email.split('@')[1].split('.')[0]),\n  website,\n  phone: pick('phone', 'Phone', 'tel'),\n  budget: pick('budget', 'Budget'),\n  timeline: pick('timeline', 'Timeline', 'when'),\n  source: pick('source', 'utm_source', 'Source') || 'webhook',\n  message: pick('message', 'Message', 'notes', 'details', 'comments', 'body'),\n  receivedAt: new Date().toISOString(),\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "6c6820f8-fabb-4dc8-8a9e-ac3d306eb59c",
+      "name": "Normalize Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website || 'https://example.invalid' }}",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 5
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "html"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "08555a77-472b-4a1c-bb6c-d6cd4e7e26aa",
+      "name": "Fetch Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn raw HTML into compact readable text for the model (max ~5k chars).\nconst html = String($json.html || '');\nconst text = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<noscript[\\s\\S]*?<\\/noscript>/gi, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .slice(0, 5000);\nreturn { json: { websiteText: text || '(website unavailable)' } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "d0d543cb-7809-41b3-acac-cf09d6028f77",
+      "name": "Website → Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Our business: {{ $('Config').first().json.businessName }}\nWhat we offer / ideal customer: {{ $('Config').first().json.offerSummary }}\nBooking link: {{ $('Config').first().json.bookingLink }}\nSender name for the reply: {{ $('Config').first().json.ownerName }}\n\nNEW LEAD\n{{ JSON.stringify($('Normalize Lead').item.json, null, 2) }}\n\nTHEIR WEBSITE (truncated)\n{{ $json.websiteText }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a senior B2B sales qualifier. Score the lead 0-100 on fit with our offer, budget signal, urgency and authority. tier = hot (>=70), warm (40-69) or cold (<40). Then write the first reply email: warm, specific to their message and company (reference one concrete detail), max 120 words, no fluff, no 'I hope this finds you well'. Hot/warm: propose a short call with the booking link. Cold: helpful, point to a next step without hard selling. Plain text, sign with the sender name. Never invent facts about them."
+            }
+          ]
+        }
+      },
+      "id": "d1319a1a-a9c9-4a6d-b4db-6192b36bcbbf",
+      "name": "AI Qualify Lead",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "7eeec01d-324a-4984-8f58-11334bc101ab",
+      "name": "Claude (AI Qualify Lead)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"score\": {\n      \"type\": \"number\"\n    },\n    \"tier\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"hot\",\n        \"warm\",\n        \"cold\"\n      ]\n    },\n    \"intent\": {\n      \"type\": \"string\",\n      \"description\": \"What they actually want, one line\"\n    },\n    \"company_summary\": {\n      \"type\": \"string\"\n    },\n    \"fit_reasons\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"risks\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"next_step\": {\n      \"type\": \"string\"\n    },\n    \"reply_subject\": {\n      \"type\": \"string\"\n    },\n    \"reply_body\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"score\",\n    \"tier\",\n    \"intent\",\n    \"reply_subject\",\n    \"reply_body\",\n    \"next_step\"\n  ]\n}"
+      },
+      "id": "278a0d2b-1323-4282-888d-51979fb1ff1a",
+      "name": "Parser (AI Qualify Lead)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a40e1207-0344-4eba-a330-18de4eebede0",
+              "leftValue": "={{ $('Config').first().json.replyMode }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "89b6ec53-0285-4046-bc45-0f26b7de523f",
+      "name": "Send or Draft?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Normalize Lead').item.json.email }}",
+        "subject": "={{ $json.output.reply_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.output.reply_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "4c3285d6-98fc-481d-a9ae-c424d44473f8",
+      "name": "Send Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        -100
+      ],
+      "webhookId": "f589983c-3755-4d5d-9011-e741e6f7a72d"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $json.output.reply_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.output.reply_body }}",
+        "options": {
+          "sendTo": "={{ $('Normalize Lead').item.json.email }}"
+        }
+      },
+      "id": "9f99169d-14b9-4bef-8d51-061c5c18821f",
+      "name": "Draft Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize Lead').item.json;\nconst ai = $('AI Qualify Lead').item.json.output;\nconst days = { hot: 1, warm: 3, cold: 14 }[ai.tier] ?? 3;\nconst next = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);\nconst threadId = $json.threadId || ($json.message && $json.message.threadId) || '';\nreturn { json: {\n  email: lead.email, name: lead.name, company: lead.company, website: lead.website, phone: lead.phone,\n  source: lead.source, budget: lead.budget, timeline: lead.timeline, message: lead.message,\n  score: ai.score, tier: ai.tier, intent: ai.intent, summary: ai.company_summary || '',\n  next_step: ai.next_step, stage: 'contacted', touches: 1,\n  last_contacted: new Date().toISOString().slice(0, 10), next_follow_up: next,\n  thread_id: threadId, created_at: lead.receivedAt,\n  notes: [...(ai.fit_reasons || []).map(r => '+ ' + r), ...(ai.risks || []).map(r => '- ' + r)].join('\\n'),\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "b405ac2e-4da8-445f-be32-5d1d2d0c6af8",
+      "name": "Build CRM Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "9cdc62c1-97aa-4280-baa0-89647ab08864",
+      "name": "Upsert Leads Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51ea7a64-a2d6-4511-b8ae-5b7cbffcf490",
+              "leftValue": "={{ $('Build CRM Row').item.json.score }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "rightValue": "={{ $('Config').first().json.hotThreshold }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "19709b6c-8b0e-48cc-8e2d-528064177514",
+      "name": "Hot Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=🔥 Hot lead ({{ $('Build CRM Row').item.json.score }}): {{ $('Build CRM Row').item.json.name }} — {{ $('Build CRM Row').item.json.company }}",
+        "emailType": "text",
+        "message": "=Intent: {{ $('Build CRM Row').item.json.intent }}\n\nNext step: {{ $('Build CRM Row').item.json.next_step }}\n\nWhy:\n{{ $('Build CRM Row').item.json.notes }}\n\nTheir message:\n{{ $('Build CRM Row').item.json.message }}\n\nEmail: {{ $('Build CRM Row').item.json.email }}  Phone: {{ $('Build CRM Row').item.json.phone }}\nReply mode: {{ $('Config').first().json.replyMode }} (already {{ $('Config').first().json.replyMode === 'send' ? 'sent' : 'drafted' }})",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "47020169-e886-457c-967f-57e31d4156ea",
+      "name": "Alert Owner",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2580,
+        -80
+      ],
+      "webhookId": "3ef1a5df-8d66-4471-8d6f-d6f96b2d8119"
+    }
+  ],
+  "connections": {
+    "Claude (AI Qualify Lead)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Qualify Lead",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Qualify Lead)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Qualify Lead",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead": {
+      "main": [
+        [
+          {
+            "node": "Fetch Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Website": {
+      "main": [
+        [
+          {
+            "node": "Website → Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Website → Text": {
+      "main": [
+        [
+          {
+            "node": "AI Qualify Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Qualify Lead": {
+      "main": [
+        [
+          {
+            "node": "Send or Draft?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send or Draft?": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Build CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Build CRM Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build CRM Row": {
+      "main": [
+        [
+          {
+            "node": "Upsert Leads Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Leads Sheet": {
+      "main": [
+        [
+          {
+            "node": "Hot Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hot Lead?": {
+      "main": [
+        [
+          {
+            "node": "Alert Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

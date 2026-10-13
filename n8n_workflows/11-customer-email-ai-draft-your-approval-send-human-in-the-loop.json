@@ -1,0 +1,665 @@
+{
+  "name": "11 · Customer Email → AI Draft → Your Approval → Send (human-in-the-loop)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## AI writes, you approve from your phone\nCustomer emails matching `watchQuery` (e.g. to support@, or a label) get a reply drafted from your knowledge base.\n\nYou receive an email with **Approve / Request changes** buttons:\n- Approve → sent as a real reply in the customer's thread\n- Changes → you type what to fix, Claude revises, you get a new approval email (loops until approved, max 4 rounds)\n\nAlso callable by webhook (`/draft-with-approval`) with `{\"from\":\"…\",\"subject\":\"…\",\"body\":\"…\"}` → then it sends a new email instead of a thread reply.",
+        "width": 540,
+        "height": 380,
+        "color": 5
+      },
+      "id": "6437447f-5ea6-45e9-b824-c7003585d456",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "to:support@yourcompany.com",
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "d7f24086-74fa-410e-98e5-436a52d61a47",
+      "name": "Customer Email",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "draft-with-approval",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "Accepted"
+        }
+      },
+      "id": "afcf173e-7adf-45b2-81cb-a4584cd1d018",
+      "name": "Draft Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        120
+      ],
+      "webhookId": "9d15e89a-6834-466b-a78f-f67be9b793ac"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b319e593-da2e-43c4-8a12-6bc75e40c62c",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "92b57d06-b697-4317-904d-559f5dd11b6e",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "9b7d6dd8-d381-4d1c-91fa-3f31252ef85a",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "5308b749-a761-40d9-83c9-571046751991",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "95cca78f-8110-4e30-aba2-4121c20c18ac",
+              "name": "knowledgeBase",
+              "value": "Paste FAQs, policies, pricing, refund rules, SLAs, tone of voice here. Or replace this with a Google Docs 'Get' node and reference its content.",
+              "type": "string"
+            },
+            {
+              "id": "4466ec63-a953-44c7-93d3-c3d9eb3fba4a",
+              "name": "maxRounds",
+              "value": 4,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "8ea778eb-84fe-4dd4-a2fb-5b19e2463cf6",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(({ json: j }) => {\n  if (j.id && j.threadId) {   // came from Gmail trigger\n    const f = j.from?.value?.[0] || {};\n    return { json: { messageId: j.id, threadId: j.threadId, fromEmail: f.address, fromName: f.name || '',\n      subject: j.subject || '', body: String(j.text || j.snippet || '').split(/\\nOn .{5,80} wrote:/)[0].slice(0, 6000), round: 0 } };\n  }\n  const b = j.body && typeof j.body === 'object' ? j.body : j;\n  return { json: { messageId: '', threadId: '', fromEmail: b.from || b.email, fromName: b.name || '',\n    subject: b.subject || '', body: String(b.body || b.message || ''), round: 0 } };\n});"
+      },
+      "id": "cf20cb7b-7087-48a9-b71c-00148fd93e7b",
+      "name": "Normalize Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=KNOWLEDGE BASE\n{{ $('Config').first().json.knowledgeBase }}\n\nCUSTOMER: {{ $json.fromName }} <{{ $json.fromEmail }}>\nSUBJECT: {{ $json.subject }}\n\n{{ $json.body }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are {{ $('Config').first().json.ownerName }} at {{ $('Config').first().json.businessName }}. Draft a reply that fully resolves the request using ONLY the knowledge base. If something is unknown, say you'll check and get back within one business day instead of guessing. Warm, direct, under 150 words, plain text, sign off with first name. Also give confidence 0-1 and list anything the approver should double-check."
+            }
+          ]
+        }
+      },
+      "id": "ad081013-988c-47f8-b262-eba53c626225",
+      "name": "AI Draft",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "83d17536-8a0c-4635-99b2-2aecc837e808",
+      "name": "Claude (AI Draft)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        620,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": {\n      \"type\": \"string\"\n    },\n    \"confidence\": {\n      \"type\": \"number\"\n    },\n    \"check\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"reply\",\n    \"confidence\"\n  ]\n}"
+      },
+      "id": "5f1325e4-6667-4fd8-93ba-f4b843ae265d",
+      "name": "Parser (AI Draft)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        800,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Single place that holds the draft for the approval loop (first draft or a revision).\nconst req = $('Normalize Request').item.json;\nconst round = $runIndex + 1;  // 1 = first draft, 2+ = revisions\nreturn { json: { ...req, reply: $json.output.reply, confidence: $json.output.confidence ?? '', check: ($json.output.check || []).join('; '), round } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "38d492e9-22c4-4a84-9073-ce29103d0c6e",
+      "name": "Current Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=✋ Approve reply to {{ $json.fromName || $json.fromEmail }}: {{ $json.subject }} (v{{ $json.round }})",
+        "message": "=CUSTOMER WROTE:\n{{ $json.body.slice(0, 1500) }}\n\n────────── PROPOSED REPLY ──────────\n{{ $json.reply }}\n\nConfidence: {{ $json.confidence }}   Double-check: {{ $json.check || '-' }}",
+        "responseType": "approval",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "✅ Send it",
+            "disapproveLabel": "✏️ Request changes"
+          }
+        },
+        "options": {
+          "appendAttribution": false,
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 3,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "e64dbfe6-5ac1-4689-8a6d-9b4f11886d4b",
+      "name": "Ask Me To Approve",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1220,
+        0
+      ],
+      "webhookId": "8bcc8a8d-1e95-4eee-8545-e08bf43b6360"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b46fe0e6-ddd9-4a5c-8c92-d20ac09a6200",
+              "leftValue": "={{ $json.data.approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b587cdf0-d796-4cea-b5fe-da8caa47c22a",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aa8add98-03fc-43a4-a36e-adbcfe0ed4b5",
+              "leftValue": "={{ $('Current Draft').item.json.messageId }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "654dbdac-fec9-4c70-b7de-b9c80417809b",
+      "name": "Gmail Thread?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1660,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Current Draft').item.json.messageId }}",
+        "emailType": "text",
+        "message": "={{ $('Current Draft').item.json.reply }}",
+        "options": {
+          "appendAttribution": false,
+          "replyToSenderOnly": true
+        }
+      },
+      "id": "066b00f9-3389-48e8-b15c-05dc6f56af0a",
+      "name": "Reply In Thread",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1880,
+        -220
+      ],
+      "webhookId": "921d1b5f-0006-486f-9ae4-aa24c93c538a"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Current Draft').item.json.fromEmail }}",
+        "subject": "=Re: {{ $('Current Draft').item.json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Current Draft').item.json.reply }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e55db6b2-f172-4470-9233-a9fa5d4192b1",
+      "name": "Send New Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1880,
+        -60
+      ],
+      "webhookId": "d9d99334-657c-47b1-a5c6-19ad6746de80"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "222b5bb6-9d8d-45fc-ad71-194ecc2b8951",
+              "leftValue": "={{ $('Current Draft').item.json.round }}",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              },
+              "rightValue": "={{ $('Config').first().json.maxRounds }}"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "97a09cfc-e13d-4620-a008-17357e358807",
+      "name": "Rounds Left?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=✏️ What should change? ({{ $('Current Draft').item.json.subject }})",
+        "message": "=Current draft:\n\n{{ $('Current Draft').item.json.reply }}",
+        "responseType": "freeText",
+        "options": {
+          "appendAttribution": false,
+          "messageButtonLabel": "Give instructions",
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 3,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "8881cbcd-af1a-4e33-ae04-40773e0123d9",
+      "name": "What Should Change?",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1880,
+        140
+      ],
+      "webhookId": "af79b83a-8cc5-4b3c-b418-cce2e1492723"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=KNOWLEDGE BASE\n{{ $('Config').first().json.knowledgeBase }}\n\nCUSTOMER EMAIL\n{{ $('Current Draft').item.json.body }}\n\nCURRENT DRAFT\n{{ $('Current Draft').item.json.reply }}\n\nMY INSTRUCTIONS\n{{ $json.data.text }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Revise the draft exactly per the instructions. Keep everything else that was fine. Plain text."
+            }
+          ]
+        }
+      },
+      "id": "6b3e4403-1fd7-49ee-8f25-877d70170e30",
+      "name": "AI Revise",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        2100,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "6be8059b-6bd5-42f4-810e-56c6367a7d1c",
+      "name": "Claude (AI Revise)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        2040,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": {\n      \"type\": \"string\"\n    },\n    \"confidence\": {\n      \"type\": \"number\"\n    },\n    \"check\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"reply\"\n  ]\n}"
+      },
+      "id": "6c95bdd8-a6c9-42af-9979-8fbf4bb9383d",
+      "name": "Parser (AI Revise)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2220,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Claude (AI Draft)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Draft)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Draft",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (AI Revise)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Revise",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Revise)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Revise",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Email": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Request": {
+      "main": [
+        [
+          {
+            "node": "AI Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Draft": {
+      "main": [
+        [
+          {
+            "node": "Current Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Current Draft": {
+      "main": [
+        [
+          {
+            "node": "Ask Me To Approve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Me To Approve": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Gmail Thread?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rounds Left?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Thread?": {
+      "main": [
+        [
+          {
+            "node": "Reply In Thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send New Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rounds Left?": {
+      "main": [
+        [
+          {
+            "node": "What Should Change?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What Should Change?": {
+      "main": [
+        [
+          {
+            "node": "AI Revise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Revise": {
+      "main": [
+        [
+          {
+            "node": "Current Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -1,0 +1,382 @@
+{
+  "name": "07 · Morning Brief: Inbox + Pipeline + Money",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## One email at 07:30 that tells you what matters today\n- Last 24h of inbox, compressed\n- Leads with follow-ups due + hot leads not yet booked\n- Overdue invoices & total outstanding\n\nClaude ranks it into **Top 3**, **Reply to**, **Pipeline**, **Money**, **Ignore**.",
+        "width": 460,
+        "height": 260,
+        "color": 5
+      },
+      "id": "d9b5cbbc-ea5a-482d-bf91-38b8f172f939",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "1b3a0c4b-9868-43a0-b7f3-d1d789798c5b",
+      "name": "Weekdays 07:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "02747010-4caf-47c0-95e5-a618e8cdf694",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "c2cc70b0-2691-4509-afac-f749a4fcfd62",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "80ba976c-14e4-43b7-b718-94c13e2f9c6d",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "96d7050d-9d59-4767-a887-41a016002b6d",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "c2c0b507-60c5-4bbe-8dc3-d0a8ccf19dfb",
+              "name": "priorities",
+              "value": "This quarter: close 3 new clients, ship v2, keep cash > 3 months.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a2ca0bcc-f1cc-48aa-b6ee-7090092491c1",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 80,
+        "simple": false,
+        "filters": {
+          "q": "in:inbox newer_than:1d -category:promotions -category:social -from:me"
+        },
+        "options": {}
+      },
+      "id": "860ee2d0-1345-4e40-95a5-a86c7c470e65",
+      "name": "Last 24h Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json).filter(m => m.id).map(m => {\n  const f = m.from?.value?.[0] || {};\n  const unread = (m.labelIds || []).includes('UNREAD');\n  const text = String(m.text || m.snippet || '').replace(/\\s+/g, ' ').slice(0, 350);\n  return `${unread ? '[UNREAD] ' : ''}${f.name || ''} <${f.address || ''}> | ${m.subject || ''} | ${text}`;\n});\nreturn [{ json: { emailCount: rows.length, emails: rows.join('\\n') || '(no new email)' } }];"
+      },
+      "id": "e51b6df6-5406-424d-9a21-65ac5bffbaba",
+      "name": "Compact Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "d0ff9b51-2ef5-4b9c-98c5-ba6dbfc9d5be",
+      "name": "Read Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        0
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoices",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "3869121c-ce10-4057-99e4-a70490035093",
+      "name": "Read Invoices",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        0
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().slice(0, 10);\nconst leads = $('Read Leads').all().map(i => i.json).filter(l => l.email);\nconst due = leads.filter(l => l.next_follow_up && String(l.next_follow_up).slice(0, 10) <= today && !['won', 'lost', 'replied', 'nurture'].includes(l.stage));\nconst hot = leads.filter(l => l.tier === 'hot' && !['won', 'lost', 'meeting_booked'].includes(l.stage));\nconst replied = leads.filter(l => l.stage === 'replied');\nconst inv = $('Read Invoices').all().map(i => i.json).filter(r => r.invoice_id && !['paid', 'void'].includes(String(r.status).toLowerCase()));\nconst overdue = inv.filter(r => String(r.due_date).slice(0, 10) < today);\nconst sum = a => a.reduce((s, r) => s + (Number(r.amount) || 0), 0);\nconst L = l => `${l.name} (${l.company || l.email}) — ${l.tier || ''} ${l.score || ''} — ${l.intent || ''} — stage ${l.stage}`;\nreturn [{ json: {\n  emails: $('Compact Emails').first().json.emails,\n  followUpsDue: due.map(L).join('\\n') || 'none',\n  hotLeads: hot.map(L).join('\\n') || 'none',\n  repliedLeads: replied.map(L).join('\\n') || 'none',\n  overdue: overdue.map(r => `${r.invoice_id} ${r.client_name} ${r.amount} ${r.currency || ''} due ${r.due_date}`).join('\\n') || 'none',\n  outstandingTotal: sum(inv), overdueTotal: sum(overdue),\n  dateLabel: new Date().toDateString(),\n}}];"
+      },
+      "id": "7d8c28ec-ba4c-4367-8a33-5178ff3a80db",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today: {{ $json.dateLabel }}\nMy priorities: {{ $('Config').first().json.priorities }}\n\nINBOX (last 24h)\n{{ $json.emails }}\n\nLEADS REPLIED (respond today!)\n{{ $json.repliedLeads }}\n\nFOLLOW-UPS DUE\n{{ $json.followUpsDue }}\n\nHOT LEADS NOT BOOKED\n{{ $json.hotLeads }}\n\nOVERDUE INVOICES (total {{ $json.overdueTotal }}, all outstanding {{ $json.outstandingTotal }})\n{{ $json.overdue }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a chief of staff writing a morning brief. Output an HTML email body (h3, ul, li, p, b only; no <html> tag). Sections: 1) Top 3 for today (each with why + first action); 2) Reply to (person, one-line ask, suggested answer in <=15 words); 3) Pipeline; 4) Money; 5) Safe to ignore (one line). Be ruthless: under 300 words, no filler, no greetings."
+            }
+          ]
+        }
+      },
+      "id": "f242638b-da9a-43cc-8896-443a0459b503",
+      "name": "AI Morning Brief",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "d80cb5c2-5e72-414b-8840-45617606a651",
+      "name": "Claude (AI Morning Brief)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"subject\": {\n      \"type\": \"string\",\n      \"description\": \"e.g. '3 things today: ...' under 70 chars\"\n    },\n    \"html\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"subject\",\n    \"html\"\n  ]\n}"
+      },
+      "id": "1119eb8d-0686-48ab-8e6c-5797d416c257",
+      "name": "Parser (AI Morning Brief)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1660,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=☀️ {{ $json.output.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.output.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "67ed10b5-ec18-495f-810d-ccbefcdc8030",
+      "name": "Send Brief",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1860,
+        0
+      ],
+      "webhookId": "dc356e07-554f-48c0-8844-d1defd67c4ab"
+    }
+  ],
+  "connections": {
+    "Claude (AI Morning Brief)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Morning Brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Morning Brief)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Morning Brief",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekdays 07:30": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Last 24h Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Last 24h Email": {
+      "main": [
+        [
+          {
+            "node": "Compact Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compact Emails": {
+      "main": [
+        [
+          {
+            "node": "Read Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads": {
+      "main": [
+        [
+          {
+            "node": "Read Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Invoices": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "AI Morning Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Morning Brief": {
+      "main": [
+        [
+          {
+            "node": "Send Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

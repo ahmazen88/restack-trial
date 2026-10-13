@@ -1,0 +1,650 @@
+{
+  "name": "05 · Project Done → Feedback Form → Reviews or Save-the-Client",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Turn happy clients into reviews, catch unhappy ones early\nPOST `{\"client_name\":\"Jane\",\"client_email\":\"jane@acme.com\",\"project\":\"Website redesign\"}`\n\n1. Client gets an email with a 2-question form (rating + comment) — built into Gmail *send & wait*\n2. 4–5★ → thank-you + your review link + referral ask\n3. ≤3★ → Claude drafts a recovery email in your Gmail drafts + alerts you\n4. Everything logged to **Feedback** sheet. Waits up to 14 days.",
+        "width": 520,
+        "height": 340,
+        "color": 5
+      },
+      "id": "25092ade-325b-4b96-a8fe-d76fa12e97ee",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "project-complete",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "Accepted"
+        }
+      },
+      "id": "007369e8-238e-413f-b00d-ad41978fa5d2",
+      "name": "Project Complete Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "eef1bad5-0fab-4b4c-b627-b747cc86148c"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7498a45-2455-4a97-9bca-f7908a67a1e2",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "6f218f6c-d363-4621-8a2f-ee37b147083f",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "26161c39-ba67-4f59-b44f-2eef80a86888",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "847f573a-5b6f-4025-9109-b5432fc5a48b",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "6f37637c-75a2-40ca-8920-61bc2aa6362d",
+              "name": "reviewLink",
+              "value": "https://g.page/r/YOUR_GOOGLE_REVIEW_ID/review",
+              "type": "string"
+            },
+            {
+              "id": "083cbe91-0965-4928-861d-b626150bb8c7",
+              "name": "referralOffer",
+              "value": "If you know anyone who could use our help, an intro would mean a lot — we'll thank you with 10% off your next project.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "2908bceb-7495-4563-8467-2d675a1babd1",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "209649da-d59f-4f93-8628-16fa9a111336",
+              "name": "client_name",
+              "value": "={{ ($json.body || $json).client_name }}",
+              "type": "string"
+            },
+            {
+              "id": "29e883c3-deab-43e9-9fe8-43c4812ab917",
+              "name": "client_email",
+              "value": "={{ ($json.body || $json).client_email }}",
+              "type": "string"
+            },
+            {
+              "id": "33b01476-bc80-45f4-854e-1e937fc80ab6",
+              "name": "project",
+              "value": "={{ ($json.body || $json).project }}",
+              "type": "string"
+            },
+            {
+              "id": "f9e92471-e9d3-46e5-b6a8-eba5c6c88bcc",
+              "name": "first_name",
+              "value": "={{ String(($json.body || $json).client_name || '').split(' ')[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "c81094be-f2de-489e-8d54-47fa734dc615",
+      "name": "Client",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $json.client_email }}",
+        "subject": "=Quick question about {{ $json.project }}",
+        "message": "=Hi {{ $json.first_name }},\n\nThanks again for trusting {{ $('Config').first().json.businessName }} with {{ $json.project }}. Could you spare 20 seconds to tell us how it went? It genuinely shapes how we work.\n\n{{ $('Config').first().json.ownerName }}",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "rating",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "5 - Excellent"
+                  },
+                  {
+                    "option": "4 - Good"
+                  },
+                  {
+                    "option": "3 - Okay"
+                  },
+                  {
+                    "option": "2 - Poor"
+                  },
+                  {
+                    "option": "1 - Bad"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "comment",
+              "fieldType": "textarea",
+              "placeholder": "What went well? What could be better?"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "responseFormTitle": "How did we do?",
+          "limitWaitTime": {
+            "values": {
+              "limitType": "afterTimeInterval",
+              "resumeAmount": 14,
+              "resumeUnit": "days"
+            }
+          }
+        }
+      },
+      "id": "cea934a8-2d52-403f-9026-6990f42f1cd7",
+      "name": "Ask For Feedback",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        0
+      ],
+      "webhookId": "cc18638a-a6cb-4871-8b7b-25eb1b59bcb4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $('Client').item.json;\nconst d = $json.data || {};\nconst rating = parseInt(String(d.rating || '').slice(0, 1), 10) || null;\nreturn { json: { ...c, rating, comment: d.comment || '', responded: rating !== null, at: new Date().toISOString() } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "79645b1e-4489-4461-b5e2-c96eea127f1f",
+      "name": "Read Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "71009f38-84b3-424e-b110-16273d89e7f9",
+                    "leftValue": "={{ $json.responded }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "e34c85f1-ad2e-4321-96eb-e842e6bc50d5",
+                    "leftValue": "={{ $json.rating }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    },
+                    "rightValue": 4
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "happy"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "113f5c17-4d62-4400-8e8a-1926e3b2117e",
+                    "leftValue": "={{ $json.responded }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  },
+                  {
+                    "id": "31e57b23-47da-47b4-87a1-8501b6c1ad75",
+                    "leftValue": "={{ $json.rating }}",
+                    "operator": {
+                      "type": "number",
+                      "operation": "lte"
+                    },
+                    "rightValue": 3
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "unhappy"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c48d47e4-184a-4c35-acaa-44399b55a872",
+                    "leftValue": "={{ $json.responded }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "no_response"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9c53f3ad-5c83-4cdd-8dd0-7e794ccf60f9",
+      "name": "Route By Rating",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.client_email }}",
+        "subject": "=Thank you, {{ $json.first_name }} 🙏",
+        "emailType": "text",
+        "message": "=Hi {{ $json.first_name }},\n\nThat made our day — thank you.\n\nWould you be up for sharing that in a public review? It takes a minute and helps other people find us:\n{{ $('Config').first().json.reviewLink }}\n\n{{ $('Config').first().json.referralOffer }}\n\n{{ $('Config').first().json.ownerName }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "07965c17-2b1d-47e3-a27c-a4030a4bea45",
+      "name": "Thank + Review Ask",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1380,
+        -180
+      ],
+      "webhookId": "415b4d1c-772c-45d9-a3b2-9edc11b815d6"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client: {{ $json.client_name }}\nProject: {{ $json.project }}\nRating: {{ $json.rating }}/5\nComment: {{ $json.comment || '(none)' }}\nSender: {{ $('Config').first().json.ownerName }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "A client gave low feedback. Diagnose the likely root cause in one line, then write a sincere, non-defensive reply (<120 words) that thanks them, owns what is ours, asks one specific question and offers a short call. No discounts unless the comment is about price."
+            }
+          ]
+        }
+      },
+      "id": "7fe1eea6-088a-4808-907b-d5c6b86496a1",
+      "name": "AI Recovery Draft",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1380,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "8088118e-9ee7-4f4d-bbda-2a4f0d487976",
+      "name": "Claude (AI Recovery Draft)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1320,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"root_cause\": {\n      \"type\": \"string\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"low\",\n        \"medium\",\n        \"high\"\n      ]\n    },\n    \"reply\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"root_cause\",\n    \"severity\",\n    \"reply\"\n  ]\n}"
+      },
+      "id": "ad7e53c4-69d2-4d0a-bbe0-bc252555ab66",
+      "name": "Parser (AI Recovery Draft)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Read Answer').item.json.project }}",
+        "emailType": "text",
+        "message": "={{ $json.output.reply }}",
+        "options": {
+          "sendTo": "={{ $('Read Answer').item.json.client_email }}"
+        }
+      },
+      "id": "45bc23a7-bce4-45d0-a7bd-bc345d799893",
+      "name": "Save Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1700,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=⚠️ {{ $('Read Answer').item.json.rating }}★ from {{ $('Read Answer').item.json.client_name }} ({{ $('AI Recovery Draft').item.json.output.severity }})",
+        "emailType": "text",
+        "message": "=Project: {{ $('Read Answer').item.json.project }}\nComment: {{ $('Read Answer').item.json.comment }}\n\nLikely cause: {{ $('AI Recovery Draft').item.json.output.root_cause }}\n\nA reply is waiting in your Gmail drafts.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "dc4f38d3-25b0-4d3e-b0ec-ec99c5831e1d",
+      "name": "Alert Me",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1920,
+        60
+      ],
+      "webhookId": "870799cd-e94f-45a7-b41b-c9b72c7e88c8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a = $('Read Answer').item.json;\nreturn { json: { at: a.at, client_name: a.client_name, client_email: a.client_email, project: a.project, rating: a.rating ?? '', comment: a.comment, responded: a.responded } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "22139fb7-f339-45bc-a39d-77273d8351ad",
+      "name": "Log Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Feedback",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "1b3f671e-2e67-402b-bd55-8151c5cf3489",
+      "name": "Log Feedback",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2360,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Claude (AI Recovery Draft)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Recovery Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Recovery Draft)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Recovery Draft",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Complete Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client": {
+      "main": [
+        [
+          {
+            "node": "Ask For Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask For Feedback": {
+      "main": [
+        [
+          {
+            "node": "Read Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Answer": {
+      "main": [
+        [
+          {
+            "node": "Route By Rating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route By Rating": {
+      "main": [
+        [
+          {
+            "node": "Thank + Review Ask",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Recovery Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Recovery Draft": {
+      "main": [
+        [
+          {
+            "node": "Save Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft": {
+      "main": [
+        [
+          {
+            "node": "Alert Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Me": {
+      "main": [
+        [
+          {
+            "node": "Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Thank + Review Ask": {
+      "main": [
+        [
+          {
+            "node": "Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Row": {
+      "main": [
+        [
+          {
+            "node": "Log Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

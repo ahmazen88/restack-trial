@@ -1,0 +1,340 @@
+{
+  "name": "10 · Research Agent → Emailed Report",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Ask a question, get a sourced report in your inbox\nPOST (or email via 09 with `\"action\":\"research\"`):\n```json\n{\"question\":\"Who are Acme Corp's competitors and how do they price?\",\n \"depth\":\"deep\",\"reply_to\":\"you@yourcompany.com\"}\n```\nClaude agent plans, searches the web (SerpAPI), reads pages, uses Wikipedia & a calculator, and cites sources. Good for: prospect research, competitor teardown, market sizing, vendor comparison.",
+        "width": 520,
+        "height": 340,
+        "color": 5
+      },
+      "id": "3e24f3b4-da21-4983-8229-1647e701ad32",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "Accepted"
+        }
+      },
+      "id": "3c66c5f0-403f-4317-90c4-3787638eeb68",
+      "name": "Research Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "6d7edcce-55ad-4581-bf2c-9eacfb5bd2fd"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7edc69e2-c64f-4e4d-b299-d7493973027b",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "5e3d3127-7728-4bce-b2c6-f511089cd935",
+              "name": "context",
+              "value": "Who I am and why I usually research things (helps the agent focus).",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f1ff6073-d792-438e-a046-1bf55a9579b4",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "89e25df4-bb1e-40e1-9cc9-4e94b32003d2",
+              "name": "question",
+              "value": "={{ ($json.body || $json).question || ($json.body || $json).topic || ($json.body || $json).company }}",
+              "type": "string"
+            },
+            {
+              "id": "6f5ffe1a-7e85-421a-bfd9-1dcea1d5c25e",
+              "name": "depth",
+              "value": "={{ ($json.body || $json).depth || 'standard' }}",
+              "type": "string"
+            },
+            {
+              "id": "4b925be4-8451-41bc-9feb-d5936cfa03d9",
+              "name": "reply_to",
+              "value": "={{ ($json.body || $json).reply_to || $('Config').first().json.ownerEmail }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "e604aed2-69ea-434f-8d66-a5200bdcc8b4",
+      "name": "Request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Research request ({{ $json.depth }} depth): {{ $json.question }}\n\nRequester context: {{ $('Config').first().json.context }}",
+        "options": {
+          "systemMessage": "=You are a meticulous research analyst. Today is {{ $now.toISODate() }}.\nProcess: 1) break the question into 3-6 sub-questions; 2) search for each; 3) open the 2-4 most authoritative pages with the fetch tool and read them; 4) cross-check numbers across sources; 5) write the report.\nDepth 'quick' = ~4 tool calls, 'standard' = ~10, 'deep' = up to 25.\nOutput a complete HTML email body (h2, h3, p, ul, li, table, b, a only): TL;DR (3 bullets), Key findings, a comparison table if relevant, Implications / what I'd do, Open questions, Sources (numbered links). Cite inline like [1]. Never invent a source or number; say when evidence is thin.",
+          "maxIterations": 30
+        }
+      },
+      "id": "691e2ea3-942a-4de6-b937-f1ca894a91ee",
+      "name": "Research Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "c39a9c81-b841-4a67-8e0e-35fbde603c28",
+      "name": "Claude (Agent)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        560,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a2e054c9-9397-45bf-9070-6c7b66834f9d",
+      "name": "Web Search",
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [
+        700,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch and read a web page. Input: the full https URL to read. Returns the page text.",
+        "url": "{url}",
+        "optimizeResponse": true,
+        "dataField": "",
+        "responseType": "html",
+        "cssSelector": "body",
+        "onlyContent": true,
+        "truncateResponse": true,
+        "maxLength": 8000,
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "url",
+              "description": "Full URL of the page to read",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "3597d421-0fa2-41c3-9212-8dd03a79b1c0",
+      "name": "Fetch Web Page",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "7745a83e-4ed9-4b95-a89b-24b0332e31b8",
+      "name": "Wikipedia",
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "typeVersion": 1,
+      "position": [
+        980,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4e4dec18-8bad-4670-ade5-5e1230805c5d",
+      "name": "Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Request').item.json.reply_to }}",
+        "subject": "=🔎 {{ $('Request').item.json.question.slice(0, 90) }}",
+        "emailType": "html",
+        "message": "={{ $json.output.replace(/^```html\\s*|```\\s*$/g, '') }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6cbc3260-f335-412d-a798-fd21ccba263b",
+      "name": "Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        0
+      ],
+      "webhookId": "067ec14c-e4b8-40d8-a7e7-ec82f1447955"
+    }
+  ],
+  "connections": {
+    "Research Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request": {
+      "main": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Agent": {
+      "main": [
+        [
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Agent)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Web Page": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wikipedia": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

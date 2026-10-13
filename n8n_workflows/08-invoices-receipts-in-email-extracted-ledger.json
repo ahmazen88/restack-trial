@@ -1,0 +1,456 @@
+{
+  "name": "08 · Invoices & Receipts in Email → Extracted → Ledger",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Bookkeeping that does itself\nWatches for PDF invoices/receipts, extracts vendor, dates, totals, tax, category → **Ledger** sheet.\nBills due within 7 days email you a reminder. Processed emails get your `processedLabelId` label so they are never read twice.\n\nScanned image-only PDFs have no text layer: add an OCR step (e.g. Mistral OCR / Google Vision) before the AI.",
+        "width": 500,
+        "height": 300,
+        "color": 5
+      },
+      "id": "a633406c-34df-4d30-9515-aae9cda8a57e",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment filename:pdf (invoice OR receipt OR bill OR rechnung OR factura OR facture)",
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "id": "02bcd61f-167b-41ab-b0de-c0760d1175eb",
+      "name": "Email With PDF",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2eaf9caf-0dfe-4b2f-9663-dd9b3385de07",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "0ce45e7b-333e-4658-a128-75028a547afb",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "c607abf8-079d-41d1-88e5-a10de203fedd",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "110d9fb9-4577-4dc6-b4d8-9feea352851a",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "d6b84ecd-7d40-4b5b-aec2-9d36ebd38688",
+              "name": "processedLabelId",
+              "value": "Label_PROCESSED_ID",
+              "type": "string"
+            },
+            {
+              "id": "eb0d4c4e-6da6-478f-8e12-880d3a43128c",
+              "name": "homeCurrency",
+              "value": "USD",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "325192d2-fe92-4936-bf25-b3d311daa4f6",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const item of $('Email With PDF').all()) {\n  const m = item.json; const f = m.from?.value?.[0] || {};\n  for (const [key, file] of Object.entries(item.binary || {})) {\n    const isPdf = (file.mimeType || '').includes('pdf') || /\\.pdf$/i.test(file.fileName || '');\n    if (!isPdf) continue;\n    out.push({ json: { messageId: m.id, threadId: m.threadId, fromEmail: f.address || '', subject: m.subject || '',\n                       fileName: file.fileName || key, emailDate: m.date }, binary: { data: file } });\n  }\n}\nreturn out;"
+      },
+      "id": "3beb145d-790a-47d1-8d1e-adbc81a94530",
+      "name": "One Item Per PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {
+          "maxPages": 5
+        }
+      },
+      "id": "cb978b75-c1b7-4e19-8ac7-7d354e1a9576",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Email from {{ $('One Item Per PDF').item.json.fromEmail }}, subject \"{{ $('One Item Per PDF').item.json.subject }}\", file {{ $('One Item Per PDF').item.json.fileName }}.\n\nDOCUMENT TEXT\n{{ String($json.text || '').slice(0, 12000) }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Extract accounting data from an invoice/receipt. Dates as YYYY-MM-DD. Amounts as numbers without symbols. If a value is absent, use empty string or 0 and lower confidence. is_payable = it's a bill we still need to pay (not a receipt/paid confirmation)."
+            }
+          ]
+        }
+      },
+      "id": "6450ec8f-ab79-42b0-a0d5-28ae95e0f309",
+      "name": "AI Extract",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "5257cc37-8dc5-49b3-aaad-a870522820f3",
+      "name": "Claude (AI Extract)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        820,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"doc_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"invoice\",\n        \"receipt\",\n        \"credit_note\",\n        \"statement\",\n        \"other\"\n      ]\n    },\n    \"vendor\": {\n      \"type\": \"string\"\n    },\n    \"invoice_number\": {\n      \"type\": \"string\"\n    },\n    \"issue_date\": {\n      \"type\": \"string\"\n    },\n    \"due_date\": {\n      \"type\": \"string\"\n    },\n    \"currency\": {\n      \"type\": \"string\"\n    },\n    \"subtotal\": {\n      \"type\": \"number\"\n    },\n    \"tax\": {\n      \"type\": \"number\"\n    },\n    \"total\": {\n      \"type\": \"number\"\n    },\n    \"category\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"software\",\n        \"hardware\",\n        \"contractors\",\n        \"marketing\",\n        \"travel\",\n        \"meals\",\n        \"office\",\n        \"utilities\",\n        \"rent\",\n        \"professional_fees\",\n        \"taxes\",\n        \"other\"\n      ]\n    },\n    \"description\": {\n      \"type\": \"string\",\n      \"description\": \"what was bought, <= 12 words\"\n    },\n    \"is_payable\": {\n      \"type\": \"boolean\"\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"description\": \"0-1\"\n    }\n  },\n  \"required\": [\n    \"doc_type\",\n    \"vendor\",\n    \"total\",\n    \"currency\",\n    \"category\",\n    \"is_payable\",\n    \"confidence\"\n  ]\n}"
+      },
+      "id": "ecb41698-8f8f-4edb-8dda-6520c67606d1",
+      "name": "Parser (AI Extract)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $('One Item Per PDF').item.json; const x = $json.output;\nconst days = x.due_date ? Math.round((new Date(x.due_date) - new Date(new Date().toISOString().slice(0, 10))) / 864e5) : null;\nreturn { json: {\n  logged_at: new Date().toISOString(), doc_type: x.doc_type, vendor: x.vendor, invoice_number: x.invoice_number || '',\n  issue_date: x.issue_date || '', due_date: x.due_date || '', currency: x.currency || $('Config').first().json.homeCurrency,\n  subtotal: x.subtotal ?? '', tax: x.tax ?? '', total: x.total, category: x.category, description: x.description || '',\n  status: x.is_payable ? 'to_pay' : 'paid', confidence: x.confidence, needs_review: x.confidence < 0.7 ? 'yes' : '',\n  from: src.fromEmail, file: src.fileName, email_link: `https://mail.google.com/mail/u/0/#all/${src.threadId}`,\n  _messageId: src.messageId, _dueInDays: days,\n}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "2c3de6a9-7591-4b6e-964a-a537170741b0",
+      "name": "Ledger Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { _messageId, _dueInDays, ...row } = $json;\nreturn { json: row };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "abc982bd-79cb-4917-b109-e4debc013639",
+      "name": "Clean Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Ledger",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "4b5f040f-e23c-4675-87c0-79fd7621ab18",
+      "name": "Append Ledger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1660,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6f38b70f-0403-4919-af08-82b844c6e6ef",
+              "leftValue": "={{ $json.status }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "to_pay"
+            },
+            {
+              "id": "d294cc28-9e58-4b30-b08c-fc841073f01e",
+              "leftValue": "={{ $json._dueInDays ?? 999 }}",
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              },
+              "rightValue": 7
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a8d5b2e5-cdef-49b8-9e86-2c8f0d11306d",
+      "name": "Bill Due ≤ 7 Days?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=🧾 Pay {{ $json.vendor }} {{ $json.total }} {{ $json.currency }} by {{ $json.due_date }}",
+        "emailType": "text",
+        "message": "={{ $json.description }}\nInvoice #{{ $json.invoice_number }} — due in {{ $json._dueInDays }} day(s).\n{{ $json.email_link }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ffa606e1-5998-442d-9797-84f352891601",
+      "name": "Remind Me To Pay",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1660,
+        80
+      ],
+      "webhookId": "40df8612-0771-4903-bae8-f472f4d3ed47"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $json._messageId }}",
+        "labelIds": "={{ [$('Config').first().json.processedLabelId] }}"
+      },
+      "id": "209e492e-d23c-4641-b98b-6feef3209487",
+      "name": "Label Processed",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        260
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Claude (AI Extract)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Extract",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser (AI Extract)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Extract",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email With PDF": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "One Item Per PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One Item Per PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "AI Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Extract": {
+      "main": [
+        [
+          {
+            "node": "Ledger Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ledger Row": {
+      "main": [
+        [
+          {
+            "node": "Clean Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Bill Due ≤ 7 Days?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Label Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Row": {
+      "main": [
+        [
+          {
+            "node": "Append Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bill Due ≤ 7 Days?": {
+      "main": [
+        [
+          {
+            "node": "Remind Me To Pay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

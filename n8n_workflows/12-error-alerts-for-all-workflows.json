@@ -1,0 +1,109 @@
+{
+  "name": "12 · Error Alerts For All Workflows",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Know the moment anything breaks\nIn every other workflow: **Settings → Error workflow → this one**.\nYou get the workflow, failing node, error and a direct link to the execution.",
+        "width": 420,
+        "height": 200,
+        "color": 5
+      },
+      "id": "9a2d617d-4ed9-4ae7-8c1a-a64a915d04c5",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "79f8ac48-0349-4105-b5cf-19329589dbce",
+      "name": "On Any Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3296064d-bb81-4ea8-a4e3-7d0418ee69fc",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "0d2ffe5c-841a-47d8-a413-623b419fbe6f",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.ownerEmail }}",
+        "subject": "=❌ n8n: {{ $('On Any Error').first().json.workflow.name }} failed at \"{{ $('On Any Error').first().json.execution.lastNodeExecuted }}\"",
+        "emailType": "text",
+        "message": "=Workflow: {{ $('On Any Error').first().json.workflow.name }}\nNode: {{ $('On Any Error').first().json.execution.lastNodeExecuted }}\nError: {{ $('On Any Error').first().json.execution.error.message }}\n\n{{ $('On Any Error').first().json.execution.error.description || '' }}\n\nOpen execution: {{ $('On Any Error').first().json.execution.url }}\nMode: {{ $('On Any Error').first().json.execution.mode }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a4d0e183-8ddc-4ef6-9b60-07a9cef54c7c",
+      "name": "Email Error",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        0
+      ],
+      "webhookId": "08421941-d24b-4ca2-9cd0-f7cdf331ba41"
+    }
+  ],
+  "connections": {
+    "On Any Error": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Email Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

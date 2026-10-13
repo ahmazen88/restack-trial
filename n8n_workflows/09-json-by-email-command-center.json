@@ -1,0 +1,367 @@
+{
+  "name": "09 · JSON-by-Email Command Center",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Run any workflow by emailing JSON\nEmail yourself (subject starts with `[n8n]`) a JSON body:\n```json\n{\"token\":\"YOUR_SECRET\",\"action\":\"add_lead\",\n \"data\":{\"name\":\"Jane\",\"email\":\"jane@acme.com\",\"message\":\"wants a quote\"}}\n```\nBatch: `\"data\": [ {...}, {...} ]` runs once per entry.\n\nActions → webhooks (edit `routes` in Config):\n`add_lead` 01 · `meeting_brief` 04 · `project_complete` 05 · `research` 10 · `invoice_check` 03-style\n\nSecurity: sender must be in `allowedSenders` **and** token must match (From headers can be spoofed). You get a reply with the result of every call.",
+        "width": 540,
+        "height": 430,
+        "color": 5
+      },
+      "id": "5a46f517-8439-4ea3-b601-b3fa5e1b3385",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -470
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "subject:\"[n8n]\"",
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "03d735f6-9a7e-44c9-a613-cf105f71fc47",
+      "name": "Command Email",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8bcebaa7-9860-4eee-8de2-16bc82125696",
+              "name": "ownerEmail",
+              "value": "you@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "d8502750-3b46-4588-943e-f190c0c5a242",
+              "name": "ownerName",
+              "value": "Your Name",
+              "type": "string"
+            },
+            {
+              "id": "fcc06b3d-7432-43dd-843b-d999d58868bb",
+              "name": "businessName",
+              "value": "Your Company",
+              "type": "string"
+            },
+            {
+              "id": "0e3d9807-c4a2-43d7-a30e-f7c203612c1a",
+              "name": "spreadsheetId",
+              "value": "PASTE_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "d0b180d2-f969-41d6-a737-81063728a7a9",
+              "name": "allowedSenders",
+              "value": "you@yourcompany.com,assistant@yourcompany.com",
+              "type": "string"
+            },
+            {
+              "id": "ce1d267c-47a2-4d37-aa54-ad871946072e",
+              "name": "token",
+              "value": "CHANGE-ME-long-random-string",
+              "type": "string"
+            },
+            {
+              "id": "50357eb0-5085-47b9-b6a6-fac072aa8424",
+              "name": "routes",
+              "value": "{\n \"add_lead\": \"https://YOUR-N8N/webhook/lead-intake\",\n \"meeting_brief\": \"https://YOUR-N8N/webhook/meeting-booked\",\n \"project_complete\": \"https://YOUR-N8N/webhook/project-complete\",\n \"research\": \"https://YOUR-N8N/webhook/research\",\n \"approve_reply\": \"https://YOUR-N8N/webhook/draft-with-approval\"\n}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "76fa8013-6e34-42c0-8314-41735d1b83ff",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst allowed = String(cfg.allowedSenders).toLowerCase().split(',').map(s => s.trim());\nconst routes = JSON.parse(cfg.routes);\nconst handle = (m) => {\nconst from = String(m.from?.value?.[0]?.address || '').toLowerCase();\nconst base = { messageId: m.id, from };\nif (!allowed.includes(from)) return [{ json: { ...base, ok: false, notify: false, error: 'sender not allowed' } }];\n// Pull the first {...} or [...] block out of the body (handles ```json fences and signatures)\nconst raw = String(m.text || '').replace(/```(?:json)?/g, '');\nconst start = raw.search(/[\\{\\[]/);\nlet cmd;\ntry {\n  if (start < 0) throw new Error('no JSON found');\n  let depth = 0, end = -1, inStr = false, esc = false;\n  for (let i = start; i < raw.length; i++) {\n    const c = raw[i];\n    if (inStr) { if (esc) esc = false; else if (c === '\\\\') esc = true; else if (c === '\"') inStr = false; continue; }\n    if (c === '\"') inStr = true; else if (c === '{' || c === '[') depth++; else if (c === '}' || c === ']') { depth--; if (depth === 0) { end = i; break; } }\n  }\n  cmd = JSON.parse(raw.slice(start, end + 1).replace(/[“”]/g, '\"').replace(/[‘’]/g, \"'\"));\n} catch (e) {\n  return [{ json: { ...base, ok: false, notify: true, error: 'Invalid JSON: ' + e.message } }];\n}\nconst cmds = Array.isArray(cmd) ? cmd : [cmd];\nconst out = [];\nfor (const c of cmds) {\n  if (c.token !== cfg.token && cmd.token !== cfg.token) { out.push({ json: { ...base, ok: false, notify: false, error: 'bad token' } }); continue; }\n  const url = routes[c.action];\n  if (!url) { out.push({ json: { ...base, ok: false, notify: true, error: `Unknown action \"${c.action}\". Known: ${Object.keys(routes).join(', ')}` } }); continue; }\n  for (const d of (Array.isArray(c.data) ? c.data : [c.data || {}])) out.push({ json: { ...base, ok: true, action: c.action, url, payload: d } });\n}\nreturn out;\n};\nreturn $('Command Email').all().flatMap(i => handle(i.json));"
+      },
+      "id": "ad4db08f-6c4a-488e-b9a4-657758ed3569",
+      "name": "Parse & Authorize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b9b6ef3b-2eef-43f4-ae4a-926af49ca8c0",
+                    "leftValue": "={{ $json.ok }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "run"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3fc78d47-a674-47ad-8406-4f171eca2005",
+                    "leftValue": "={{ $json.notify }}",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "rightValue": ""
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "error"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1750c054-44a3-4b9d-b4d4-b5a0d0d9d6cd",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "45d50d32-5dc5-4fcb-a347-675d4613dce8",
+      "name": "Call Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        -100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const runs = $('Valid?').all().filter(i => i.json.ok);\nconst lines = $input.all().map((r, idx) => {\n  const src = runs[idx]?.json || {};\n  const ok = !r.json.error;\n  return `${ok ? '✅' : '❌'} ${src.action} ${JSON.stringify(src.payload).slice(0, 120)}${ok ? '' : ' → ' + (r.json.error?.message || JSON.stringify(r.json.error))}`;\n});\nreturn [{ json: { messageId: runs[0]?.json.messageId, body: `Ran ${lines.length} command(s):\\n\\n${lines.join('\\n')}` } }];"
+      },
+      "id": "510223fb-1378-4ebe-bd1a-98740f95a9c5",
+      "name": "Collect Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fa2292d0-bd36-4060-a36c-483e5529fafe",
+              "name": "messageId",
+              "value": "={{ $json.messageId }}",
+              "type": "string"
+            },
+            {
+              "id": "deab2e21-7110-48b7-a811-ae0501f5a0c5",
+              "name": "body",
+              "value": "=❌ {{ $json.error }}\n\nFormat:\n{\"token\":\"…\",\"action\":\"add_lead\",\"data\":{\"name\":\"Jane\",\"email\":\"jane@acme.com\"}}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "84773765-ed3f-44a3-a3f9-8744c312853d",
+      "name": "Error Help",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        900,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $json.messageId }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false,
+          "replyToSenderOnly": true
+        }
+      },
+      "id": "3583ed9b-6952-488f-b950-3c0c2186459a",
+      "name": "Reply With Result",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1360,
+        0
+      ],
+      "webhookId": "4e1b4a2a-605f-4ccb-a545-75d7bb6bf406"
+    }
+  ],
+  "connections": {
+    "Command Email": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Parse & Authorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Authorize": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Call Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Workflow": {
+      "main": [
+        [
+          {
+            "node": "Collect Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Results": {
+      "main": [
+        [
+          {
+            "node": "Reply With Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Help": {
+      "main": [
+        [
+          {
+            "node": "Reply With Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
