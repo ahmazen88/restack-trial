@@ -1,0 +1,18 @@
+{
+  "outlook": {
+    "enabled": true,
+    "all_mailboxes": true,
+    "extra_folders": ["Inbox/Alerts", "shared-team@corp.com/Inbox"],
+    "sweep_seconds": 60,
+    "preview_chars": 300
+  },
+  "teams": {
+    "enabled": true,
+    "app_ids": ["teams"],
+    "poll_seconds": 2,
+    "preview_chars": 300
+  },
+  "backfill_minutes": 30,
+  "log_file": "commwatch_events.jsonl",
+  "max_rows": 2000
+}
